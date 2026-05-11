@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+SPDX-License-Identifier: BSD-3-Clause-Clear.
 */
 /*!
 	@file
@@ -60,24 +64,24 @@ int IPACM_EvtDispatcher::PostEvt
 
 	if(data->event < IPA_EXTERNAL_EVENT_MAX)
 	{
-		IPACMDBG("Insert event into external queue.\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Insert event into external queue.\n");
 		MsgQueue = MessageQueue::getInstanceExternal();
 	}
 	else
 	{
-		IPACMDBG("Insert event into internal queue.\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Insert event into internal queue.\n");
 		MsgQueue = MessageQueue::getInstanceInternal();
 	}
 	if(MsgQueue == NULL)
 	{
-		IPACMERR("unable to retrieve MsgQueue instance\n");
+		IPACM_LOG(IPACM_LOG_ERR, "unable to retrieve MsgQueue instance\n");
 		return IPACM_FAILURE;
 	}
 
 	item = new Message();
 	if(item == NULL)
 	{
-		IPACMERR("unable to create new message item\n");
+		IPACM_LOG(IPACM_LOG_ERR, "unable to create new message item\n");
 		return IPACM_FAILURE;
 	}
 
@@ -86,21 +90,20 @@ int IPACM_EvtDispatcher::PostEvt
 
 	if(pthread_mutex_lock(&mutex) != 0)
 	{
-		IPACMERR("unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "unable to lock the mutex\n");
 		return IPACM_FAILURE;
 	}
 
-	IPACMDBG("Enqueing item\n");
 	MsgQueue->enqueue(item);
-	IPACMDBG("Enqueued item %p\n", item);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Enqueued item %p\n", item);
 
 	if(pthread_cond_signal(&cond_var) != 0)
 	{
-		IPACMDBG("unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "unable to lock the mutex\n");
 		/* Release the mutex before you return failure */
 		if(pthread_mutex_unlock(&mutex) != 0)
 		{
-			IPACMERR("unable to unlock the mutex\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to unlock the mutex\n");
 			return IPACM_FAILURE;
 		}
 		return IPACM_FAILURE;
@@ -108,7 +111,7 @@ int IPACM_EvtDispatcher::PostEvt
 
 	if(pthread_mutex_unlock(&mutex) != 0)
 	{
-		IPACMERR("unable to unlock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "unable to unlock the mutex\n");
 		return IPACM_FAILURE;
 	}
 
@@ -122,7 +125,7 @@ void IPACM_EvtDispatcher::ProcessEvt(ipacm_cmd_q_data *data)
 
 	if(head == NULL)
 	{
-		IPACMDBG("Queue is empty\n");
+		IPACM_LOG(IPACM_LOG_WARN, "Queue is empty\n");
 	}
 
 	while(tmp != NULL)
@@ -132,16 +135,16 @@ void IPACM_EvtDispatcher::ProcessEvt(ipacm_cmd_q_data *data)
 		{
 			ipacm_event_stats[data->event]++;
 			tmp1.obj->event_callback(data->event, data->evt_data);
-			IPACMDBG(" Find matched registered events %d\n", data->event);
+			IPACM_LOG(IPACM_LOG_DEBUG, " Find matched registered events %d\n", data->event);
 		}
 	        tmp = tmp1.next;
 	}
 
-	IPACMDBG(" Finished process events %d\n", data->event);
+	IPACM_LOG(IPACM_LOG_DEBUG, " Finished process events %d\n", data->event);
 			
 	if(data->evt_data != NULL)
 	{
-		IPACMDBG("free the event:%d data: %p\n", data->event, data->evt_data);
+		IPACM_LOG(IPACM_LOG_DEBUG, "free the event:%d data: %p\n", data->event, data->evt_data);
 		free(data->evt_data);
 	}
 	return;

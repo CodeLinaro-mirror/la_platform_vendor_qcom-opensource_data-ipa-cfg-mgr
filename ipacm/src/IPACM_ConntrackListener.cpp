@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 #include <sys/ioctl.h>
 #include <net/if.h>
@@ -46,8 +50,6 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	sta_clnt_ipv6_addr(*(new Ipv6IpAddressesCollection(MAX_STA_CLNT_IFACES))),
 	wan_ipaddr_v6(*(new Ipv6IpAddress))
 {
-	 IPACMDBG("\n");
-
 	 isNatThreadStart = false;
 	 isCTReg = false;
 	 WanUp = false;
@@ -124,14 +126,14 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 
 	 if(data == NULL)
 	 {
-		 IPACMERR("Invalid Data\n");
+		 IPACM_LOG(IPACM_LOG_ERR, "Invalid Data\n");
 		 return;
 	 }
 
 	 switch(evt)
 	 {
 	 case IPA_PROCESS_CT_MESSAGE:
-			IPACMDBG("Received IPA_PROCESS_CT_MESSAGE event\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_PROCESS_CT_MESSAGE event\n");
 			ProcessCTMessage(data);
 			break;
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
@@ -139,7 +141,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 	{
 		if (IsIpv6CTEnabled())
 		{
-			IPACMDBG_H("Received IPA_ADD_SOCKSv5_CONN event\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_ADD_SOCKSv5_CONN event\n");
 			socksv5_info = (ipa_socksv5_msg*)data;
 			ProcessSocksv5Conn(socksv5_info, true);
 		}
@@ -150,7 +152,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 	{
 		if (IsIpv6CTEnabled())
 		{
-			IPACMDBG_H("Received IPA_DEL_SOCKSv5_CONN event\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_DEL_SOCKSv5_CONN event\n");
 			socksv5_info = (ipa_socksv5_msg*)data;
 			ProcessSocksv5Conn(socksv5_info, false);
 		}
@@ -160,12 +162,12 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 	case IPA_PROCESS_CT_MESSAGE_V6:
 	{
 		const ipacm_ct_evt_data* evt_data = static_cast<const ipacm_ct_evt_data*>(data);
-		IPACMDBG_H("Received IPA_PROCESS_CT_MESSAGE_V6 event\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_PROCESS_CT_MESSAGE_V6 event\n");
 #ifdef FEATURE_IPV6_NAT
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable) {
 			Ipv6NatEntry entry;
 
-			IPACMDBG_H("nat enabled\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "nat enabled\n");
 			CreateIpv6NatEntryFromCtEventData(evt_data, entry);
 			ProcessCTMessage_v6(evt_data, entry);
 		} else
@@ -183,7 +185,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 	}
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 	 case IPA_HANDLE_WAN_UP:
-			IPACMDBG_H("Received IPA_HANDLE_WAN_UP event\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_HANDLE_WAN_UP event\n");
 #ifdef FEATURE_VLAN_MPDN
 			if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 			{
@@ -197,18 +199,18 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			break;
 #ifdef FEATURE_VLAN_MPDN
 	 case IPA_HANDLE_WAN_VLAN_PDN_UP:
-			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_UP event\n");
+			IPACM_LOG(IPACM_LOG_INFO, "Received IPA_HANDLE_WAN_VLAN_PDN_UP event\n");
 			HandleVlanUp(data);
 			break;
 
 	 case IPA_HANDLE_WAN_VLAN_PDN_DOWN:
-			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN event\n");
+			IPACM_LOG(IPACM_LOG_INFO, "Received IPA_HANDLE_WAN_VLAN_PDN_DOWN event\n");
 			HandleVlanDown(data);
 			break;
 #endif
 
 	 case IPA_HANDLE_WAN_DOWN:
-			IPACMDBG_H("Received IPA_HANDLE_WAN_DOWN event\n");
+			IPACM_LOG(IPACM_LOG_INFO, "Received IPA_HANDLE_WAN_DOWN event\n");
 			wan_data = (ipacm_event_iface_up *)data;
 			if (WanUp)
 			{
@@ -217,7 +219,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			break;
 
 	case IPA_HANDLE_WAN_UP_V6:
-		IPACMDBG_H("Received IPA_HANDLE_WAN_UP_V6 event\n");
+		IPACM_LOG(IPACM_LOG_INFO, "Received IPA_HANDLE_WAN_UP_V6 event\n");
 		if (!WanUp_v6)
 		{
 			wan_data = static_cast<const ipacm_event_iface_up*>(data);
@@ -227,7 +229,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		break;
 
 	case IPA_HANDLE_WAN_DOWN_V6:
-		IPACMDBG_H("Received IPA_HANDLE_WAN_DOWN_V6 event\n");
+		IPACM_LOG(IPACM_LOG_INFO, "Received IPA_HANDLE_WAN_DOWN_V6 event\n");
 		if (WanUp_v6)
 		{
 			wan_data = static_cast<const ipacm_event_iface_up*>(data);
@@ -246,17 +248,17 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		}
 		/* create v6-ct tble */
 		data_evt_conn = (ipacm_event_connection*)data;
-		IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_UP event\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_HANDLE_SOCKSv5_UP event\n");
 		memset(&wan_data_local, 0, sizeof(wan_data_local));
 		wan_data_local.ipv6_addr[0] = data_evt_conn->dst_ipv6_addr[0];
 		wan_data_local.ipv6_addr[1] = data_evt_conn->dst_ipv6_addr[1];
 		wan_data_local.ipv6_addr[2] = data_evt_conn->dst_ipv6_addr[2];
 		wan_data_local.ipv6_addr[3] = data_evt_conn->dst_ipv6_addr[3];
 		strlcpy(wan_data_local.ifname, IPA_IF_SOCKSv5_NAME, sizeof(wan_data_local.ifname));
-		IPACMDBG_H("WanUp_v6 %d\n", WanUp_v6);
+		IPACM_LOG(IPACM_LOG_DEBUG, "WanUp_v6 %d\n", WanUp_v6);
 		if (!WanUp_v6)
 		{
-			IPACMDBG_H("WanUp_v6 %d\n", WanUp_v6);
+			IPACM_LOG(IPACM_LOG_DEBUG, "WanUp_v6 %d\n", WanUp_v6);
 			wan_data = static_cast<const ipacm_event_iface_up*>(&wan_data_local);
 			static_cast<Ipv6IpAddress&>(wan_ipaddr_v6).CreateFromArray(wan_data->ipv6_addr, false);
 			TriggerWANUp_v6(wan_data);
@@ -266,7 +268,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		break;
 
 	case IPA_HANDLE_SOCKSv5_DOWN:
-		IPACMDBG_H("Received IPA_HANDLE_SOCKSv5_DOWN event\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_HANDLE_SOCKSv5_DOWN event\n");
 		if (WanUp_v6)
 		{
 			Ipv6IpAddress wan_addr;
@@ -278,7 +280,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 
 	/* modify TCP/UDP filters to ignore local WLAN or LAN IPv4 connections */
 	case IPA_HANDLE_LAN_WLAN_UP:
-			IPACMDBG_H("Received event: %d with ifname: %s and address: 0x%x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received event: %d with ifname: %s and address: 0x%x\n",
 							 evt, ((ipacm_event_iface_up *)data)->ifname,
 							 ((ipacm_event_iface_up *)data)->ipv4_addr);
 			IPACM_ConntrackClient::UpdateUDPFilters(data, false);
@@ -293,7 +295,7 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			pConfig = IPACM_Config::GetInstance();
 			if(pConfig == NULL)
 			{
-				IPACMERR("Unable to get Config instance\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Unable to get Config instance\n");
 				break;
 			}
 		}
@@ -303,17 +305,17 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		break;
 
 	 case IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT:
-		 IPACMDBG("Received IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT event\n");
+		 IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT event\n");
 		 HandleNonNatIPAddr(data, true);
 		 break;
 
 	 case IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT:
-		 IPACMDBG("Received IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT event\n");
+		 IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT event\n");
 		 HandleNonNatIPAddr(data, false);
 		 break;
 
 	 default:
-			IPACMDBG("Ignore cmd %d\n", evt);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Ignore cmd %d\n", evt);
 			break;
 	 }
 }
@@ -333,12 +335,12 @@ void IPACM_ConntrackListener::ReadNfConntrackAcct()
 		pclose(cmd);
 		if (acct == 1)
 		{
-			IPACMDBG_H("Accounting is enabled. \n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Accounting is enabled. \n");
 			is_acct_enabled = true;
 		}
 		else
 		{
-			IPACMDBG_H("Accounting is not enabled.\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Accounting is not enabled.\n");
 			is_acct_enabled = false;
 		}
 	}
@@ -356,12 +358,12 @@ uint32_t IPACM_ConntrackListener::GetPacketThreshhold(void)
 	{
 		fgets(input_value, MAX_CMD_SIZE, cmd);
 		pkt_thrshld = strtoul(input_value, NULL, 0);
-		IPACMDBG_H("Configured packet threshold: %d\n", pkt_thrshld);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Configured packet threshold: %d\n", pkt_thrshld);
 		pclose(cmd);
 	}
 	else
 	{
-		IPACMDBG_H("Packet threshold is not enabled.\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Packet threshold is not enabled.\n");
 	}
 
 	return pkt_thrshld;
@@ -373,21 +375,21 @@ int IPACM_ConntrackListener::CheckNatIface(int if_index, bool *NatIface)
 	struct ifreq ifr;
 	*NatIface = false;
 
-	IPACMDBG("Received interface index %d", if_index);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Received interface index %d", if_index);
 
 	if (pConfig == NULL)
 	{
 		pConfig = IPACM_Config::GetInstance();
 		if (pConfig == NULL)
 		{
-			IPACMERR("Unable to get Config instance\n");
+			IPACM_LOG(IPACM_LOG_INFO, "Unable to get Config instance\n");
 			return IPACM_FAILURE;
 		}
 	}
 
 	cnt = pConfig->GetNatIfacesCnt();
 	NatIfaceCnt = cnt;
-	IPACMDBG("Total Nat ifaces: %d\n", NatIfaceCnt);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Total Nat ifaces: %d\n", NatIfaceCnt);
 	if (pNatIfaces != NULL)
 	{
 		free(pNatIfaces);
@@ -398,21 +400,22 @@ int IPACM_ConntrackListener::CheckNatIface(int if_index, bool *NatIface)
 	pNatIfaces = (NatIfaces *)malloc(len);
 	if (pNatIfaces == NULL)
 	{
-		IPACMERR("Unable to allocate memory for non nat ifaces\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory for non nat ifaces\n");
 		return IPACM_FAILURE;
 	}
 
 	memset(pNatIfaces, 0, len);
 	if (pConfig->GetNatIfaces(NatIfaceCnt, pNatIfaces) != 0)
 	{
-		IPACMERR("Unable to retrieve non nat ifaces\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to retrieve non nat ifaces\n");
 		return IPACM_FAILURE;
 	}
 
 	/* Search/Configure linux interface-index and map it to IPA interface-index */
 	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
-		PERROR("get interface name socket create failed");
+		perror("get interface name socket create failed");
+		IPACM_LOG(IPACM_LOG_INFO, "get interface name socket create failed");
 		return IPACM_FAILURE;
 	}
 
@@ -420,7 +423,8 @@ int IPACM_ConntrackListener::CheckNatIface(int if_index, bool *NatIface)
 	ifr.ifr_ifindex = if_index;
 	if (ioctl(fd, SIOCGIFNAME, &ifr) < 0)
 	{
-		PERROR("call_ioctl_on_dev: ioctl failed:");
+		perror("call_ioctl_on_dev: ioctl failed:");
+		IPACM_LOG(IPACM_LOG_INFO, "call_ioctl_on_dev: ioctl failed:");
 		close(fd);
 		return IPACM_FAILURE;
 	}
@@ -432,7 +436,7 @@ int IPACM_ConntrackListener::CheckNatIface(int if_index, bool *NatIface)
 					pNatIfaces[i].iface_name,
 					sizeof(pNatIfaces[i].iface_name)) == 0)
 		{
-			IPACMDBG_H("Nat iface (%s), entry (%d), dont cache",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Nat iface (%s), entry (%d), dont cache",
 						pNatIfaces[i].iface_name, i);
 			*NatIface = true;
 			return IPACM_SUCCESS;
@@ -464,7 +468,7 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr(void* inParam, bool AddOp)
 	}
 #endif
 	default:
-		IPACMERR("Not supported IP type %d\n", data->iptype);
+		IPACM_LOG(IPACM_LOG_ERR, "Not supported IP type %d\n", data->iptype);
 	}
 }
 
@@ -477,13 +481,13 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr_v4(
 
 	if (isStaMode)
 	{
-		IPACMDBG("In STA mode, don't add dummy rules for non nat ifaces\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "In STA mode, don't add dummy rules for non nat ifaces\n");
 		return;
 	}
 
 	if (data->ipv4_addr == 0)
 	{
-		IPACMDBG("Ignoring\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Ignoring\n");
 		return;
 	}
 
@@ -511,7 +515,7 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr_v4(
 				if (nonnat_iface_ipv4_addr[cnt] == 0)
 				{
 					nonnat_iface_ipv4_addr[cnt] = data->ipv4_addr;
-					IPACMDBG("Add ip addr to non nat list (%d) ", cnt);
+					IPACM_LOG(IPACM_LOG_INFO, "Add ip addr to non nat list (%d) ", cnt);
 					iptodot("with ipv4 address", nonnat_iface_ipv4_addr[cnt]);
 
 					/* Add dummy nat rule for non nat ifaces */
@@ -528,7 +532,7 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr_v4(
 		{
 			if (nonnat_iface_ipv4_addr[cnt] == data->ipv4_addr)
 			{
-				IPACMDBG("Reseting ct filters, entry (%d) ", cnt);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Reseting ct filters, entry (%d) ", cnt);
 				iptodot("with ipv4 address", nonnat_iface_ipv4_addr[cnt]);
 				nonnat_iface_ipv4_addr[cnt] = 0;
 				nat_inst->FlushTempEntries(data->ipv4_addr, false);
@@ -544,10 +548,10 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr_v4(
 
 void IPACM_ConntrackListener::HandleNonNatIPAddr_v6(const IpAddress& ip, int if_index, bool AddOp)
 {
-	IPACMDBG_H("\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "\n");
 	if (isStaMode)
 	{
-		IPACMDBG("In STA mode, don't add dummy rules for non nat ifaces\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "In STA mode, don't add dummy rules for non nat ifaces\n");
 		return;
 	}
 
@@ -568,14 +572,14 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr_v6(const IpAddress& ip, int if_
 
 		if (nonnat_iface_ipv6_addr.Find(ip) != NULL)
 		{
-			IPACMDBG_H("IP duplication. Ignore\n");
+			IPACM_LOG(IPACM_LOG_WARN, "IP duplication. Ignore\n");
 			return;
 		}
 
 		IpAddress* entry = nonnat_iface_ipv6_addr.GetFirstEmpty();
 		if (entry == NULL)
 		{
-			IPACMERR("Unable to add, reached maximum nonnat_interfaces\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to add, reached maximum nonnat_interfaces\n");
 			return;
 		}
 
@@ -584,7 +588,7 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr_v6(const IpAddress& ip, int if_
 		/* Add dummy NAT rule for non NAT interfaces */
 		ipv6ct_inst->FlushTempEntries(ip, true, true, false);
 
-		IPACMDBG_H("Successfully added nonnat interface\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Successfully added nonnat interface\n");
 	}
 	else
 	{
@@ -592,14 +596,14 @@ void IPACM_ConntrackListener::HandleNonNatIPAddr_v6(const IpAddress& ip, int if_
 		IpAddress* entry = nonnat_iface_ipv6_addr.Find(ip);
 		if (entry == NULL)
 		{
-			IPACMDBG_H("The interface is not in nonnat interfaces\n");
+			IPACM_LOG(IPACM_LOG_WARN, "The interface is not in nonnat interfaces\n");
 			return;
 		}
 
 		entry->Clear();
 		ipv6ct_inst->FlushTempEntries(ip, false, true, false);
 		ipv6ct_inst->DelEntriesOnClntDiscon(ip);
-		IPACMDBG("Successfully deleted nonnat interface\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Successfully deleted nonnat interface\n");
 	}
 }
 
@@ -628,7 +632,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 					pConfig = IPACM_Config::GetInstance();
 					if (pConfig == NULL)
 					{
-						IPACMERR("Unable to get Config instance\n");
+						IPACM_LOG(IPACM_LOG_ERR, "Unable to get Config instance\n");
 						return;
 					}
 				}
@@ -636,17 +640,17 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 				if(pConfig->get_vlan_id(data->iface_name, &nat_clients[j].vlan_id) == IPACM_SUCCESS)
 				{
 					nat_clients[j].is_vlan_client = true;
-					IPACMDBG_H("client %d: vlan iface %s has vlan id %d ", j, data->iface_name, nat_clients[j].vlan_id);
+					IPACM_LOG(IPACM_LOG_INFO, "client %d: vlan iface %s has vlan id %d ", j, data->iface_name, nat_clients[j].vlan_id);
 					iptodot("and ip data->ipv4_addr", data->ipv4_addr);
 				}
 				else
 				{
 					nat_clients[j].is_vlan_client = false;
 					nat_clients[j].vlan_id = 0;
-					IPACMDBG_H("client %d: iface %s is not a vlan iface\n", j, data->iface_name);
+					IPACM_LOG(IPACM_LOG_INFO, "client %d: iface %s is not a vlan iface\n", j, data->iface_name);
 				}
 #endif
-				IPACMDBG_H("for iface %s: ", data->iface_name);
+				IPACM_LOG(IPACM_LOG_DEBUG, "for iface %s: ", data->iface_name);
 				iptodot("Nating connections of iface addr: ", nat_clients[j].nat_iface_ipv4_addr);
 				break;
 			}
@@ -661,10 +665,10 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 			bool entry_exists;
 			int i;
 
-			IPACMDBG_H("client %d is_vlan_client %d\n", j, nat_clients[j].is_vlan_client);
+			IPACM_LOG(IPACM_LOG_DEBUG, "client %d is_vlan_client %d\n", j, nat_clients[j].is_vlan_client);
 			if (nat_clients[j].is_vlan_client)
 			{
-				IPACMDBG("handling VLAN clients temp entries\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "handling VLAN clients temp entries\n");
 				iptodot("vlan client ip", data->ipv4_addr);
 
 				nat_inst->FlushAndCacheVlanTempEntries(data->ipv4_addr, &entry_exists, &public_ip);
@@ -675,7 +679,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 						/* check if we already got vlan_pdn_up event for this ip */
 						if(vlan_pdns[i].public_ip == public_ip)
 						{
-							IPACMDBG_H("vlan pdn already up for ");
+							IPACM_LOG(IPACM_LOG_INFO, "vlan pdn already up for ");
 							iptodot("ip", public_ip);
 							return;
 						}
@@ -685,7 +689,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 					{
 						iptodot("vlan client ip", data->ipv4_addr);
 						iptodot("pdn ip", public_ip);
-						IPACMERR("can't add more PDN, already got max \n");
+						IPACM_LOG(IPACM_LOG_INFO, "can't add more PDN, already got max \n");
 						return;
 					}
 
@@ -696,7 +700,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 					vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
 					if(!vlan_data)
 					{
-						IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+						IPACM_LOG(IPACM_LOG_ERR, "couldn't allocate memory for new vlan pdn event\n");
 						return;
 					}
 					memset(vlan_data, 0, sizeof(ipacm_event_route_vlan));
@@ -708,7 +712,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 						vlan_data->wan_ipv6_prefix[0]=IPA_DUMMY_PREFIX;
 					}
 					evt_data.evt_data = vlan_data;
-					IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+					IPACM_LOG(IPACM_LOG_INFO, "sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
 						vlan_data->VlanID,
 						vlan_data->iptype);
 					iptodot("pdn ip", public_ip);
@@ -719,7 +723,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 			else
 #endif
 			{
-				IPACMDBG("Flushing temp entries client %d\n", j);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Flushing temp entries client %d\n", j);
 				iptodot("client ip", data->ipv4_addr);
 				nat_inst->FlushTempEntries(data->ipv4_addr, true);
 			}
@@ -730,11 +734,9 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 
 void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(const IpAddress& ip, int if_index)
 {
-	IPACMDBG_H("\n");
-
 	if (!IsIpv6CTEnabled() || !ip.Valid())
 	{
-		IPACMDBG("Ignoring\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Ignoring\n");
 		return;
 	}
 
@@ -752,7 +754,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(const IpAddress& ip, in
 		IpAddress* entry = nat_iface_ipv6_addr.GetFirstEmpty();
 		if (entry == NULL)
 		{
-			IPACMERR("Unable to add, reached maximum nat_interfaces\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to add, reached maximum nat_interfaces\n");
 			return;
 		}
 
@@ -762,7 +764,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(const IpAddress& ip, in
 	ipv6ct_inst->ResetPwrSaveIf(ip);
 	ipv6ct_inst->FlushTempEntries(ip, true, false, false);
 
-	IPACMDBG_H("Successfully added NAT interface\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Successfully added NAT interface\n");
 }
 
 #ifdef FEATURE_VLAN_MPDN
@@ -776,19 +778,19 @@ bool IPACM_ConntrackListener::IsVlanIPv4(uint32_t ipv4_address, uint16_t *VlanId
 		{
 			if(nat_clients[i].is_vlan_client)
 			{
-				IPACMDBG_H("ipv4 address belong to vlan iface with id %d\n", nat_clients[i].vlan_id)
+				IPACM_LOG(IPACM_LOG_INFO, "ipv4 address belong to vlan iface with id %d\n", nat_clients[i].vlan_id)
 				*VlanId = nat_clients[i].vlan_id;
 				return true;
 			}
 			else
 			{
-				IPACMDBG_H("not vlan v4 address\n");
+				IPACM_LOG(IPACM_LOG_INFO, "not vlan v4 address\n");
 				return false;
 			}
 			return false;
 		}
 	}
-	IPACMDBG("couldn't match IP\n");
+	IPACM_LOG(IPACM_LOG_INFO, "couldn't match IP\n");
 	return false;
 }
 #endif
@@ -800,7 +802,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt(
 
 	if(ipv4_addr == 0)
 	{
-		IPACMDBG("Ignoring\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Ignoring\n");
 		return;
 	}
 
@@ -809,7 +811,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt(
 	{
 		if (nat_clients[cnt].nat_iface_ipv4_addr == ipv4_addr)
 		{
-			IPACMDBG("Reseting ct nat iface, entry (%d) ", cnt);
+			IPACM_LOG(IPACM_LOG_INFO, "Reseting ct nat iface, entry (%d) ", cnt);
 			iptodot("with ipv4 address", nat_clients[cnt].nat_iface_ipv4_addr);
 			nat_clients[cnt].nat_iface_ipv4_addr = 0;
 #ifdef FEATURE_VLAN_MPDN
@@ -826,11 +828,9 @@ void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt(
 
 void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt_v6(const IpAddress& ip)
 {
-	IPACMDBG_H("\n");
-
 	if (!IsIpv6CTEnabled() || !ip.Valid())
 	{
-		IPACMDBG("Ignoring\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Ignoring\n");
 		return;
 	}
 
@@ -839,7 +839,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt_v6(const IpAddress& ip)
 	IpAddress* entry = nat_iface_ipv6_addr.Find(ip);
 	if (entry == NULL)
 	{
-		IPACMDBG_H("The interface is not NAT interface\n");
+		IPACM_LOG(IPACM_LOG_WARN, "The interface is not NAT interface\n");
 		return;
 	}
 
@@ -847,21 +847,20 @@ void IPACM_ConntrackListener::HandleNeighIpAddrDelEvt_v6(const IpAddress& ip)
 	ipv6ct_inst->FlushTempEntries(ip, false, false, false);
 	ipv6ct_inst->DelEntriesOnClntDiscon(ip);
 
-	IPACMDBG_H("Successfully deleted NAT interface\n");
+	IPACM_LOG(IPACM_LOG_INFO, "Successfully deleted NAT interface\n");
 }
 
 #ifdef FEATURE_VLAN_MPDN
 void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlanup_data = (ipacm_event_vlan_pdn *)in_param;
-	IPACMDBG_H("Recevied below information during VLAN PDN up,\n");
-	IPACMDBG_H("IPType: %d, vlan_id:%d, mux id %d\n",
+	IPACM_LOG(IPACM_LOG_INFO, "Recevied below information during VLAN PDN up with IPType: %d, vlan_id:%d, mux id %d\n",
 		vlanup_data->iptype,
 		vlanup_data->VlanID,
 		vlanup_data->mux_id);
 	if(nat_inst == NULL)
 	{
-		IPACMERR(" no nat_inst\n");
+		IPACM_LOG(IPACM_LOG_ERR, " no nat_inst\n");
 		return;
 	}
 
@@ -869,16 +868,16 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 	if(num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS)
 		return;
 
-	IPACMDBG_H("ipv4 address for new PDN 0x%X\n", vlanup_data->ipv4_addr);
+	IPACM_LOG(IPACM_LOG_DEBUG, "ipv4 address for new PDN 0x%X\n", vlanup_data->ipv4_addr);
 	if(!vlanup_data->ipv4_addr)
 	{
-		IPACMERR("ipv4 address is invalid, iptype %d\n", vlanup_data->iptype);
+		IPACM_LOG(IPACM_LOG_ERR, "ipv4 address is invalid, iptype %d\n", vlanup_data->iptype);
 		return;
 	}
 
 	if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id, false))
 	{
-		IPACMERR("failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
+		IPACM_LOG(IPACM_LOG_ERR, "failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
 	}
 	else
 	{
@@ -886,7 +885,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
 			if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr) {
-				IPACMDBG_H("found existing PDN entry in %d \n", i);
+				IPACM_LOG(IPACM_LOG_DEBUG, "found existing PDN entry in %d \n", i);
 				return;
 			}
 		}
@@ -895,7 +894,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		{
 			if(vlan_pdns[i].public_ip == 0)
 			{
-				IPACMDBG_H("found empty PDN entry in %d num_vlan_pdns %d\n", i, num_vlan_pdns);
+				IPACM_LOG(IPACM_LOG_DEBUG, "found empty PDN entry in %d num_vlan_pdns %d\n", i, num_vlan_pdns);
 				vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
 				vlan_pdns[i].vlan_id = vlanup_data->VlanID;
 				num_vlan_pdns++;
@@ -904,7 +903,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		}
 		if(!isNatThreadStart)
 		{
-			IPACMDBG("creating nat threads\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "creating nat threads\n");
 			CreateNatThreads();
 		}
 	}
@@ -916,14 +915,14 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 	 ipacm_event_iface_up *wanup_data = (ipacm_event_iface_up *)in_param;
 	 uint8_t mux_id;
 
-	 IPACMDBG_H("Recevied below information during wanup,\n");
-	 IPACMDBG_H("if_name:%s, ipv4_address:0x%x mux_id:%d, xlat_mux_id:%d\n",
-						wanup_data->ifname, wanup_data->ipv4_addr, wanup_data->mux_id,
-						wanup_data->xlat_mux_id);
+	 IPACM_LOG(IPACM_LOG_INFO, "Recevied below information during wanup: "
+			 	   "if_name:%s, ipv4_address:0x%x mux_id:%d, xlat_mux_id:%d\n",
+					wanup_data->ifname, wanup_data->ipv4_addr, wanup_data->mux_id,
+					wanup_data->xlat_mux_id);
 
 	 if(wanup_data->ipv4_addr == 0)
 	 {
-		 IPACMERR("Invalid ipv4 address,ignoring IPA_HANDLE_WAN_UP event\n");
+		 IPACM_LOG(IPACM_LOG_ERR, "Invalid ipv4 address,ignoring IPA_HANDLE_WAN_UP event\n");
 		 return;
 	 }
 #ifdef FEATURE_VLAN_MPDN
@@ -931,15 +930,15 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 	 {
 		 if(wanup_data->ipv4_addr == wan_ipaddr)
 		 {
-			 IPACMERR("WanUpAddreess hasn't changed, ignoring\n");
+			 IPACM_LOG(IPACM_LOG_ERR, "WanUpAddreess hasn't changed, ignoring\n");
 			 return;
 		 }
-		 IPACMDBG_H("WanUpAddreess changed STA %d->%d, IF %s->%s \n",
+		 IPACM_LOG(IPACM_LOG_DEBUG, "WanUpAddreess changed STA %d->%d, IF %s->%s \n",
 			 isStaMode, wanup_data->is_sta, wan_ifname, wanup_data->ifname);
 
 		 if(!IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 		 {
-			 IPACMDBG_H("Wan still up, ignore\n");
+			 IPACM_LOG(IPACM_LOG_DEBUG, "Wan still up, ignore\n");
 			 return;
 		 }
 		 /*
@@ -953,7 +952,7 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 
 	 WanUp = true;
 	 isStaMode = wanup_data->is_sta;
-	 IPACMDBG("isStaMode: %d\n", isStaMode);
+	 IPACM_LOG(IPACM_LOG_DEBUG, "isStaMode: %d\n", isStaMode);
 
 	 wan_ipaddr = wanup_data->ipv4_addr;
 	 memcpy(wan_ifname, wanup_data->ifname, sizeof(wan_ifname));
@@ -971,32 +970,29 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 #endif
 	 }
 
-	 IPACMDBG("creating nat threads\n");
+	 IPACM_LOG(IPACM_LOG_INFO, "creating nat threads\n");
 	 CreateNatThreads();
 }
 
 void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_data)
 {
-	IPACMDBG_H("\n");
 	if (!IsIpv6CTEnabled())
 	{
-		IPACMDBG("Ignoring\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Ignoring\n");
 		return;
 	}
 /* need QCMAP changes to remove below feature flag and use run time flag instead*/
 #ifndef FEATURE_SOCKSv5
 	if (!wan_ipaddr_v6.Valid())
 	{
-		IPACMERR("Invalid WAN address,ignoring WAN UP event\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid WAN address,ignoring WAN UP event\n");
 		return;
 	}
 #endif
-	IPACMDBG_H("Recevied below information during wanup\n");
-	IPACMDBG_H("if_name: %s", evt_data->ifname);
-	wan_ipaddr_v6.DebugDump("WAN");
-
 	isStaMode = evt_data->is_sta;
-	IPACMDBG_H("isStaMode: %d\n", isStaMode);
+	IPACM_LOG(IPACM_LOG_INFO, "Recevied if_name in wan up: %s isStaMode: %d",
+		       		evt_data->ifname, isStaMode);
+	wan_ipaddr_v6.DebugDump("WAN");
 
 	memcpy(wan_ifname, evt_data->ifname, sizeof(wan_ifname));
 
@@ -1007,12 +1003,12 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 
 /* need QCMAP changes to remove below feature flag and use run time flag instead*/
 #ifndef FEATURE_SOCKSv5
-	IPACMDBG_H("creating nat threads\n");
+	IPACM_LOG(IPACM_LOG_INFO, "creating nat threads\n");
 	CreateNatThreads();
 #endif
 	WanUp_v6 = true;
 
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 int IPACM_ConntrackListener::CreateConnTrackThreads(void)
@@ -1025,29 +1021,29 @@ int IPACM_ConntrackListener::CreateConnTrackThreads(void)
 		ret = pthread_create(&tcp_thread, NULL, IPACM_ConntrackClient::TCPRegisterWithConnTrack, NULL);
 		if(0 != ret)
 		{
-			IPACMERR("unable to create TCP conntrack event listner thread\n");
-			PERROR("unable to create TCP conntrack\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to create TCP conntrack event listner thread\n");
+			perror("unable to create TCP conntrack\n");
 			goto error;
 		}
 
-		IPACMDBG("created TCP conntrack event listner thread\n");
+		IPACM_LOG(IPACM_LOG_INFO, "created TCP conntrack event listner thread\n");
 		if(pthread_setname_np(tcp_thread, "tcp ct listener") != 0)
 		{
-			IPACMERR("unable to set thread name\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to set thread name\n");
 		}
 
 		ret = pthread_create(&udp_thread, NULL, IPACM_ConntrackClient::UDPRegisterWithConnTrack, NULL);
 		if(0 != ret)
 		{
-			IPACMERR("unable to create UDP conntrack event listner thread\n");
-			PERROR("unable to create UDP conntrack\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to create UDP conntrack event listner thread\n");
+			perror("unable to create UDP conntrack\n");
 			goto error;
 		}
 
-		IPACMDBG("created UDP conntrack event listner thread\n");
+		IPACM_LOG(IPACM_LOG_INFO, "created UDP conntrack event listner thread\n");
 		if(pthread_setname_np(udp_thread, "udp ct listener") != 0)
 		{
-			IPACMERR("unable to set thread name\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to set thread name\n");
 		}
 
 		isCTReg = true;
@@ -1068,15 +1064,15 @@ int IPACM_ConntrackListener::CreateNatThreads(void)
 		ret = pthread_create(&udpcto_thread, NULL, IPACM_ConntrackClient::UDPConnTimeoutUpdate, NULL);
 		if(0 != ret)
 		{
-			IPACMERR("unable to create udp conn timeout thread\n");
-			PERROR("unable to create udp conn timeout\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to create udp conn timeout thread\n");
+			perror("unable to create udp conn timeout\n");
 			goto error;
 		}
 
-		IPACMDBG("created upd conn timeout thread\n");
+		IPACM_LOG(IPACM_LOG_INFO, "created upd conn timeout thread\n");
 		if(pthread_setname_np(udpcto_thread, "udp conn timeout") != 0)
 		{
-			IPACMERR("unable to set thread name\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to set thread name\n");
 		}
 
 		isNatThreadStart = true;
@@ -1091,14 +1087,12 @@ error:
 void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlanup_data = (ipacm_event_vlan_pdn *)in_param;
-	IPACMDBG_H("Recevied below information during VLAN DOWN up,\n");
-	IPACMDBG_H("IPType: %d, vlan_id:%d, mux id %d\n",
-		vlanup_data->iptype,
-		vlanup_data->VlanID,
-		vlanup_data->mux_id);
+	IPACM_LOG(IPACM_LOG_INFO, "Input Params: IPType: %d, vlan_id:%d, mux id %d IP: 0x%X\n",
+					vlanup_data->iptype, vlanup_data->VlanID,
+				    vlanup_data->mux_id, vlanup_data->ipv4_addr);
 	if(nat_inst == NULL)
 	{
-		IPACMERR(" no nat_inst\n");
+		IPACM_LOG(IPACM_LOG_ERR, " no nat_inst\n");
 		return;
 	}
 
@@ -1106,14 +1100,14 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 		(vlanup_data->iptype == IPA_IP_MAX))
 	{
 		/* VLAN PDN down is triggered only on LINK_DOWN, we can safely remove the PDN */
-		IPACMDBG_H("removing PDN ipv4 address 0x%X\n", vlanup_data->ipv4_addr);
+		IPACM_LOG(IPACM_LOG_INFO, "removing PDN ipv4 address 0x%X\n", vlanup_data->ipv4_addr);
 		nat_inst->RemovePdn(vlanup_data->ipv4_addr);
 
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
 			if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
 			{
-				IPACMDBG_H("removing pdn entry in %d\n", i);
+				IPACM_LOG(IPACM_LOG_INFO, "removing pdn entry in %d\n", i);
 				vlan_pdns[i].public_ip = 0;
 				vlan_pdns[i].vlan_id = 0;
 				num_vlan_pdns--;
@@ -1125,12 +1119,7 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 #endif
 void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 {
-#ifdef FEATURE_VLAN_MPDN
-	IPACMDBG_H("Removing default ipv4 pdn with");
-#else
-	IPACMDBG_H("Deleting ipv4 nat table with");
-#endif
-	IPACMDBG_H(" public ip address(0x%x): %d.%d.%d.%d\n", wan_addr,
+	IPACM_LOG(IPACM_LOG_INFO, " public ip address(0x%x): %d.%d.%d.%d\n", wan_addr,
 		((wan_addr >> 24) & 0xFF), ((wan_addr >> 16) & 0xFF),
 		((wan_addr >> 8) & 0xFF), (wan_addr & 0xFF));
 
@@ -1160,10 +1149,9 @@ void IPACM_ConntrackListener::TriggerWANDown(uint32_t wan_addr)
 
 void IPACM_ConntrackListener::TriggerWANDown_v6(const IpAddress& wan_addr)
 {
-	IPACMDBG_H("\n");
 	if (!IsIpv6CTEnabled())
 	{
-		IPACMDBG("Ignoring\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Ignoring\n");
 		return;
 	}
 
@@ -1172,7 +1160,7 @@ void IPACM_ConntrackListener::TriggerWANDown_v6(const IpAddress& wan_addr)
 #ifndef FEATURE_SOCKSv5
 	if (wan_addr != wan_ipaddr_v6)
 	{
-		IPACMDBG_H("WAN IP address is not matching\n");
+		IPACM_LOG(IPACM_LOG_WARN, "WAN IP address is not matching\n");
 		return;
 	}
 	wan_addr.DebugDump("Deleting the table with");
@@ -1180,60 +1168,58 @@ void IPACM_ConntrackListener::TriggerWANDown_v6(const IpAddress& wan_addr)
 	/* delete entries one by one to insure all uc activation entries gets removed */
 	ipv6ct_inst->DelEntriesOnWanDown();
 	ipv6ct_inst->DeleteTable(wan_addr);
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 void ParseCTMessage(struct nf_conntrack *ct)
 {
 	 uint32_t status, timeout;
-	 IPACMDBG("Printing conntrack parameters\n");
 
 	 iptodot("ATTR_IPV4_SRC = ATTR_ORIG_IPV4_SRC:", nfct_get_attr_u32(ct, ATTR_ORIG_IPV4_SRC));
 	 iptodot("ATTR_IPV4_DST = ATTR_ORIG_IPV4_DST:", nfct_get_attr_u32(ct, ATTR_ORIG_IPV4_DST));
-	 IPACMDBG("ATTR_PORT_SRC = ATTR_ORIG_PORT_SRC: 0x%x\n", nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC));
-	 IPACMDBG("ATTR_PORT_DST = ATTR_ORIG_PORT_DST: 0x%x\n", nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_PORT_SRC = ATTR_ORIG_PORT_SRC: 0x%x\n", nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_PORT_DST = ATTR_ORIG_PORT_DST: 0x%x\n", nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST));
 
 	 iptodot("ATTR_REPL_IPV4_SRC:", nfct_get_attr_u32(ct, ATTR_REPL_IPV4_SRC));
 	 iptodot("ATTR_REPL_IPV4_DST:", nfct_get_attr_u32(ct, ATTR_REPL_IPV4_DST));
-	 IPACMDBG("ATTR_REPL_PORT_SRC: 0x%x\n", nfct_get_attr_u16(ct, ATTR_REPL_PORT_SRC));
-	 IPACMDBG("ATTR_REPL_PORT_DST: 0x%x\n", nfct_get_attr_u16(ct, ATTR_REPL_PORT_DST));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_REPL_PORT_SRC: 0x%x\n", nfct_get_attr_u16(ct, ATTR_REPL_PORT_SRC));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_REPL_PORT_DST: 0x%x\n", nfct_get_attr_u16(ct, ATTR_REPL_PORT_DST));
 
 	 iptodot("ATTR_SNAT_IPV4:", nfct_get_attr_u32(ct, ATTR_SNAT_IPV4));
 	 iptodot("ATTR_DNAT_IPV4:", nfct_get_attr_u32(ct, ATTR_DNAT_IPV4));
-	 IPACMDBG("ATTR_SNAT_PORT: 0x%x\n", nfct_get_attr_u16(ct, ATTR_SNAT_PORT));
-	 IPACMDBG("ATTR_DNAT_PORT: 0x%x\n", nfct_get_attr_u16(ct, ATTR_DNAT_PORT));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_SNAT_PORT: 0x%x\n", nfct_get_attr_u16(ct, ATTR_SNAT_PORT));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_DNAT_PORT: 0x%x\n", nfct_get_attr_u16(ct, ATTR_DNAT_PORT));
 
-	 IPACMDBG("ATTR_MARK: 0x%x\n", nfct_get_attr_u32(ct, ATTR_MARK));
-	 IPACMDBG("ATTR_USE: 0x%x\n", nfct_get_attr_u32(ct, ATTR_USE));
-	 IPACMDBG("ATTR_ID: 0x%x\n", nfct_get_attr_u32(ct, ATTR_ID));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_MARK: 0x%x\n", nfct_get_attr_u32(ct, ATTR_MARK));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_USE: 0x%x\n", nfct_get_attr_u32(ct, ATTR_USE));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_ID: 0x%x\n", nfct_get_attr_u32(ct, ATTR_ID));
 
 	 status = nfct_get_attr_u32(ct, ATTR_STATUS);
-	 IPACMDBG("ATTR_STATUS: 0x%x\n", status);
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_STATUS: 0x%x\n", status);
 
 	 timeout = nfct_get_attr_u32(ct, ATTR_TIMEOUT);
-	 IPACMDBG("ATTR_TIMEOUT: 0x%x\n", timeout);
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_TIMEOUT: 0x%x\n", timeout);
 
 	 if(IPS_SRC_NAT & status)
 	 {
-			IPACMDBG("IPS_SRC_NAT set\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "IPS_SRC_NAT set\n");
 	 }
 
 	 if(IPS_DST_NAT & status)
 	 {
-			IPACMDBG("IPS_DST_NAT set\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "IPS_DST_NAT set\n");
 	 }
 
 	 if(IPS_SRC_NAT_DONE & status)
 	 {
-			IPACMDBG("IPS_SRC_NAT_DONE set\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "IPS_SRC_NAT_DONE set\n");
 	 }
 
 	 if(IPS_DST_NAT_DONE & status)
 	 {
-			IPACMDBG(" IPS_DST_NAT_DONE set\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, " IPS_DST_NAT_DONE set\n");
 	 }
 
-	 IPACMDBG("\n");
 	 return;
 }
 
@@ -1244,51 +1230,48 @@ void ParseCTV6Message(struct nf_conntrack *ct)
 	 struct nfct_attr_grp_ipv6 repl_params;
 	 uint8_t l4proto, tcp_flags, tcp_state;
 
-	 IPACMDBG("Printing conntrack parameters\n");
-
 	 nfct_get_attr_grp(ct, ATTR_GRP_ORIG_IPV6, (void *)&orig_params);
 #ifdef FEATURE_IPV6_NAT
 	 nfct_get_attr_grp(ct, ATTR_GRP_REPL_IPV6, (void *)&repl_params);
 #endif
-	 IPACMDBG("Orig src_v6_addr: 0x%08x%08x%08x%08x\n", orig_params.src[0], orig_params.src[1],
+	 IPACM_LOG(IPACM_LOG_DEBUG, "Orig src_v6_addr: 0x%08x%08x%08x%08x\n", orig_params.src[0], orig_params.src[1],
                 	orig_params.src[2], orig_params.src[3]);
-	IPACMDBG("Orig dst_v6_addr: 0x%08x%08x%08x%08x\n", orig_params.dst[0], orig_params.dst[1],
+	IPACM_LOG(IPACM_LOG_DEBUG, "Orig dst_v6_addr: 0x%08x%08x%08x%08x\n", orig_params.dst[0], orig_params.dst[1],
                 	orig_params.dst[2], orig_params.dst[3]);
 #ifdef FEATURE_IPV6_NAT
-	IPACMDBG("Repl src_v6_addr: 0x%08x%08x%08x%08x\n", repl_params.src[0], repl_params.src[1],
+	IPACM_LOG(IPACM_LOG_DEBUG, "Repl src_v6_addr: 0x%08x%08x%08x%08x\n", repl_params.src[0], repl_params.src[1],
 		repl_params.src[2], repl_params.src[3]);
-	IPACMDBG("Repl dst_v6_addr: 0x%08x%08x%08x%08x\n", repl_params.dst[0], repl_params.dst[1],
+	IPACM_LOG(IPACM_LOG_DEBUG, "Repl dst_v6_addr: 0x%08x%08x%08x%08x\n", repl_params.dst[0], repl_params.dst[1],
 		repl_params.dst[2], repl_params.dst[3]);
 #endif
-	 IPACMDBG("ATTR_PORT_SRC = ATTR_ORIG_PORT_SRC: 0x%x\n", nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC));
-	 IPACMDBG("ATTR_PORT_DST = ATTR_ORIG_PORT_DST: 0x%x\n", nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_PORT_SRC = ATTR_ORIG_PORT_SRC: 0x%x\n", nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_PORT_DST = ATTR_ORIG_PORT_DST: 0x%x\n", nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST));
 #ifdef FEATURE_IPV6_NAT
-	 IPACMDBG("ATTR_PORT_SRC = ATTR_REPL_PORT_SRC: 0x%x\n", nfct_get_attr_u16(ct, ATTR_REPL_PORT_SRC));
-	 IPACMDBG("ATTR_PORT_DST = ATTR_REPL_PORT_DST: 0x%x\n", nfct_get_attr_u16(ct, ATTR_REPL_PORT_DST));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_PORT_SRC = ATTR_REPL_PORT_SRC: 0x%x\n", nfct_get_attr_u16(ct, ATTR_REPL_PORT_SRC));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_PORT_DST = ATTR_REPL_PORT_DST: 0x%x\n", nfct_get_attr_u16(ct, ATTR_REPL_PORT_DST));
 #endif
 
-	 IPACMDBG("ATTR_MARK: 0x%x\n", nfct_get_attr_u32(ct, ATTR_MARK));
-	 IPACMDBG("ATTR_USE: 0x%x\n", nfct_get_attr_u32(ct, ATTR_USE));
-	 IPACMDBG("ATTR_ID: 0x%x\n", nfct_get_attr_u32(ct, ATTR_ID));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_MARK: 0x%x\n", nfct_get_attr_u32(ct, ATTR_MARK));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_USE: 0x%x\n", nfct_get_attr_u32(ct, ATTR_USE));
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_ID: 0x%x\n", nfct_get_attr_u32(ct, ATTR_ID));
 
 	 timeout = nfct_get_attr_u32(ct, ATTR_TIMEOUT);
-	 IPACMDBG("ATTR_TIMEOUT: 0x%x\n", timeout);
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_TIMEOUT: 0x%x\n", timeout);
 
 	 status = nfct_get_attr_u32(ct, ATTR_STATUS);
-	 IPACMDBG("ATTR_STATUS: 0x%x\n", status);
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_STATUS: 0x%x\n", status);
 
 	 l4proto = nfct_get_attr_u8(ct, ATTR_ORIG_L4PROTO);
-	 IPACMDBG("ATTR_ORIG_L4PROTO: 0x%x\n", l4proto);
+	 IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_ORIG_L4PROTO: 0x%x\n", l4proto);
 	 if(l4proto == IPPROTO_TCP)
 	 {
 		tcp_state = nfct_get_attr_u8(ct, ATTR_TCP_STATE);
-		IPACMDBG("ATTR_TCP_STATE: 0x%x\n", tcp_state);
+		IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_TCP_STATE: 0x%x\n", tcp_state);
 
 		tcp_flags =  nfct_get_attr_u8(ct, ATTR_TCP_FLAGS_ORIG);
-		IPACMDBG("ATTR_TCP_FLAGS_ORIG: 0x%x\n", tcp_flags);
+		IPACM_LOG(IPACM_LOG_DEBUG, "ATTR_TCP_FLAGS_ORIG: 0x%x\n", tcp_flags);
 	 }
 
-	 IPACMDBG("\n");
 	 return;
 }
 
@@ -1306,32 +1289,31 @@ void IPACM_ConntrackListener::ProcessCTV6Message(void *param)
 	 /* Process message and generate ioctl call to kernel thread */
 	 nfct_snprintf(buf, sizeof(buf), evt_data->ct,
 								 evt_data->type, NFCT_O_PLAIN, NFCT_OF_TIME);
-	 IPACMDBG("%s\n", buf);
-	 IPACMDBG("\n");
+	 IPACM_LOG(IPACM_LOG_DEBUG, "%s\n", buf);
 	 ParseCTV6Message(ct);
 #endif
 
 	if(p_lan2lan == NULL)
 	{
-		IPACMERR("Lan2Lan Instance is null\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Lan2Lan Instance is null\n");
 		goto IGNORE;
 	}
 
 	status = nfct_get_attr_u32(ct, ATTR_STATUS);
 	if((IPS_DST_NAT & status) || (IPS_SRC_NAT & status))
 	{
-		IPACMDBG("Either Destination or Source nat flag Set\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Either Destination or Source nat flag Set\n");
 		goto IGNORE;
 	}
 
 	l4proto = nfct_get_attr_u8(ct, ATTR_ORIG_L4PROTO);
 	if(IPPROTO_UDP != l4proto && IPPROTO_TCP != l4proto)
 	{
-		 IPACMDBG("Received unexpected protocl %d conntrack message\n", l4proto);
+		 IPACM_LOG(IPACM_LOG_DEBUG, "Received unexpected protocl %d conntrack message\n", l4proto);
 		 goto IGNORE;
 	}
 
-	IPACMDBG("Neither Destination nor Source nat flag Set\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Neither Destination nor Source nat flag Set\n");
 	struct nfct_attr_grp_ipv6 orig_params;
 	nfct_get_attr_grp(ct, ATTR_GRP_ORIG_IPV6, (void *)&orig_params);
 
@@ -1339,24 +1321,24 @@ void IPACM_ConntrackListener::ProcessCTV6Message(void *param)
 	lan2lan_conn.iptype = IPA_IP_v6;
 	memcpy(lan2lan_conn.src_ipv6_addr, orig_params.src,
 				 sizeof(lan2lan_conn.src_ipv6_addr));
-    IPACMDBG("Before convert, src_v6_addr: 0x%08x%08x%08x%08x\n", lan2lan_conn.src_ipv6_addr[0], lan2lan_conn.src_ipv6_addr[1],
+    IPACM_LOG(IPACM_LOG_DEBUG, "Before convert, src_v6_addr: 0x%08x%08x%08x%08x\n", lan2lan_conn.src_ipv6_addr[0], lan2lan_conn.src_ipv6_addr[1],
                 	lan2lan_conn.src_ipv6_addr[2], lan2lan_conn.src_ipv6_addr[3]);
     for(int cnt=0; cnt<4; cnt++)
 	{
 	   lan2lan_conn.src_ipv6_addr[cnt] = ntohl(lan2lan_conn.src_ipv6_addr[cnt]);
 	}
-	IPACMDBG("After convert src_v6_addr: 0x%08x%08x%08x%08x\n", lan2lan_conn.src_ipv6_addr[0], lan2lan_conn.src_ipv6_addr[1],
+	IPACM_LOG(IPACM_LOG_DEBUG, "After convert src_v6_addr: 0x%08x%08x%08x%08x\n", lan2lan_conn.src_ipv6_addr[0], lan2lan_conn.src_ipv6_addr[1],
                 	lan2lan_conn.src_ipv6_addr[2], lan2lan_conn.src_ipv6_addr[3]);
 
 	memcpy(lan2lan_conn.dst_ipv6_addr, orig_params.dst,
 				 sizeof(lan2lan_conn.dst_ipv6_addr));
-	IPACMDBG("Before convert, dst_ipv6_addr: 0x%08x%08x%08x%08x\n", lan2lan_conn.dst_ipv6_addr[0], lan2lan_conn.dst_ipv6_addr[1],
+	IPACM_LOG(IPACM_LOG_DEBUG, "Before convert, dst_ipv6_addr: 0x%08x%08x%08x%08x\n", lan2lan_conn.dst_ipv6_addr[0], lan2lan_conn.dst_ipv6_addr[1],
                 	lan2lan_conn.dst_ipv6_addr[2], lan2lan_conn.dst_ipv6_addr[3]);
     for(int cnt=0; cnt<4; cnt++)
 	{
 	   lan2lan_conn.dst_ipv6_addr[cnt] = ntohl(lan2lan_conn.dst_ipv6_addr[cnt]);
 	}
-	IPACMDBG("After convert, dst_ipv6_addr: 0x%08x%08x%08x%08x\n", lan2lan_conn.dst_ipv6_addr[0], lan2lan_conn.dst_ipv6_addr[1],
+	IPACM_LOG(IPACM_LOG_DEBUG, "After convert, dst_ipv6_addr: 0x%08x%08x%08x%08x\n", lan2lan_conn.dst_ipv6_addr[0], lan2lan_conn.dst_ipv6_addr[1],
                 	lan2lan_conn.dst_ipv6_addr[2], lan2lan_conn.dst_ipv6_addr[3]);
 
 	if(((IPPROTO_UDP == l4proto) && (NFCT_T_NEW == evt_data->type)) ||
@@ -1393,7 +1375,7 @@ void IPACM_ConntrackListener::ProcessCTMessage(void *param)
 	 out_flags = (NFCT_OF_SHOW_LAYER3 | NFCT_OF_TIME | NFCT_OF_ID);
 	 nfct_snprintf(buf, sizeof(buf), evt_data->ct,
 								 evt_data->type, NFCT_O_PLAIN, out_flags);
-	 IPACMDBG_H("%s\n", buf);
+	 IPACM_LOG(IPACM_LOG_DEBUG, "%s\n", buf);
 
 	 ParseCTMessage(evt_data->ct);
 #endif
@@ -1401,7 +1383,7 @@ void IPACM_ConntrackListener::ProcessCTMessage(void *param)
 	 l4proto = nfct_get_attr_u8(evt_data->ct, ATTR_ORIG_L4PROTO);
 	 if(IPPROTO_UDP != l4proto && IPPROTO_TCP != l4proto)
 	 {
-			IPACMDBG("Received unexpected protocl %d conntrack message\n", l4proto);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received unexpected protocl %d conntrack message\n", l4proto);
 	 }
 	 else
 	 {
@@ -1415,13 +1397,12 @@ void IPACM_ConntrackListener::ProcessCTMessage(void *param)
 
 void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry)
 {
-	IPACMDBG_H("\n");
 #ifdef IPACM_DEBUG
 	char buf[1024];
 
 	/* Process message and generate ioctl call to kernel thread */
 	nfct_snprintf(buf, sizeof(buf), evt_data->ct, evt_data->type, NFCT_O_PLAIN, NFCT_OF_TIME);
-	IPACMDBG("%s\n", buf);
+	IPACM_LOG(IPACM_LOG_DEBUG, "%s\n", buf);
 
 	ParseCTV6Message(evt_data->ct);
 #endif
@@ -1433,7 +1414,7 @@ void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_d
 
 	/* Cleanup item that was allocated during the original CT callback */
 	nfct_destroy(evt_data->ct);
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
@@ -1441,8 +1422,6 @@ void IPACM_ConntrackListener::ProcessSocksv5Conn(ipa_socksv5_msg *socksv5_info, 
 {
 	Ipv6ctEntry entry;
 	nat_table_entry rule;
-
-	IPACMDBG_H("\n");
 
 	if (socksv5_info->ul_in.ip_type == IPA_IP_v6) {
 		entry.m_srcAddr = Ipv6IpAddress(socksv5_info->ul_in.ipv6_src, false);
@@ -1524,7 +1503,7 @@ void IPACM_ConntrackListener::ProcessSocksv5Conn(ipa_socksv5_msg *socksv5_info, 
 			nat_inst->DeleteEntry(&rule);
 		}
 	}
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
@@ -1540,7 +1519,7 @@ void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
 		/* check if we already got vlan_pdn_up event for this ip */
 		if(vlan_pdns[i].public_ip == public_ip)
 		{
-			IPACMDBG_H("vlan pdn already up for ");
+			IPACM_LOG(IPACM_LOG_DEBUG, "vlan pdn already up for pdn_idx %d", i);
 			iptodot("ip", public_ip);
 			return;
 		}
@@ -1549,7 +1528,7 @@ void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
 	if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS))
 	{
 		iptodot("pdn ip", public_ip);
-		IPACMERR("can't add more PDN, already got max %d \n", num_vlan_pdns);
+		IPACM_LOG(IPACM_LOG_ERR, "can't add more PDN, already got max %d \n", num_vlan_pdns);
 		return;
 	}
 
@@ -1558,7 +1537,7 @@ void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
 	/* query qmuxd mapping*/
 	if ( IPACM_Iface::ipacmcfg->query_mux_id(&info) == IPACM_SUCCESS)
 	{
-		IPACMDBG_H(" Find the ipv4 0x%X map to muxd %d\n", public_ip, info.mux_id);
+		IPACM_LOG(IPACM_LOG_DEBUG, " Find the ipv4 0x%X map to muxd %d\n", public_ip, info.mux_id);
 		data.iptype = IPA_IP_v4;
 		data.VlanID = 0;
 		data.mux_id = info.mux_id;
@@ -1567,21 +1546,21 @@ void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
 	}
 	else
 	{
-		IPACMERR("failed to find qqmuxd and HandleVlanUp for 0x%X\n", public_ip);
+		IPACM_LOG(IPACM_LOG_ERR, "failed to find qqmuxd and HandleVlanUp for 0x%X\n", public_ip);
 	}
 
 	evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
 	vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
 	if(!vlan_data)
 	{
-		IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+		IPACM_LOG(IPACM_LOG_ERR, "couldn't allocate memory for new vlan pdn event\n");
 		return;
 	}
 	memset(vlan_data, 0, sizeof(ipacm_event_route_vlan));
 	vlan_data->iptype = IPA_IP_v4;
 	vlan_data->wan_ipv4_addr = public_ip;
 	evt_data.evt_data = vlan_data;
-	IPACMDBG("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
 		vlan_data->VlanID,
 		vlan_data->iptype);
 	iptodot("pdn ip", public_ip);
@@ -1597,14 +1576,14 @@ void IPACM_ConntrackListener::PostSocksv5Ready(ipacm_event_connection* data_evt_
 	data_event_conn = (ipacm_event_connection *)malloc(sizeof(ipacm_event_connection));
 	if(data_event_conn == NULL)
 	{
-		IPACMERR("unable to allocate memory for event_wlan data_event_conn\n");
+		IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event_wlan data_event_conn\n");
 		return;
 	}
 	memcpy(data_event_conn, data_evt_conn, sizeof(ipacm_event_connection));
 	evt_data.event = IPA_HANDLE_SOCKSv5_READY;
 	evt_data.evt_data = data_event_conn;
 	/* finish command queue */
-	IPACMDBG_H("Posting IPA_HANDLE_SOCKSv5_Ready event:%d\n", evt_data.event);
+	IPACM_LOG(IPACM_LOG_INFO, "Posting IPA_HANDLE_SOCKSv5_Ready event:%d\n", evt_data.event);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 }
 #endif //defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
@@ -1625,7 +1604,7 @@ bool IPACM_ConntrackListener::AddIface(
 	{
 		if (rule->private_ip == IPACM_Wan::getWANIP())
 		{
-			IPACMDBG("In Passthrough mode and entry matched with Wan IP (0x%x)\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "In Passthrough mode and entry matched with Wan IP (0x%x)\n",
 				rule->private_ip);
 			return true;
 		}
@@ -1634,7 +1613,7 @@ bool IPACM_ConntrackListener::AddIface(
 
 	if (nat_inst == NULL)
 	{
-		IPACMERR("Nat instance is NULL, unable to check ALG\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Nat instance is NULL, unable to check ALG\n");
 		return false;
 	}
 
@@ -1642,20 +1621,20 @@ bool IPACM_ConntrackListener::AddIface(
 	if(nat_inst->isAlgPort(rule->protocol, rule->private_port) ||
 		 nat_inst->isAlgPort(rule->protocol, rule->target_port)) {
 
-		IPACMDBG("ALG port connection, prot=%u, private_port=%u, target_port=%u\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "ALG port connection, prot=%u, private_port=%u, target_port=%u\n",
 			rule->protocol, rule->private_port, rule->target_port);
 
 		if (isStaMode) {
-			IPACMDBG("ALG port in STA mode, ignore the event\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "ALG port in STA mode, ignore the event\n");
 			return false;
 		}
 
 		if (!rule->dst_nat) {
-			IPACMDBG("ALG port with src NAT event, ignore it\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "ALG port with src NAT event, ignore it\n");
 			return false;
 		}
 
-		IPACMDBG("Install dummy NAT rule for ALG port DL flow public_ip=%u public_port=%u\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "Install dummy NAT rule for ALG port DL flow public_ip=%u public_port=%u\n",
 			rule->public_ip, rule->public_port);
 		rule->private_ip = rule->public_ip;
 		rule->private_port = rule->public_port;
@@ -1670,7 +1649,7 @@ bool IPACM_ConntrackListener::AddIface(
 			if (rule->private_ip == nat_clients[cnt].nat_iface_ipv4_addr ||
 				rule->target_ip == nat_clients[cnt].nat_iface_ipv4_addr)
 			{
-				IPACMDBG("matched nat_clients[%d].nat_iface_ipv4_addr\n", cnt);
+				IPACM_LOG(IPACM_LOG_DEBUG, "matched nat_clients[%d].nat_iface_ipv4_addr\n", cnt);
 				iptodot("AddIface(): Nat entry match with ip addr",
 					nat_clients[cnt].nat_iface_ipv4_addr);
 				return true;
@@ -1689,7 +1668,7 @@ bool IPACM_ConntrackListener::AddIface(
 				if (rule->private_ip == nonnat_iface_ipv4_addr[cnt] ||
 					rule->target_ip == nonnat_iface_ipv4_addr[cnt])
 				{
-					IPACMDBG("matched non_nat_iface_ipv4_addr entry(%d)\n", cnt);
+					IPACM_LOG(IPACM_LOG_INFO, "matched non_nat_iface_ipv4_addr entry(%d)\n", cnt);
 					iptodot("AddIface(): Non Nat entry match with ip addr",
 							nonnat_iface_ipv4_addr[cnt]);
 
@@ -1699,17 +1678,17 @@ bool IPACM_ConntrackListener::AddIface(
 				}
 			}
 		}
-		IPACMDBG_H("Not mtaching with non-nat ifaces\n");
+		IPACM_LOG(IPACM_LOG_INFO, "Not mtaching with non-nat ifaces\n");
 	}
 	else
-		IPACMDBG("In STA mode, don't compare against non nat ifaces\n");
+		IPACM_LOG(IPACM_LOG_INFO, "In STA mode, don't compare against non nat ifaces\n");
 
 	if(pConfig == NULL)
 	{
 		pConfig = IPACM_Config::GetInstance();
 		if(pConfig == NULL)
 		{
-			IPACMERR("Unable to get Config instance\n");
+			IPACM_LOG(IPACM_LOG_INFO, "Unable to get Config instance\n");
 			return false;
 		}
 	}
@@ -1717,7 +1696,7 @@ bool IPACM_ConntrackListener::AddIface(
 	if (pConfig->isPrivateSubnet(rule->private_ip) ||
 		pConfig->isPrivateSubnet(rule->target_ip))
 	{
-		IPACMDBG("Matching with Private subnet\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Matching with Private subnet\n");
 		*isTempEntry = true;
 		return true;
 	}
@@ -1732,32 +1711,32 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 
 	if (nat_inst == NULL)
 	{
-		IPACMERR("Nat instance is NULL, unable to add or delete\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Nat instance is NULL, unable to add or delete\n");
 		return IPACM_FAILURE;
 	}
 #ifdef FEATURE_VLAN_MPDN
 	if(!sendVlanEvent)
 	{
-		IPACMERR("sendVlanEvent is NULL\n");
+		IPACM_LOG(IPACM_LOG_ERR, "sendVlanEvent is NULL\n");
 		return IPACM_FAILURE;
 	}
 #endif
 
-	IPACMDBG_H("Below Nat Entry will either be added or deleted\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Below Nat Entry will either be added or deleted\n");
 	iptodot("AddORDeleteNatEntry(): target ip or dst ip",
 			input->rule->target_ip);
-	IPACMDBG("target port or dst port: 0x%x Decimal:%d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "target port or dst port: 0x%x Decimal:%d\n",
 			 input->rule->target_port, input->rule->target_port);
 	iptodot("AddORDeleteNatEntry(): private ip or src ip",
 			input->rule->private_ip);
-	IPACMDBG("private port or src port: 0x%x, Decimal:%d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "private port or src port: 0x%x, Decimal:%d\n",
 			 input->rule->private_port, input->rule->private_port);
-	IPACMDBG("public port or reply dst port: 0x%x, Decimal:%d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "public port or reply dst port: 0x%x, Decimal:%d\n",
 			 input->rule->public_port, input->rule->public_port);
-	IPACMDBG("Protocol: %d, destination nat flag: %d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "Protocol: %d, destination nat flag: %d\n",
 			 input->rule->protocol, input->rule->dst_nat);
 #ifdef FEATURE_VLAN_MPDN
-	IPACMDBG("isVlan %d, IsVlanUp %d\n", input->isVlan, input->IsVlanUp);
+	IPACM_LOG(IPACM_LOG_DEBUG, "isVlan %d, IsVlanUp %d\n", input->isVlan, input->IsVlanUp);
 #endif
 
 	pkt_count = nfct_get_attr_u64(input->ct, ATTR_ORIG_COUNTER_PACKETS) +
@@ -1770,32 +1749,32 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
                     (((pkt_threshld != 0) && (pkt_count >= pkt_threshld)) ||
                     (pkt_threshld == 0)))
 		{
-			IPACMDBG("TCP state TCP_CONNTRACK_ESTABLISHED(%d)\n", tcp_state);
+			IPACM_LOG(IPACM_LOG_DEBUG, "TCP state TCP_CONNTRACK_ESTABLISHED(%d)\n", tcp_state);
 #ifdef FEATURE_VLAN_MPDN
 			if(input->isVlan)
 			{
 				if(!input->IsVlanUp)
 				{
-					IPACMDBG_H("Detected VLAN WAN UP\n");
+					IPACM_LOG(IPACM_LOG_INFO,"Detected VLAN WAN UP\n");
 					*sendVlanEvent = true;
-					IPACMDBG_H("vlan Wan is not up, cache connections\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "vlan Wan is not up, cache connections\n");
 					nat_inst->CacheEntry(input->rule);
 				}
 				else if(input->isTempEntry)
 				{
-					IPACMDBG("TCP: adding temp for vlan\n");
+					IPACM_LOG(IPACM_LOG_INFO, "TCP: adding temp for vlan\n");
 					nat_inst->AddTempEntry(input->rule);
 				}
 				else
 				{
-					IPACMDBG("TCP: adding entry for vlan\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "TCP: adding entry for vlan\n");
 					nat_inst->AddEntry(input->rule);
 				}
 			} else
 #endif
 			if (!WanUp)
 			{
-				IPACMDBG("Wan is not up, cache connections\n");
+				IPACM_LOG(IPACM_LOG_INFO, "Wan is not up, cache connections\n");
 				nat_inst->CacheEntry(input->rule);
 			}
 			else if (input->isTempEntry)
@@ -1810,7 +1789,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 		else if (TCP_CONNTRACK_FIN_WAIT == tcp_state ||
 				   input->type == NFCT_T_DESTROY)
 		{
-			IPACMDBG("TCP state TCP_CONNTRACK_FIN_WAIT(%d) "
+			IPACM_LOG(IPACM_LOG_DEBUG, "TCP state TCP_CONNTRACK_FIN_WAIT(%d) "
 					 "or type NFCT_T_DESTROY(%d)\n", tcp_state, input->type);
 
 			nat_inst->DeleteEntry(input->rule);
@@ -1818,7 +1797,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 		}
 		else
 		{
-			IPACMDBG("Ignore tcp state: %d and type: %d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Ignore tcp state: %d and type: %d\n",
 					 tcp_state, input->type);
 		}
 
@@ -1830,25 +1809,25 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			((pkt_threshld != 0) && (pkt_count >= pkt_threshld)
 			&& (NFCT_T_UPDATE == input->type)))
 		{
-			IPACMDBG("New UDP connection at time %ld\n", time(NULL));
+			IPACM_LOG(IPACM_LOG_DEBUG, "New UDP connection at time %ld\n", time(NULL));
 #ifdef FEATURE_VLAN_MPDN
 			if(input->isVlan)
 			{
 				if(!input->IsVlanUp)
 				{
-					IPACMDBG_H("Detected VLAN WAN UP\n");
+					IPACM_LOG(IPACM_LOG_INFO, "Detected VLAN WAN UP\n");
 					*sendVlanEvent = true;
-					IPACMDBG_H("vlan Wan is not up, cache connections\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "vlan Wan is not up, cache connections\n");
 					nat_inst->CacheEntry(input->rule);
 				}
 				else if(input->isTempEntry)
 				{
-					IPACMDBG("UDP: adding temp for vlan\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "UDP: adding temp for vlan\n");
 					nat_inst->AddTempEntry(input->rule);
 				}
 				else
 				{
-					IPACMDBG("UDP: adding entry for vlan\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "UDP: adding entry for vlan\n");
 					nat_inst->AddEntry(input->rule);
 				}
 			}
@@ -1856,7 +1835,7 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 #endif
 			if (!WanUp)
 			{
-				IPACMDBG("Wan is not up, cache connections\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "Wan is not up, cache connections\n");
 				nat_inst->CacheEntry(input->rule);
 			}
 			else if (input->isTempEntry)
@@ -1870,13 +1849,13 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 		}
 		else if (NFCT_T_DESTROY == input->type)
 		{
-			IPACMDBG("UDP connection close at time %ld\n", time(NULL));
+			IPACM_LOG(IPACM_LOG_DEBUG, "UDP connection close at time %ld\n", time(NULL));
 			nat_inst->DeleteEntry(input->rule);
 			nat_inst->DeleteTempEntry(input->rule);
 		}
 		else
 		{
-			IPACMDBG("Ignore udp, count: %d and type: %d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Ignore udp, count: %d and type: %d\n",
 				pkt_count, input->type);
 		}
 	}
@@ -1887,8 +1866,6 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* evt_data,
 	const NatEntryBase& entry, bool isTempEntry)
 {
-	IPACMDBG_H("\n");
-
 	uint64_t pkt_count = nfct_get_attr_u64(evt_data->ct, ATTR_ORIG_COUNTER_PACKETS) +
 		nfct_get_attr_u64(evt_data->ct, ATTR_REPL_COUNTER_PACKETS);
 
@@ -1897,10 +1874,10 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 		uint8_t tcp_state = nfct_get_attr_u8(evt_data->ct, ATTR_TCP_STATE);
 		if (TCP_CONNTRACK_ESTABLISHED == tcp_state && pkt_count >= pkt_threshld)
 		{
-			IPACMDBG_H("TCP state TCP_CONNTRACK_ESTABLISHED(%d)\n", tcp_state);
+			IPACM_LOG(IPACM_LOG_DEBUG, "TCP state TCP_CONNTRACK_ESTABLISHED(%d)\n", tcp_state);
 			if (!WanUp_v6)
 			{
-				IPACMDBG_H("Wan is not up, cache connections\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "Wan is not up, cache connections\n");
 				ipv6ct_inst->CacheEntry(entry);
 			}
 			else if (isTempEntry)
@@ -1914,14 +1891,14 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 		}
 		else if (TCP_CONNTRACK_FIN_WAIT == tcp_state || evt_data->type == NFCT_T_DESTROY)
 		{
-			IPACMDBG_H("TCP state TCP_CONNTRACK_FIN_WAIT(%d) or type NFCT_T_DESTROY(%d)\n", tcp_state, evt_data->type);
+			IPACM_LOG(IPACM_LOG_DEBUG, "TCP state TCP_CONNTRACK_FIN_WAIT(%d) or type NFCT_T_DESTROY(%d)\n", tcp_state, evt_data->type);
 
 			ipv6ct_inst->DeleteEntry(entry);
 			ipv6ct_inst->DeleteTempEntry(entry);
 		}
 		else
 		{
-			IPACMDBG_H("Ignore tcp state: %d and type: %d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Ignore tcp state: %d and type: %d\n",
 				tcp_state, evt_data->type);
 		}
 
@@ -1933,10 +1910,10 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 			((pkt_threshld != 0) && (pkt_count >= pkt_threshld)
 			&& (NFCT_T_UPDATE == evt_data->type)))
 		{
-			IPACMDBG_H("New UDP connection at time %ld\n", time(NULL));
+			IPACM_LOG(IPACM_LOG_DEBUG, "New UDP connection at time %ld\n", time(NULL));
 			if (!WanUp_v6)
 			{
-				IPACMDBG_H("Wan is not up, cache connections\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "Wan is not up, cache connections\n");
 				ipv6ct_inst->CacheEntry(entry);
 			}
 			else if (isTempEntry)
@@ -1950,12 +1927,11 @@ void IPACM_ConntrackListener::AddORDeleteNatEntry_v6(const ipacm_ct_evt_data* ev
 		}
 		else if (NFCT_T_DESTROY == evt_data->type)
 		{
-			IPACMDBG_H("UDP connection close at time %ld\n", time(NULL));
+			IPACM_LOG(IPACM_LOG_DEBUG, "UDP connection close at time %ld\n", time(NULL));
 			ipv6ct_inst->DeleteEntry(entry);
 			ipv6ct_inst->DeleteTempEntry(entry);
 		}
 	}
-	IPACMDBG_H("return\n");
 }
 
 void IPACM_ConntrackListener::PopulateTCPorUDPEntry(
@@ -1965,10 +1941,10 @@ void IPACM_ConntrackListener::PopulateTCPorUDPEntry(
 {
 	if (IPS_DST_NAT == status)
 	{
-		IPACMDBG("Destination NAT\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Destination NAT\n");
 		rule->dst_nat = true;
 
-		IPACMDBG("Parse reply tuple\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Parse reply tuple\n");
 		rule->target_ip = nfct_get_attr_u32(ct, ATTR_ORIG_IPV4_SRC);
 		rule->target_ip = ntohl(rule->target_ip);
 		iptodot("PopulateTCPorUDPEntry(): target ip", rule->target_ip);
@@ -1978,7 +1954,7 @@ void IPACM_ConntrackListener::PopulateTCPorUDPEntry(
 		rule->target_port = ntohs(rule->target_port);
 		if (0 == rule->target_port)
 		{
-			IPACMDBG("unable to retrieve target port\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "unable to retrieve target port\n");
 		}
 
 		/* Retrieve public port */
@@ -1991,7 +1967,7 @@ void IPACM_ConntrackListener::PopulateTCPorUDPEntry(
 		iptodot("PopulateTCPorUDPEntry(): private ip", rule->private_ip);
 		if (0 == rule->private_ip)
 		{
-			IPACMDBG("unable to retrieve private ip address\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "unable to retrieve private ip address\n");
 		}
 
 		/* Retrieve src/private port */
@@ -1999,29 +1975,29 @@ void IPACM_ConntrackListener::PopulateTCPorUDPEntry(
 		rule->private_port = ntohs(rule->private_port);
 		if (0 == rule->private_port)
 		{
-			IPACMDBG("unable to retrieve private port\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "unable to retrieve private port\n");
 		}
 	}
 	else if (IPS_SRC_NAT == status)
 	{
-		IPACMDBG("Source NAT\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Source NAT\n");
 		rule->dst_nat = false;
 
 		/* Retrieve target/dst ip address */
-		IPACMDBG("Parse source tuple\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Parse source tuple\n");
 		rule->target_ip = nfct_get_attr_u32(ct, ATTR_ORIG_IPV4_DST);
 		rule->target_ip = ntohl(rule->target_ip);
 		iptodot("PopulateTCPorUDPEntry(): target ip", rule->target_ip);
 		if (0 == rule->target_ip)
 		{
-			IPACMDBG("unable to retrieve target ip address\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "unable to retrieve target ip address\n");
 		}
 		/* Retrieve target/dst port */
 		rule->target_port = nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST);
 		rule->target_port = ntohs(rule->target_port);
 		if (0 == rule->target_port)
 		{
-			IPACMDBG("unable to retrieve target port\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "unable to retrieve target port\n");
 		}
 
 		/* Retrieve public port */
@@ -2029,7 +2005,7 @@ void IPACM_ConntrackListener::PopulateTCPorUDPEntry(
 		rule->public_port = ntohs(rule->public_port);
 		if (0 == rule->public_port)
 		{
-			IPACMDBG("unable to retrieve public port\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "unable to retrieve public port\n");
 		}
 
 		/* Retrieve src/private ip address */
@@ -2038,7 +2014,7 @@ void IPACM_ConntrackListener::PopulateTCPorUDPEntry(
 		iptodot("PopulateTCPorUDPEntry(): private ip", rule->private_ip);
 		if (0 == rule->private_ip)
 		{
-			IPACMDBG("unable to retrieve private ip address\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "unable to retrieve private ip address\n");
 		}
 
 		/* Retrieve src/private port */
@@ -2046,7 +2022,7 @@ void IPACM_ConntrackListener::PopulateTCPorUDPEntry(
 		rule->private_port = ntohs(rule->private_port);
 		if (0 == rule->private_port)
 		{
-			IPACMDBG("unable to retrieve private port\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "unable to retrieve private port\n");
 		}
 	}
 
@@ -2062,7 +2038,7 @@ void IPACM_ConntrackListener::HandleLan2Lan(struct nf_conntrack *ct,
 
 	if (p_lan2lan == NULL)
 	{
-		IPACMERR("Lan2Lan Instance is null\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Lan2Lan Instance is null\n");
 		return;
 	}
 
@@ -2105,17 +2081,17 @@ void IPACM_ConntrackListener::CheckSTAClient(
 
 	if (nCnt == MAX_STA_CLNT_IFACES)
 	{
-		IPACMERR("The STA client IP addresses collection is inconsistent with STA client counter\n");
+		IPACM_LOG(IPACM_LOG_ERR, "The STA client IP addresses collection is inconsistent with STA client counter\n");
 		return;
 	}
 
 	if ((sta_clnt_ipv4_addr[nCnt] & STA_CLNT_SUBNET_MASK) != (rule->target_ip & STA_CLNT_SUBNET_MASK))
 	{
-		IPACMDBG("STA client subnet mask not matching\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "STA client subnet mask not matching\n");
 		return;
 	}
 
-	IPACMDBG("StaClntCnt %d\n", StaClntCnt);
+	IPACM_LOG(IPACM_LOG_DEBUG, "StaClntCnt %d\n", StaClntCnt);
 	for (; nCnt < MAX_STA_CLNT_IFACES; ++nCnt)
 	{
 		if (!sta_clnt_ipv4_addr[nCnt])
@@ -2123,22 +2099,20 @@ void IPACM_ConntrackListener::CheckSTAClient(
 			continue;
 		}
 
-		IPACMDBG("Comparing trgt_ip 0x%x with sta clnt ip: 0x%x\n", rule->target_ip, sta_clnt_ipv4_addr[nCnt]);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Comparing trgt_ip 0x%x with sta clnt ip: 0x%x\n", rule->target_ip, sta_clnt_ipv4_addr[nCnt]);
 		if (rule->target_ip == sta_clnt_ipv4_addr[nCnt])
 		{
-			IPACMDBG("Match index %d\n", nCnt);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Match index %d\n", nCnt);
 			return;
 		}
 	}
 
-	IPACMDBG_H("Not matching with STA Clnt Ip Addrs 0x%x\n", rule->target_ip);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Not matching with STA Clnt Ip Addrs 0x%x\n", rule->target_ip);
 	*isTempEntry = true;
 }
 
 void IPACM_ConntrackListener::CheckSTAClient_v6(const NatEntryBase& entry, bool& isTempEntry)
 {
-	IPACMDBG_H("\n");
-
 	if (!isStaMode || !StaClntCnt_v6)
 	{
 		return;
@@ -2155,26 +2129,26 @@ void IPACM_ConntrackListener::CheckSTAClient_v6(const NatEntryBase& entry, bool&
 
 	if (i == MAX_STA_CLNT_IFACES)
 	{
-		IPACMERR("The STA client IP addresses collection is inconsistent with STA client counter\n");
+		IPACM_LOG(IPACM_LOG_ERR, "The STA client IP addresses collection is inconsistent with STA client counter\n");
 		return;
 	}
 
 	const IpAddress& target_ip = entry.GetTargetIp();
 	if (!target_ip.IsSameSubnet(sta_clnt_ipv6_addr[i]))
 	{
-		IPACMDBG("Not STA client\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Not STA client\n");
 		return;
 	}
 
 	if (sta_clnt_ipv6_addr.Find(target_ip) != NULL)
 	{
-		IPACMDBG_H("The target is in STA client list\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "The target is in STA client list\n");
 		return;
 	}
 
 	entry.GetTargetIp().DebugDump("Not matching with STA Clnt Ip Addrs");
 	isTempEntry = true;
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
 /* conntrack send in host order and ipa expects in host order */
@@ -2205,7 +2179,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 #endif
 
  	 memset(&rule, 0, sizeof(rule));
-	 IPACMDBG("Received type:%d with proto:%d\n", type, l4proto);
+	 IPACM_LOG(IPACM_LOG_DEBUG, "Received type:%d with proto:%d\n", type, l4proto);
 	 status = nfct_get_attr_u32(ct, ATTR_STATUS);
 
 	 /* Retrieve Protocol */
@@ -2215,7 +2189,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 orig_src_ip = ntohl(orig_src_ip);
 	 if(orig_src_ip == 0)
 	 {
-		 IPACMERR("unable to retrieve orig src ip address\n");
+		 IPACM_LOG(IPACM_LOG_ERR, "unable to retrieve orig src ip address\n");
 		 return;
 	 }
 
@@ -2223,7 +2197,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 orig_dst_ip = ntohl(orig_dst_ip);
 	 if(orig_dst_ip == 0)
 	 {
-		 IPACMERR("unable to retrieve orig dst ip address\n");
+		 IPACM_LOG(IPACM_LOG_ERR, "unable to retrieve orig dst ip address\n");
 		 return;
 	 }
 #ifdef FEATURE_VLAN_MPDN
@@ -2231,7 +2205,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 repl_src_ip = ntohl(repl_src_ip);
 	 if(repl_src_ip == 0)
 	 {
-		 IPACMERR("unable to retrieve repl src ip address\n");
+		 IPACM_LOG(IPACM_LOG_ERR, "unable to retrieve repl src ip address\n");
 		 return;
 	 }
 
@@ -2239,7 +2213,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 repl_dst_ip = ntohl(repl_dst_ip);
 	 if(repl_dst_ip == 0)
 	 {
-		 IPACMERR("unable to retrieve repl dst ip address\n");
+		 IPACM_LOG(IPACM_LOG_ERR, "unable to retrieve repl dst ip address\n");
 		 return;
 	 }
 #endif
@@ -2259,7 +2233,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 				 /* check if we already got vlan_pdn_up event for this ip */
 				 if(vlan_pdns[i].public_ip == orig_dst_ip)
 				 {
-					 IPACMDBG_H("DST_NAT: vlan pdn already up for ");
+					IPACM_LOG(IPACM_LOG_DEBUG, "DST_NAT: vlan pdn already up for ");
 					 iptodot("ip", orig_dst_ip);
 					 nat_entry.IsVlanUp = true;
 					 break;
@@ -2270,12 +2244,12 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			 {
 				 iptodot("vlan client ip", repl_src_ip);
 				 iptodot("pdn ip",orig_dst_ip)
-				 IPACMERR("src NAT: can't add more PDN, already got max \n");
+				 IPACM_LOG(IPACM_LOG_ERR, "src NAT: can't add more PDN, already got max \n");
 				 return;
 			 }
 			 iptodot("vlan client ip", repl_src_ip);
 			 iptodot("pdn ip", orig_dst_ip);
-			 IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
+			 IPACM_LOG(IPACM_LOG_INFO, "IsVlanUp %d\n", nat_entry.IsVlanUp);
 		 }
 		 public_ip = orig_dst_ip;
 #endif
@@ -2295,7 +2269,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 				/* check if we already got vlan_pdn_up event for this ip */
 				if(vlan_pdns[i].public_ip == repl_dst_ip)
 				{
-					IPACMDBG_H("SRC_NAT: vlan pdn already up for ");
+					IPACM_LOG(IPACM_LOG_INFO, "SRC_NAT: vlan pdn already up for ");
 					iptodot("ip", repl_dst_ip);
 					nat_entry.IsVlanUp = true;
 					break;
@@ -2306,23 +2280,23 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			{
 				iptodot("vlan client ip", orig_src_ip);
 				iptodot("pdn ip",repl_dst_ip)
-					IPACMERR("dst NAT: can't add more PDN, already got max \n");
+					IPACM_LOG(IPACM_LOG_ERR, "dst NAT: can't add more PDN, already got max \n");
 				return;
 			}
 			iptodot("vlan client ip ", orig_src_ip);
 			iptodot("pdn ip ", repl_dst_ip)
-			IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
+			IPACM_LOG(IPACM_LOG_INFO, "IsVlanUp %d\n", nat_entry.IsVlanUp);
 		 }
 		 public_ip = repl_dst_ip;
 #endif
 	 }
 	 else
 	 {
-		 IPACMDBG("Neither Destination nor Source nat flag Set\n");
+		IPACM_LOG(IPACM_LOG_INFO, "Neither Destination nor Source nat flag Set\n");
 
 		if(orig_src_ip == wan_ipaddr)
 		{
-			IPACMDBG("orig src ip:0x%x equal to wan ip\n",orig_src_ip);
+			IPACM_LOG(IPACM_LOG_DEBUG, "orig src ip:0x%x equal to wan ip\n",orig_src_ip);
 			status = IPS_SRC_NAT;
 #ifdef FEATURE_VLAN_MPDN
 			public_ip = wan_ipaddr;
@@ -2330,7 +2304,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		}
 		else if(orig_dst_ip == wan_ipaddr)
 		{
-			IPACMDBG("orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
+			IPACM_LOG(IPACM_LOG_DEBUG, "orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
 			status = IPS_DST_NAT;
 #ifdef FEATURE_VLAN_MPDN
 			public_ip = wan_ipaddr;
@@ -2346,7 +2320,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 				/* check if we already got vlan_pdn_up event for this ip */
 				if(vlan_pdns[i].public_ip == orig_src_ip)
 				{
-					IPACMDBG("orig src ip:0x%x equal to vlan wan ip\n", orig_src_ip);
+					IPACM_LOG(IPACM_LOG_DEBUG, "orig src ip:0x%x equal to vlan wan ip\n", orig_src_ip);
 					status = IPS_SRC_NAT;
 					public_ip = orig_src_ip;
 					embedded_vlan = true;
@@ -2354,7 +2328,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 				}
 				else if(vlan_pdns[i].public_ip == orig_dst_ip)
 				{
-					IPACMDBG("orig Dst IP:0x%x equal to wan ip\n", orig_dst_ip);
+					IPACM_LOG(IPACM_LOG_DEBUG, "orig Dst IP:0x%x equal to wan ip\n", orig_dst_ip);
 					status = IPS_DST_NAT;
 					public_ip = orig_dst_ip;
 					embedded_vlan = true;
@@ -2364,7 +2338,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			if (!status)
 #endif
 			{
-				IPACMDBG_H("Neither orig src ip:0x%x Nor orig Dst IP:0x%x equal to wan ip:0x%x\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "Neither orig src ip:0x%x Nor orig Dst IP:0x%x equal to wan ip:0x%x\n",
 					orig_src_ip, orig_dst_ip, wan_ipaddr);
 
 #ifdef CT_OPT
@@ -2386,7 +2360,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 }
 	 else
 	 {
-		 IPACMDBG("Neither source Nor destination nat\n");
+		 IPACM_LOG(IPACM_LOG_ERR, "Neither source Nor destination nat\n");
 		 goto IGNORE;
 	 }
 
@@ -2406,12 +2380,12 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 {
 		 if (isStaMode)
 		 {
-			 IPACMDBG("In STA mode, ignore connections destinated to STA interface\n");
+			 IPACM_LOG(IPACM_LOG_WARN, "In STA mode, ignore connections destinated to STA interface\n");
 			 goto IGNORE;
 		 }
 
-		 IPACMDBG("For embedded connections add dummy nat rule\n");
-		 IPACMDBG("Change private port %d to %d\n",
+		 IPACM_LOG(IPACM_LOG_DEBUG, "For embedded connections add dummy nat rule\n");
+		 IPACM_LOG(IPACM_LOG_DEBUG, "Change private port %d to %d\n",
 				  rule.private_port, rule.public_port);
 		 rule.private_port = rule.public_port;
 	 }
@@ -2435,7 +2409,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		 data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
 		 if(!data)
 		 {
-			 IPACMERR("couldn't allocate memory for new vlan pdn event\n");
+			 IPACM_LOG(IPACM_LOG_ERR, "couldn't allocate memory for new vlan pdn event\n");
 			 return;
 		 }
 		 memset(data, 0, sizeof(ipacm_event_route_vlan));
@@ -2447,7 +2421,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			data->wan_ipv6_prefix[0]=IPA_DUMMY_PREFIX;
 		}
 		 evt_data.evt_data = data;
-		 IPACMDBG_H("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+		 IPACM_LOG(IPACM_LOG_INFO, "sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
 			 data->VlanID,
 			 data->iptype);
 		 iptodot("pdn ip", public_ip);
@@ -2460,19 +2434,19 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	 return;
 
 IGNORE:
-	IPACMDBG_H("ignoring below Nat Entry\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "ignoring below Nat Entry\n");
 	iptodot("ProcessTCPorUDPMsg(): target ip or dst ip", rule.target_ip);
-	IPACMDBG("target port or dst port: 0x%x Decimal:%d\n", rule.target_port, rule.target_port);
+	IPACM_LOG(IPACM_LOG_DEBUG, "target port or dst port: 0x%x Decimal:%d\n", rule.target_port, rule.target_port);
 	iptodot("ProcessTCPorUDPMsg(): private ip or src ip", rule.private_ip);
-	IPACMDBG("private port or src port: 0x%x, Decimal:%d\n", rule.private_port, rule.private_port);
-	IPACMDBG("public port or reply dst port: 0x%x, Decimal:%d\n", rule.public_port, rule.public_port);
-	IPACMDBG("Protocol: %d, destination nat flag: %d\n", rule.protocol, rule.dst_nat);
+	IPACM_LOG(IPACM_LOG_DEBUG, "private port or src port: 0x%x, Decimal:%d\n", rule.private_port, rule.private_port);
+	IPACM_LOG(IPACM_LOG_DEBUG, "public port or reply dst port: 0x%x, Decimal:%d\n", rule.public_port, rule.public_port);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Protocol: %d, destination nat flag: %d\n", rule.protocol, rule.dst_nat);
 	return;
 }
 
 void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data, const NatEntryBase& entry)
 {
-	IPACMDBG_H("Received conntrack event with type: %d\n", evt_data->type);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Received conntrack event with type: %d\n", evt_data->type);
 	entry.DebugDump("with");
 
 	bool isTempEntry = false;
@@ -2480,7 +2454,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 	{
 		if (!IsIpv6PrivateSubnet(entry.GetClientIp()) && !IsIpv6PrivateSubnet(entry.GetTargetIp()))
 		{
-			IPACMDBG_H("Ignore the entry\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Ignore the entry\n");
 			return;
 		}
 		isTempEntry = true;
@@ -2491,17 +2465,16 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 	}
 
 	AddORDeleteNatEntry_v6(evt_data, entry, isTempEntry);
-	IPACMDBG_H("return\n");
 }
 
 void IPACM_ConntrackListener::HandleSTAClientAddEvt(uint32_t clnt_ip_addr)
 {
 	 int cnt;
-	 IPACMDBG_H("Received STA client 0x%x\n", clnt_ip_addr);
+	 IPACM_LOG(IPACM_LOG_DEBUG, "Received STA client 0x%x\n", clnt_ip_addr);
 
 	 if(StaClntCnt >= MAX_STA_CLNT_IFACES)
 	 {
-		IPACMDBG("Max STA client reached, ignore 0x%x\n", clnt_ip_addr);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Max STA client reached, ignore 0x%x\n", clnt_ip_addr);
 		return;
 	 }
 
@@ -2510,17 +2483,17 @@ void IPACM_ConntrackListener::HandleSTAClientAddEvt(uint32_t clnt_ip_addr)
 		if(sta_clnt_ipv4_addr[cnt] != 0 &&
 		 sta_clnt_ipv4_addr[cnt] == clnt_ip_addr)
 		{
-			IPACMDBG("Ignoring duplicate one 0x%x\n", clnt_ip_addr);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Ignoring duplicate one 0x%x\n", clnt_ip_addr);
 			break;
 		}
 
 		if(sta_clnt_ipv4_addr[cnt] == 0)
 		{
-			IPACMDBG("Adding STA client 0x%x at Index: %d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Adding STA client 0x%x at Index: %d\n",
 					clnt_ip_addr, cnt);
 			sta_clnt_ipv4_addr[cnt] = clnt_ip_addr;
 			StaClntCnt++;
-			IPACMDBG("STA client cnt %d\n", StaClntCnt);
+			IPACM_LOG(IPACM_LOG_DEBUG, "STA client cnt %d\n", StaClntCnt);
 			break;
 		}
 
@@ -2532,11 +2505,9 @@ void IPACM_ConntrackListener::HandleSTAClientAddEvt(uint32_t clnt_ip_addr)
 
 void IPACM_ConntrackListener::HandleSTAClientAddEvt_v6(const IpAddress& ip)
 {
-	IPACMDBG_H("\n");
-
 	if (!IsIpv6CTEnabled() || !ip.Valid())
 	{
-		IPACMDBG("Ignoring\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Ignoring\n");
 		return;
 	}
 
@@ -2544,13 +2515,13 @@ void IPACM_ConntrackListener::HandleSTAClientAddEvt_v6(const IpAddress& ip)
 
 	if (StaClntCnt_v6 >= MAX_STA_CLNT_IFACES)
 	{
-		IPACMDBG("Max STA client reached, ignore\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Max STA client reached, ignore\n");
 		return;
 	}
 
 	if (sta_clnt_ipv6_addr.Find(ip) != NULL)
 	{
-		IPACMDBG("Ignoring duplicate\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Ignoring duplicate\n");
 	}
 	else
 	{
@@ -2559,33 +2530,33 @@ void IPACM_ConntrackListener::HandleSTAClientAddEvt_v6(const IpAddress& ip)
 		if (entry)
 		{
 			*entry = ip;
-			IPACMDBG("STA client cnt %d\n", StaClntCnt_v6);
+			IPACM_LOG(IPACM_LOG_DEBUG, "STA client cnt %d\n", StaClntCnt_v6);
 		}
 		else
-			IPACMDBG_H("Entry is NULL\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Entry is NULL\n");
 	}
 
 	ipv6ct_inst->FlushTempEntries(ip, true, false, true);
 
-	IPACMDBG_H("Successfully added STA client\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Successfully added STA client\n");
 }
 
 void IPACM_ConntrackListener::HandleSTAClientDelEvt(uint32_t clnt_ip_addr)
 {
 	 int cnt;
-	 IPACMDBG_H("Received STA client 0x%x\n", clnt_ip_addr);
+	 IPACM_LOG(IPACM_LOG_DEBUG, "Received STA client 0x%x\n", clnt_ip_addr);
 
 	 for(cnt=0; cnt<MAX_STA_CLNT_IFACES; cnt++)
 	 {
 		if(sta_clnt_ipv4_addr[cnt] != 0 &&
 		 sta_clnt_ipv4_addr[cnt] == clnt_ip_addr)
 		{
-			IPACMDBG("Deleting STA client 0x%x at index: %d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Deleting STA client 0x%x at index: %d\n",
 					clnt_ip_addr, cnt);
 			sta_clnt_ipv4_addr[cnt] = 0;
 			nat_inst->DelEntriesOnSTAClntDiscon(clnt_ip_addr);
 			StaClntCnt--;
-			IPACMDBG("STA client cnt %d\n", StaClntCnt);
+			IPACM_LOG(IPACM_LOG_DEBUG, "STA client cnt %d\n", StaClntCnt);
 			break;
 		}
 	 }
@@ -2596,11 +2567,9 @@ void IPACM_ConntrackListener::HandleSTAClientDelEvt(uint32_t clnt_ip_addr)
 
 void IPACM_ConntrackListener::HandleSTAClientDelEvt_v6(const IpAddress& ip)
 {
-	IPACMDBG_H("\n");
-
 	if (!IsIpv6CTEnabled() || !ip.Valid())
 	{
-		IPACMDBG("Ignoring\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Ignoring\n");
 		return;
 	}
 
@@ -2609,19 +2578,19 @@ void IPACM_ConntrackListener::HandleSTAClientDelEvt_v6(const IpAddress& ip)
 	IpAddress* entry = sta_clnt_ipv6_addr.Find(ip);
 	if (entry == NULL)
 	{
-		IPACMDBG_H("The received IP is not an STA client\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "The received IP is not an STA client\n");
 	}
 	else
 	{
 		--StaClntCnt_v6;
 		entry->Clear();
 		ipv6ct_inst->DelEntriesOnSTAClntDiscon(ip);
-		IPACMDBG("STA client cnt %d\n", StaClntCnt_v6);
+		IPACM_LOG(IPACM_LOG_DEBUG, "STA client cnt %d\n", StaClntCnt_v6);
 	}
 
 	ipv6ct_inst->FlushTempEntries(ip, false, false, true);
 
-	IPACMDBG_H("Successfully deleted STA client\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Successfully deleted STA client\n");
 }
 #ifdef FEATURE_IPV6_NAT
 void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_evt_data* evt_data,
@@ -2631,8 +2600,6 @@ void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_e
 	struct nfct_attr_grp_ipv6 repl_params;
 	uint16_t srcPort, dstPort;
 	uint16_t replSrcPort, replDstPort;
-
-	IPACMDBG_H("\n");
 
 	nfct_get_attr_grp(evt_data->ct, ATTR_GRP_ORIG_IPV6, (void *)&orig_params);
 	nfct_get_attr_grp(evt_data->ct, ATTR_GRP_REPL_IPV6, (void *)&repl_params);
@@ -2644,46 +2611,46 @@ void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_e
 	replSrcPort = nfct_get_attr_u16(evt_data->ct, ATTR_REPL_PORT_SRC);
 	if(!replSrcPort)
 	{
-		IPACMDBG("Received 0 replSrcPort\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Received 0 replSrcPort\n");
 		goto bail;
 	}
 	replDstPort = nfct_get_attr_u16(evt_data->ct, ATTR_REPL_PORT_DST);
 	if(!replDstPort)
 	{
-		IPACMDBG("Received 0 replDstPort\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Received 0 replDstPort\n");
 		goto bail;
 	}
 
 	entry.m_protocol = nfct_get_attr_u8(evt_data->ct, ATTR_ORIG_L4PROTO);
 	if(entry.m_protocol == IPPROTO_UDP)
 	{
-		IPACMDBG("Received UDP packet\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Received UDP packet\n");
 	}
 	else if(entry.m_protocol == IPPROTO_TCP)
 	{
-		IPACMDBG("Received TCP packet\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Received TCP packet\n");
 	}
 	else
 	{
-		IPACMDBG("Received unexpected protocol %d conntrack message\n", entry.m_protocol);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Received unexpected protocol %d conntrack message\n", entry.m_protocol);
 		goto bail;
 	}
 
 	if(!replDstAddr.IsGlobalAddr() && !dstAddr.IsGlobalAddr())
 	{
-		IPACMDBG("addresses aren't global, bail\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "addresses aren't global, bail\n");
 		goto bail;
 	}
 
 	/* E2E case */
 	if(nat_iface_ipv6_addr.Find(srcAddr) != NULL)
 	{
-		IPACMDBG("found src addr in nat iface list - OUTBOUND\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "found src addr in nat iface list - OUTBOUND\n");
 		entry.m_direction = NatEntryBase::DirectionOutbound;
 	}
 	else if(nat_iface_ipv6_addr.Find(replSrcAddr) != NULL)
 	{
-		IPACMDBG("found replSrcAddr addr in nat iface list - INBOUND\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "found replSrcAddr addr in nat iface list - INBOUND\n");
 		entry.m_direction = NatEntryBase::DirectionInbound;
 	}
 	/*
@@ -2694,10 +2661,10 @@ void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_e
 	{
 		if(isStaMode)
 		{
-			IPACMDBG("Don't install dummy rules in STA mode\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Don't install dummy rules in STA mode\n");
 			goto bail;
 		}
-		IPACMDBG(" Embedded - setting to dummy\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, " Embedded - setting to dummy\n");
 		entry.m_isDummy = true;
 		/*
 		* for IPv6CT direction shall be installed as allow all
@@ -2713,11 +2680,11 @@ void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_e
 	{
 		if(isStaMode)
 		{
-			IPACMDBG("Don't install dummy rules in STA mode\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Don't install dummy rules in STA mode\n");
 			goto bail;
 		}
 
-		IPACMDBG("nonnat - setting to dummy\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "nonnat - setting to dummy\n");
 		entry.m_isDummy = true;
 
 		/*
@@ -2726,14 +2693,14 @@ void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_e
 		*/
 		if(nonnat_iface_ipv6_addr.Find(srcAddr))
 		{
-			IPACMDBG("outbound nonnat - override private with public ip\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "outbound nonnat - override private with public ip\n");
 			entry.m_direction = NatEntryBase::DirectionOutbound;
 			srcAddr = replDstAddr;
 			srcPort = replDstPort;
 		}
 		else
 		{
-			IPACMDBG("inbound nonnat - override private with public ip\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "inbound nonnat - override private with public ip\n");
 			entry.m_direction = NatEntryBase::DirectionInbound;
 			replSrcAddr = dstAddr;
 			replSrcPort = dstPort;
@@ -2748,17 +2715,17 @@ void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_e
 		 */
 		if((dstAddr == replSrcAddr) & (srcAddr != replDstAddr))
 		{
-			IPACMDBG_H("identified OUTBOUND NAT by addresses\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "identified OUTBOUND NAT by addresses\n");
 			entry.m_direction = NatEntryBase::DirectionOutbound;
 		}
 		else if((srcAddr == replDstAddr) && (dstAddr != replSrcAddr))
 		{
-			IPACMDBG_H("identified INBOUND NAT by addresses\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "identified INBOUND NAT by addresses\n");
 			entry.m_direction = NatEntryBase::DirectionInbound;
 		}
 		else
 		{
-			IPACMDBG("Neither source Nor destination NAT. entry invalid\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Neither source Nor destination NAT. entry invalid\n");
 			goto bail;
 		}
 	}
@@ -2794,11 +2761,11 @@ void IPACM_ConntrackListener::CreateIpv6NatEntryFromCtEventData(const ipacm_ct_e
 	}
 	else
 	{
-		IPACMERR("Bad direction %d\n", entry.m_direction);
+		IPACM_LOG(IPACM_LOG_ERR, "Bad direction %d\n", entry.m_direction);
 		goto bail;
 	}
 
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return;
 
 bail:
@@ -2812,7 +2779,7 @@ bail:
 void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_evt_data* evt_data,
 	Ipv6ctEntry& entry) const
 {
-	IPACMDBG_H("\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "\n");
 	struct nfct_attr_grp_ipv6 orig_params;
 	nfct_get_attr_grp(evt_data->ct, ATTR_GRP_ORIG_IPV6, (void *)&orig_params);
 	const Ipv6IpAddress srcAddr(orig_params.src, true), dstAddr(orig_params.dst, true);
@@ -2823,15 +2790,15 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 	entry.m_protocol = nfct_get_attr_u8(evt_data->ct, ATTR_ORIG_L4PROTO);
 	if (entry.m_protocol == IPPROTO_UDP)
 	{
-		IPACMDBG("Received UDP packet\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Received UDP packet\n");
 	}
 	else if (entry.m_protocol == IPPROTO_TCP)
 	{
-		IPACMDBG("Received TCP packet\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Received TCP packet\n");
 	}
 	else
 	{
-		IPACMDBG("Received unexpected protocl %d conntrack message\n", entry.m_protocol);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Received unexpected protocl %d conntrack message\n", entry.m_protocol);
 		goto bail;
 	}
 
@@ -2847,11 +2814,11 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 	{
 		if (isStaMode)
 		{
-			IPACMDBG("Don't install dummy rules in STA mode\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Don't install dummy rules in STA mode\n");
 			goto bail;
 		}
 
-		IPACMDBG("setting to dummy\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "setting to dummy\n");
 		entry.m_isDummy = true;
 		entry.m_direction = NatEntryBase::DirectionOutbound;
 	}
@@ -2859,17 +2826,17 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 	{
 		if (isStaMode)
 		{
-			IPACMDBG("Don't install dummy rules in STA mode\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Don't install dummy rules in STA mode\n");
 			goto bail;
 		}
 
-		IPACMDBG("setting to dummy\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "setting to dummy\n");
 		entry.m_isDummy = true;
 		entry.m_direction = NatEntryBase::DirectionInbound;
 	}
 	else
 	{
-		IPACMDBG("Neither source Nor destination NAT. Should be decided during adding the client\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Neither source Nor destination NAT. Should be decided during adding the client\n");
 		entry.m_direction = NatEntryBase::DirectionUnknown;
 	}
 
@@ -2889,11 +2856,11 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 	}
 	else
 	{
-		IPACMERR("Bad direction %d\n", entry.m_direction);
+		IPACM_LOG(IPACM_LOG_ERR, "Bad direction %d\n", entry.m_direction);
 		goto bail;
 	}
 
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return;
 
 bail:
@@ -2904,7 +2871,7 @@ bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
 {
 	bool ret = false;
 
-	IPACMDBG_H("\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "\n");
 #ifdef FEATURE_VLAN_MPDN
 	if (pConfig == NULL)
 	{
@@ -2929,7 +2896,7 @@ bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
 		ret = ip.IsSameSubnet(wan_ipaddr_v6);
 	}
 
-	IPACMDBG_H("return\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 	return ret;
 }
 

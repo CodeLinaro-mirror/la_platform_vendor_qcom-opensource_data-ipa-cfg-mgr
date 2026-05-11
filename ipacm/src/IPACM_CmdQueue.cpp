@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -55,7 +59,7 @@ MessageQueue* MessageQueue::getInstanceInternal()
 		inst_internal = new MessageQueue();
 		if(inst_internal == NULL)
 		{
-			IPACMERR("unable to create internal Message Queue instance\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to create internal Message Queue instance\n");
 			return NULL;
 		}
 	}
@@ -70,7 +74,7 @@ MessageQueue* MessageQueue::getInstanceExternal()
 		inst_external = new MessageQueue();
 		if(inst_external == NULL)
 		{
-			IPACMERR("unable to create external Message Queue instance\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to create external Message Queue instance\n");
 			return NULL;
 		}
 	}
@@ -89,7 +93,7 @@ void MessageQueue::enqueue(Message *item)
 	{
 		if(Tail == NULL)
 		{
-			IPACMDBG("Tail is null\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Tail is null\n");
 			Head->setnext(item);
 		}
 		else
@@ -123,19 +127,19 @@ void* MessageQueue::Process(void *param)
 	MessageQueue *MsgQueueExternal = NULL;
 	Message *item = NULL;
 	const char* eventName;
-	IPACMDBG("MessageQueue::Process()\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "MessageQueue::Process()\n");
 
 	MsgQueueInternal = MessageQueue::getInstanceInternal();
 	if(MsgQueueInternal == NULL)
 	{
-		IPACMERR("unable to start internal cmd queue process\n");
+		IPACM_LOG(IPACM_LOG_ERR, "unable to start internal cmd queue process\n");
 		return NULL;
 	}
 
 	MsgQueueExternal = MessageQueue::getInstanceExternal();
 	if(MsgQueueExternal == NULL)
 	{
-		IPACMERR("unable to start external cmd queue process\n");
+		IPACM_LOG(IPACM_LOG_ERR, "unable to start external cmd queue process\n");
 		return NULL;
 	}
 
@@ -143,7 +147,7 @@ void* MessageQueue::Process(void *param)
 	{
 		if(pthread_mutex_lock(&mutex) != 0)
 		{
-			IPACMERR("unable to lock the mutex\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to lock the mutex\n");
 			return NULL;
 		}
 
@@ -156,12 +160,12 @@ void* MessageQueue::Process(void *param)
 				eventName = IPACM_Iface::ipacmcfg->getEventName(item->evt.data.event);
 				if (eventName != NULL)
 				{
-					IPACMDBG("Get event %s from external queue (%d).\n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "Get event %s from external queue (%d).\n",
 						eventName, item->evt.data.event);
 				}
 				else
 				{
-					IPACMDBG("Get NULL event from external queue (%d).\n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "Get NULL event from external queue (%d).\n",
 						item->evt.data.event);
 				}
 			}
@@ -171,27 +175,27 @@ void* MessageQueue::Process(void *param)
 			eventName = IPACM_Iface::ipacmcfg->getEventName(item->evt.data.event);
 			if (eventName != NULL)
 			{
-				IPACMDBG("Get event %s from internal queue (%d).\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "Get event %s from internal queue (%d).\n",
 					eventName, item->evt.data.event);
 			}
 			else
 			{
-				IPACMDBG("Get NULL event from internal queue (%d).\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "Get NULL event from internal queue (%d).\n",
 					item->evt.data.event);
 			}
 		}
 
 		if(item == NULL)
 		{
-			IPACMDBG("Waiting for Message\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Waiting for Message\n");
 
 			if(pthread_cond_wait(&cond_var, &mutex) != 0)
 			{
-				IPACMERR("unable to lock the mutex\n");
+				IPACM_LOG(IPACM_LOG_ERR, "unable to lock the mutex\n");
 
 				if(pthread_mutex_unlock(&mutex) != 0)
 				{
-					IPACMERR("unable to unlock the mutex\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to unlock the mutex\n");
 					return NULL;
 				}
 
@@ -200,7 +204,7 @@ void* MessageQueue::Process(void *param)
 
 			if(pthread_mutex_unlock(&mutex) != 0)
 			{
-				IPACMERR("unable to unlock the mutex\n");
+				IPACM_LOG(IPACM_LOG_ERR, "unable to unlock the mutex\n");
 				return NULL;
 			}
 
@@ -209,11 +213,11 @@ void* MessageQueue::Process(void *param)
 		{
 			if(pthread_mutex_unlock(&mutex) != 0)
 			{
-				IPACMERR("unable to unlock the mutex\n");
+				IPACM_LOG(IPACM_LOG_ERR, "unable to unlock the mutex\n");
 				return NULL;
 			}
 
-			IPACMDBG("Processing item %p event ID: %d\n", item, item->evt.data.event);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Processing item %p event ID: %d\n", item, item->evt.data.event);
 			item->evt.callback_ptr(&item->evt.data);
 			delete item;
 			item = NULL;

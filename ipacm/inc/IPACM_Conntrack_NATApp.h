@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #ifndef IPACM_CONNTRACK_NATAPP_H
 #define IPACM_CONNTRACK_NATAPP_H
@@ -327,52 +331,52 @@ public:
 
 	EntryBaseClass* Find(const EntryBaseClass& other)
 	{
-		IPACMDBG_H("m_maxEntries %d\n", m_maxEntries);
+		IPACM_LOG(IPACM_LOG_DEBUG, "m_maxEntries %d\n", m_maxEntries);
 		for (int i = 0; i < m_maxEntries; ++i)
 		{
 			EntryBaseClass& curr = Get(i);
 			if (curr.Valid() && curr == other)
 			{
-				IPACMDBG_H("return matched entry with index %d\n", i);
+				IPACM_LOG(IPACM_LOG_DEBUG, "return matched entry with index %d\n", i);
 				return &curr;
 			}
 		}
 
-		IPACMDBG_H("Not found\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Not found\n");
 		return NULL;
 	}
 
 	const EntryBaseClass* Find(const EntryBaseClass& other) const
 	{
-		IPACMDBG_H("m_maxEntries %d\n", m_maxEntries);
+		IPACM_LOG(IPACM_LOG_DEBUG, "m_maxEntries %d\n", m_maxEntries);
 		for (int i = 0; i < m_maxEntries; ++i)
 		{
 			const EntryBaseClass& curr = Get(i);
 			if (curr.Valid() && curr == other)
 			{
-				IPACMDBG_H("return matched entry with index %d\n", i);
+				IPACM_LOG(IPACM_LOG_DEBUG, "return matched entry with index %d\n", i);
 				return &curr;
 			}
 		}
 
-		IPACMDBG_H("Not found\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Not found\n");
 		return NULL;
 	}
 
 	EntryBaseClass* GetFirstEmpty()
 	{
-		IPACMDBG_H("m_maxEntries %d\n",m_maxEntries);
+		IPACM_LOG(IPACM_LOG_DEBUG, "m_maxEntries %d\n",m_maxEntries);
 		for (int i = 0; i < m_maxEntries; ++i)
 		{
 			EntryBaseClass& curr = Get(i);
 			if (!curr.Valid())
 			{
-				IPACMDBG_H("return first empty entry with index %d\n", i);
+				IPACM_LOG(IPACM_LOG_DEBUG, "return first empty entry with index %d\n", i);
 				return &curr;
 			}
 		}
 
-		IPACMDBG_H("The collection is full, no empty entry was found\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "The collection is full, no empty entry was found\n");
 		return NULL;
 	}
 

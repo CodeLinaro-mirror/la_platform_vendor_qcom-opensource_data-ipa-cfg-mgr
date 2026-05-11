@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -93,8 +97,8 @@ int find_mask(int ip_v4_last, int *mask_value);
 
 #define NDA_RTA(r)  ((struct rtattr*)(((char*)(r)) + NLMSG_ALIGN(sizeof(struct ndmsg))))
 #define IPACM_LOG_IPV6_ADDR(prefix, ip_addr)                            \
-        IPACMDBG_H(prefix);                                               \
-		IPACMDBG_H(" IPV6 Address %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n", \
+        IPACM_LOG(IPACM_LOG_DEBUG, prefix);                                               \
+		IPACM_LOG(IPACM_LOG_DEBUG, " IPV6 Address %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n", \
                   (int)ip_addr[0],  (int)ip_addr[1],                                                        \
                   (int)ip_addr[2],  (int)ip_addr[3],                                                        \
                   (int)ip_addr[4],  (int)ip_addr[5],                                                        \
@@ -105,8 +109,8 @@ int find_mask(int ip_v4_last, int *mask_value);
                   (int)ip_addr[14], (int)ip_addr[15]);
 
 #define IPACM_LOG_IPV4_ADDR(prefix, ip_addr)                            \
-        IPACMDBG_H(prefix);                                               \
-        IPACMDBG_H(" IPV4 Address %d.%d.%d.%d\n",                         \
+        IPACM_LOG(IPACM_LOG_DEBUG, prefix);                                               \
+        IPACM_LOG(IPACM_LOG_DEBUG, " IPV4 Address %d.%d.%d.%d\n",                         \
                     (unsigned char)(ip_addr),                               \
                     (unsigned char)(ip_addr >> 8),                          \
                     (unsigned char)(ip_addr >> 16) ,                        \
@@ -131,7 +135,7 @@ static int ipa_nl_open_socket
 	/* Open netlink socket for specified protocol */
 	if((*p_sk_fd = socket(AF_NETLINK, SOCK_RAW, protocol)) < 0)
 	{
-		IPACMERR("cannot open netlink socket\n");
+		IPACM_LOG(IPACM_LOG_ERR, "cannot open netlink socket\n");
 		return IPACM_FAILURE;
 	}
 
@@ -139,13 +143,13 @@ static int ipa_nl_open_socket
 	res = getsockopt(*p_sk_fd, SOL_SOCKET, SO_SNDBUF, &sendbuff, &optlen);
 
 	if(res == -1) {
-		IPACMDBG("Error getsockopt one");
+		IPACM_LOG(IPACM_LOG_WARN, "Error getsockopt one");
 	} else {
-		IPACMDBG("orignal send buffer size = %d\n", sendbuff);
+		IPACM_LOG(IPACM_LOG_DEBUG, "orignal send buffer size = %d\n", sendbuff);
 	}
-	IPACMDBG("sets the send buffer to %d\n", buf_size);
+	IPACM_LOG(IPACM_LOG_DEBUG, "sets the send buffer to %d\n", buf_size);
 	if (setsockopt(*p_sk_fd, SOL_SOCKET, SO_RCVBUF, &buf_size, sizeof(int)) == -1) {
-    IPACMERR("Error setting socket opts\n");
+    IPACM_LOG(IPACM_LOG_ERR, "Error setting socket opts\n");
 	}
 
 	/* Initialize socket addresses to null */
@@ -164,7 +168,7 @@ static int ipa_nl_open_socket
 					(struct sockaddr *)p_sk_addr_loc,
 					sizeof(struct sockaddr_nl)) < 0)
 	{
-		IPACMERR("Socket bind failed\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Socket bind failed\n");
 		return IPACM_FAILURE;
 	}
 
@@ -217,7 +221,7 @@ static int ipa_nl_sock_listener_start
 
 		if((ret = select(sk_fd_set->max_fd + 1, &(sk_fd_set->fdset), NULL, NULL, NULL)) < 0)
 		{
-			IPACMERR("ipa_nl select failed\n");
+			IPACM_LOG(IPACM_LOG_ERR, "ipa_nl select failed\n");
 		}
 		else
 		{
@@ -231,7 +235,7 @@ static int ipa_nl_sock_listener_start
 					{
 						if(IPACM_SUCCESS != ((sk_fd_set->sk_fds[i].read_func)(sk_fd_set->sk_fds[i].sk_fd)))
 						{
-							IPACMERR("Error on read callback[%d] fd=%d\n",
+							IPACM_LOG(IPACM_LOG_ERR, "Error on read callback[%d] fd=%d\n",
 											 i,
 											 sk_fd_set->sk_fds[i].sk_fd);
 						}
@@ -239,7 +243,7 @@ static int ipa_nl_sock_listener_start
 					}
 					else
 					{
-						IPACMERR("No read function\n");
+						IPACM_LOG(IPACM_LOG_ERR, "No read function\n");
 					}
 				}
 
@@ -263,21 +267,21 @@ static struct msghdr* ipa_nl_alloc_msg
 
 	if(IPA_NL_MSG_MAX_LEN < msglen)
 	{
-		IPACMERR("Netlink message exceeds maximum length\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Netlink message exceeds maximum length\n");
 		return NULL;
 	}
 
 	msgh = (struct msghdr *)malloc(sizeof(struct msghdr));
 	if(msgh == NULL)
 	{
-		IPACMERR("Failed malloc for msghdr\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Failed malloc for msghdr\n");
 		return NULL;
 	}
 
 	nladdr = (struct sockaddr_nl *)malloc(sizeof(struct sockaddr_nl));
 	if(nladdr == NULL)
 	{
-		IPACMERR("Failed malloc for sockaddr\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Failed malloc for sockaddr\n");
 		free(msgh);
 		return NULL;
 	}
@@ -285,7 +289,8 @@ static struct msghdr* ipa_nl_alloc_msg
 	iov = (struct iovec *)malloc(sizeof(struct iovec));
 	if(iov == NULL)
 	{
-		PERROR("Failed malloc for iovec");
+		IPACM_LOG(IPACM_LOG_ERR, "Failed malloc for sockaddr\n");
+		perror("Failed malloc for iovec");
 		free(nladdr);
 		free(msgh);
 		return NULL;
@@ -294,7 +299,7 @@ static struct msghdr* ipa_nl_alloc_msg
 	buf = (unsigned char *)malloc(msglen);
 	if(buf == NULL)
 	{
-		IPACMERR("Failed malloc for mglen\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Failed malloc for mglen\n");
 		free(iov);
 		free(nladdr);
 		free(msgh);
@@ -373,7 +378,7 @@ static int ipa_nl_recv
 	msgh = ipa_nl_alloc_msg(IPA_NL_MSG_MAX_LEN);
 	if(NULL == msgh)
 	{
-		IPACMERR("Failed to allocate NL message\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to allocate NL message\n");
 		goto error;
 	}
 
@@ -384,21 +389,21 @@ static int ipa_nl_recv
 	/* Verify that something was read */
 	if(rmsgl <= 0)
 	{
-		PERROR("NL recv error");
+		perror("NL recv error");
 		goto error;
 	}
 
 	/* Verify that NL address length in the received message is expected value */
 	if(sizeof(struct sockaddr_nl) != msgh->msg_namelen)
 	{
-		IPACMERR("rcvd msg with namelen != sizeof sockaddr_nl\n");
+		IPACM_LOG(IPACM_LOG_ERR, "rcvd msg with namelen != sizeof sockaddr_nl\n");
 		goto error;
 	}
 
 	/* Verify that message was not truncated. This should not occur */
 	if(msgh->msg_flags & MSG_TRUNC)
 	{
-		IPACMERR("Rcvd msg truncated!\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Rcvd msg truncated!\n");
 		goto error;
 	}
 
@@ -632,7 +637,7 @@ static int ipa_nl_decode_nlmsg
 	while(NLMSG_OK(nlh, buflen))
 	{
 		memset(dev_name,0,IF_NAME_LEN);
-		IPACMDBG("Received msg:%d from netlink\n", nlh->nlmsg_type)
+		IPACM_LOG(IPACM_LOG_DEBUG, "Received msg:%d from netlink\n", nlh->nlmsg_type)
 		switch(nlh->nlmsg_type)
 		{
 		case RTM_NEWLINK:
@@ -640,58 +645,58 @@ static int ipa_nl_decode_nlmsg
 			msg_ptr->link_event = true;
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info)))
 			{
-				IPACMERR("Failed to decode rtm link message\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Failed to decode rtm link message\n");
 				return IPACM_FAILURE;
 			}
 			else
 			{
-				IPACMDBG("Got RTM_NEWLINK with below values\n");
-				IPACMDBG("RTM_NEWLINK, ifi_change:%d\n", msg_ptr->nl_link_info.metainfo.ifi_change);
-				IPACMDBG("RTM_NEWLINK, ifi_flags:%d\n", msg_ptr->nl_link_info.metainfo.ifi_flags);
-				IPACMDBG("RTM_NEWLINK, ifi_index:%d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
-				IPACMDBG("RTM_NEWLINK, family:%d\n", msg_ptr->nl_link_info.metainfo.ifi_family);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Got RTM_NEWLINK with below values\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "RTM_NEWLINK, ifi_change:%d\n", msg_ptr->nl_link_info.metainfo.ifi_change);
+				IPACM_LOG(IPACM_LOG_DEBUG, "RTM_NEWLINK, ifi_flags:%d\n", msg_ptr->nl_link_info.metainfo.ifi_flags);
+				IPACM_LOG(IPACM_LOG_DEBUG, "RTM_NEWLINK, ifi_index:%d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
+				IPACM_LOG(IPACM_LOG_DEBUG, "RTM_NEWLINK, family:%d\n", msg_ptr->nl_link_info.metainfo.ifi_family);
 				/* RTM_NEWLINK event with AF_BRIDGE family should be ignored in Android
 				   but this should be processed in case of MDM for Ehernet interface.
 				*/
 #ifdef FEATURE_IPA_ANDROID
 				if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE)
 				{
-					IPACMERR(" ignore this RTM_NEWLINK msg \n");
+					IPACM_LOG(IPACM_LOG_WARN, " ignore this RTM_NEWLINK msg \n");
 					return IPACM_SUCCESS;
 				}
 #endif
 				if(IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_change)
 				{
-					IPACMDBG("GOT useful newlink event\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "GOT useful newlink event\n");
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
 					if(ret_val != IPACM_SUCCESS)
 					{
-						IPACMERR("Error while getting interface name\n");
+						IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
 
 					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 					if(data_fid == NULL)
 					{
-						IPACMERR("unable to allocate memory for event data_fid\n");
+						IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_fid\n");
 						return IPACM_FAILURE;
 					}
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 
 					if(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_UP)
 					{
-						IPACMDBG_H("Interface %s bring up with IP-family: %d \n", dev_name, msg_ptr->nl_link_info.metainfo.ifi_family);
+						IPACM_LOG(IPACM_LOG_INFO, "Interface %s bring up with IP-family: %d \n", dev_name, msg_ptr->nl_link_info.metainfo.ifi_family);
 						/* post link up to command queue */
 						evt_data.event = IPA_LINK_UP_EVENT;
-						IPACMDBG_H("Posting IPA_LINK_UP_EVENT with if index: %d\n",
+						IPACM_LOG(IPACM_LOG_INFO, "Posting IPA_LINK_UP_EVENT with if index: %d\n",
 										 msg_ptr->nl_link_info.metainfo.ifi_index);
 					}
 					else
 					{
-						IPACMDBG_H("Interface %s bring down with IP-family: %d \n", dev_name, msg_ptr->nl_link_info.metainfo.ifi_family);
+						IPACM_LOG(IPACM_LOG_INFO, "Interface %s bring down with IP-family: %d \n", dev_name, msg_ptr->nl_link_info.metainfo.ifi_family);
 						/* post link down to command queue */
 						evt_data.event = IPA_LINK_DOWN_EVENT;
-						IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT with if index: %d\n",
+						IPACM_LOG(IPACM_LOG_INFO, "Posting IPA_LINK_DOWN_EVENT with if index: %d\n",
 										 data_fid->if_index);
 					}
 					evt_data.evt_data = data_fid;
@@ -710,7 +715,7 @@ static int ipa_nl_decode_nlmsg
 					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 					if(data_fid == NULL)
 					{
-						IPACMERR("unable to allocate memory for event data_fid\n");
+						IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_fid\n");
 						return IPACM_FAILURE;
 					}
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
@@ -718,17 +723,17 @@ static int ipa_nl_decode_nlmsg
 				        ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
 					if(ret_val != IPACM_SUCCESS)
 					{
-						IPACMERR("Error while getting interface name\n");
+						IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
-					IPACMDBG("Got a usb link_up event (Interface %s, %d) \n", dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
+					IPACM_LOG(IPACM_LOG_INFO, "Got a usb link_up event (Interface %s, %d) \n", dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
 
                     /*--------------------------------------------------------------------------
                        Post LAN iface (ECM) link up event
                      ---------------------------------------------------------------------------*/
                     evt_data.event = IPA_USB_LINK_UP_EVENT;
 					evt_data.evt_data = data_fid;
-					IPACMDBG_H("Posting usb IPA_LINK_UP_EVENT with if index: %d\n",
+					IPACM_LOG(IPACM_LOG_INFO, "Posting usb IPA_LINK_UP_EVENT with if index: %d\n",
 										 data_fid->if_index);
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
                 }
@@ -737,7 +742,7 @@ static int ipa_nl_decode_nlmsg
 					data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 					if(data_fid == NULL)
 					{
-						IPACMERR("unable to allocate memory for event data_fid\n");
+						IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_fid\n");
 						return IPACM_FAILURE;
 					}
 					data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
@@ -745,17 +750,17 @@ static int ipa_nl_decode_nlmsg
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
 					if(ret_val != IPACM_SUCCESS)
 					{
-						IPACMERR("Error while getting interface name\n");
+						IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
-					IPACMDBG_H("Got a usb link_down event (Interface %s) \n", dev_name);
+					IPACM_LOG(IPACM_LOG_INFO, "Got a usb link_down event (Interface %s) \n", dev_name);
 
 					/*--------------------------------------------------------------------------
 						Post LAN iface (ECM) link down event
 					---------------------------------------------------------------------------*/
 					evt_data.event = IPA_LINK_DOWN_EVENT;
 					evt_data.evt_data = data_fid;
-					IPACMDBG_H("Posting usb IPA_LINK_DOWN_EVENT with if index: %d\n",
+					IPACM_LOG(IPACM_LOG_INFO, "Posting usb IPA_LINK_DOWN_EVENT with if index: %d\n",
 										 data_fid->if_index);
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
@@ -763,54 +768,54 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_DELLINK:
-			IPACMDBG("\n GOT dellink event\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "\n GOT dellink event\n");
 			msg_ptr->type = nlh->nlmsg_type;
 			msg_ptr->link_event = true;
-			IPACMDBG("entering rtm decode\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "entering rtm decode\n");
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_link(buffer, buflen, &(msg_ptr->nl_link_info)))
 			{
-				IPACMERR("Failed to decode rtm link message\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Failed to decode rtm link message\n");
 				return IPACM_FAILURE;
 			}
 			else
 			{
-				IPACMDBG("Got RTM_DELLINK with below values\n");
-				IPACMDBG("RTM_DELLINK, ifi_change:%d\n", msg_ptr->nl_link_info.metainfo.ifi_change);
-				IPACMDBG("RTM_DELLINK, ifi_flags:%d\n", msg_ptr->nl_link_info.metainfo.ifi_flags);
-				IPACMDBG("RTM_DELLINK, ifi_index:%d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
-				IPACMDBG("RTM_DELLINK, family:%d\n", msg_ptr->nl_link_info.metainfo.ifi_family);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Got RTM_DELLINK with below values\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "RTM_DELLINK, ifi_change:%d\n", msg_ptr->nl_link_info.metainfo.ifi_change);
+				IPACM_LOG(IPACM_LOG_DEBUG, "RTM_DELLINK, ifi_flags:%d\n", msg_ptr->nl_link_info.metainfo.ifi_flags);
+				IPACM_LOG(IPACM_LOG_DEBUG, "RTM_DELLINK, ifi_index:%d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
+				IPACM_LOG(IPACM_LOG_DEBUG, "RTM_DELLINK, family:%d\n", msg_ptr->nl_link_info.metainfo.ifi_family);
 				/* RTM_NEWLINK event with AF_BRIDGE family should be ignored in Android
 				   but this should be processed in case of MDM for Ehernet interface.
 				*/
 #ifdef FEATURE_IPA_ANDROID
 				if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE)
 				{
-					IPACMERR(" ignore this RTM_DELLINK msg \n");
+					IPACM_LOG(IPACM_LOG_DEBUG, " ignore this RTM_DELLINK msg \n");
 					return IPACM_SUCCESS;
 				}
 #endif
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
 				if(ret_val != IPACM_SUCCESS)
 				{
-					IPACMERR("Error while getting interface name with index %d, continue as the interface might have already been down.\n",
+					IPACM_LOG(IPACM_LOG_WARN, "Error while getting interface name with index %d, continue as the interface might have already been down.\n",
 						msg_ptr->nl_link_info.metainfo.ifi_index);
 				}
 				else
 				{
-					IPACMDBG("Interface %s bring down \n", dev_name);
+					IPACM_LOG(IPACM_LOG_INFO, "Interface %s bring down \n", dev_name);
 				}
 				/* post link down to command queue */
 				evt_data.event = IPA_LINK_DOWN_EVENT;
 				data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 				if(data_fid == NULL)
 				{
-					IPACMERR("unable to allocate memory for event data_fid\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_fid\n");
 					return IPACM_FAILURE;
 				}
 
 				data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 
-				IPACMDBG_H("posting IPA_LINK_DOWN_EVENT with if idnex:%d\n",
+				IPACM_LOG(IPACM_LOG_INFO, "posting IPA_LINK_DOWN_EVENT with if idnex:%d\n",
 								 data_fid->if_index);
 				evt_data.evt_data = data_fid;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -819,10 +824,10 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		case RTM_NEWADDR:
-			IPACMDBG("\n GOT RTM_NEWADDR event\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "\n GOT RTM_NEWADDR event\n");
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_addr(buffer, buflen, &(msg_ptr->nl_addr_info)))
 			{
-				IPACMERR("Failed to decode rtm addr message\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Failed to decode rtm addr message\n");
 				return IPACM_FAILURE;
 			}
 			else
@@ -830,14 +835,14 @@ static int ipa_nl_decode_nlmsg
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_addr_info.metainfo.ifa_index);
 				if(ret_val != IPACM_SUCCESS)
 				{
-					IPACMERR("Error while getting interface name\n");
+					IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface name\n");
 				}
-				IPACMDBG("Interface %s \n", dev_name);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Interface %s \n", dev_name);
 
 				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 				if(data_addr == NULL)
 				{
-					IPACMERR("unable to allocate memory for event data_addr\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_addr\n");
 					return IPACM_FAILURE;
 				}
 
@@ -865,7 +870,7 @@ static int ipa_nl_decode_nlmsg
 				strlcpy(data_addr->iface_name, dev_name, sizeof(data_addr->iface_name));
 				if(AF_INET6 == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
 				{
-				    IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
+				    IPACM_LOG(IPACM_LOG_DEBUG, "Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv6 addr:0x%x:%x:%x:%x\n",
 								 data_addr->if_index,
 								 data_addr->ipv6_addr[0],
 								 data_addr->ipv6_addr[1],
@@ -874,7 +879,7 @@ static int ipa_nl_decode_nlmsg
                 }
 				else
 				{
-				IPACMDBG("Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "Posting IPA_ADDR_ADD_EVENT with if index:%d, ipv4 addr:0x%x\n",
 								 data_addr->if_index,
 								 data_addr->ipv4_addr);
 				}
@@ -887,17 +892,17 @@ static int ipa_nl_decode_nlmsg
 
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info)))
 			{
-				IPACMERR("Failed to decode rtm route message\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Failed to decode rtm route message\n");
 				return IPACM_FAILURE;
 			}
 
-			IPACMDBG("In case RTM_NEWROUTE\n");
-			IPACMDBG("rtm_type: %d\n", msg_ptr->nl_route_info.metainfo.rtm_type);
-			IPACMDBG("protocol: %d\n", msg_ptr->nl_route_info.metainfo.rtm_protocol);
-			IPACMDBG("rtm_scope: %d\n", msg_ptr->nl_route_info.metainfo.rtm_scope);
-			IPACMDBG("rtm_table: %d\n", msg_ptr->nl_route_info.metainfo.rtm_table);
-			IPACMDBG("rtm_family: %d\n", msg_ptr->nl_route_info.metainfo.rtm_family);
-			IPACMDBG("param_mask: 0x%x\n", msg_ptr->nl_route_info.attr_info.param_mask);
+			IPACM_LOG(IPACM_LOG_DEBUG, "In case RTM_NEWROUTE\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "rtm_type: %d\n", msg_ptr->nl_route_info.metainfo.rtm_type);
+			IPACM_LOG(IPACM_LOG_DEBUG, "protocol: %d\n", msg_ptr->nl_route_info.metainfo.rtm_protocol);
+			IPACM_LOG(IPACM_LOG_DEBUG, "rtm_scope: %d\n", msg_ptr->nl_route_info.metainfo.rtm_scope);
+			IPACM_LOG(IPACM_LOG_DEBUG, "rtm_table: %d\n", msg_ptr->nl_route_info.metainfo.rtm_table);
+			IPACM_LOG(IPACM_LOG_DEBUG, "rtm_family: %d\n", msg_ptr->nl_route_info.metainfo.rtm_family);
+			IPACM_LOG(IPACM_LOG_DEBUG, "param_mask: 0x%x\n", msg_ptr->nl_route_info.attr_info.param_mask);
 
 			/* take care of route add default route & uniroute */
 			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
@@ -906,20 +911,20 @@ static int ipa_nl_decode_nlmsg
 				 (msg_ptr->nl_route_info.metainfo.rtm_scope == RT_SCOPE_UNIVERSE) &&
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
-				IPACMDBG("\n GOT RTM_NEWROUTE event\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "\n GOT RTM_NEWROUTE event\n");
 
 				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
 				{
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
 					if(ret_val != IPACM_SUCCESS)
 					{
-						IPACMERR("Error while getting interface name\n");
+						IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
 
 					IPACM_NL_REPORT_ADDR( "route add -host", msg_ptr->nl_route_info.attr_info.dst_addr );
 					IPACM_NL_REPORT_ADDR( "gw", msg_ptr->nl_route_info.attr_info.gateway_addr );
-					IPACMDBG("dev %s\n",dev_name );
+					IPACM_LOG(IPACM_LOG_DEBUG, "dev %s\n",dev_name );
 					/* insert to command queue */
 					IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
 					temp = (-1);
@@ -928,7 +933,7 @@ static int ipa_nl_decode_nlmsg
 					data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 					if(data_addr == NULL)
 					{
-						IPACMERR("unable to allocate memory for event data_addr\n");
+						IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_addr\n");
 						return IPACM_FAILURE;
 					}
 
@@ -937,7 +942,7 @@ static int ipa_nl_decode_nlmsg
 					data_addr->ipv4_addr = ntohl(if_ipv4_addr);
 					data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
 
-					IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 address 0x%x, mask:0x%x\n",
+					IPACM_LOG(IPACM_LOG_INFO, "Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 address 0x%x, mask:0x%x\n",
 									 data_addr->if_index,
 									 data_addr->ipv4_addr,
 									 data_addr->ipv4_addr_mask);
@@ -951,7 +956,7 @@ static int ipa_nl_decode_nlmsg
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
 					if(ret_val != IPACM_SUCCESS)
 					{
-						IPACMERR("Error while getting interface name\n");
+						IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
 
@@ -961,19 +966,19 @@ static int ipa_nl_decode_nlmsg
 						data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 						if(data_addr == NULL)
 						{
-							IPACMERR("unable to allocate memory for event data_addr\n");
+							IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_addr\n");
 							return IPACM_FAILURE;
 						}
 
 						if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_PRIORITY)
 						{
-							IPACMDBG_H("ip -6 route add default dev %s metric %d\n",
+							IPACM_LOG(IPACM_LOG_DEBUG, "ip -6 route add default dev %s metric %d\n",
 											 dev_name,
 											 msg_ptr->nl_route_info.attr_info.priority);
 						}
 						else
 						{
-							IPACMDBG_H("ip -6 route add default dev %s\n", dev_name);
+							IPACM_LOG(IPACM_LOG_DEBUG, "ip -6 route add default dev %s\n", dev_name);
 						}
 
 						IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
@@ -999,7 +1004,7 @@ static int ipa_nl_decode_nlmsg
 						data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 						data_addr->iptype = IPA_IP_v6;
 
-						IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
+						IPACM_LOG(IPACM_LOG_DEBUG, "Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
 										 data_addr->if_index);
 						evt_data.evt_data = data_addr;
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1009,14 +1014,14 @@ static int ipa_nl_decode_nlmsg
 					else
 					{
 						IPACM_NL_REPORT_ADDR( "route add default gw \n", msg_ptr->nl_route_info.attr_info.gateway_addr );
-						IPACMDBG_H("dev %s \n", dev_name);
+						IPACM_LOG(IPACM_LOG_DEBUG, "dev %s \n", dev_name);
 						IPACM_NL_REPORT_ADDR( "dstIP:", msg_ptr->nl_route_info.attr_info.dst_addr );
 
 						/* insert to command queue */
 						data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 						if(data_addr == NULL)
 						{
-							IPACMERR("unable to allocate memory for event data_addr\n");
+							IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_addr\n");
 							return IPACM_FAILURE;
 						}
 
@@ -1031,7 +1036,7 @@ static int ipa_nl_decode_nlmsg
 						data_addr->ipv4_addr_gw = ntohl(if_ipv4_addr_gw);
 						data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
 
-            IPACMDBG_H("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
+           				IPACM_LOG(IPACM_LOG_INFO, "Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 addr:0x%x, mask: 0x%x and gw: 0x%x\n",
 										 data_addr->if_index,
 										 data_addr->ipv4_addr,
 										 data_addr->ipv4_addr_mask,
@@ -1049,18 +1054,18 @@ static int ipa_nl_decode_nlmsg
 				 (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_KERNEL) &&
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
-				IPACMDBG("\n GOT valid v6-RTM_NEWROUTE event\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "\n GOT valid v6-RTM_NEWROUTE event\n");
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
 				if(ret_val != IPACM_SUCCESS)
 				{
-					IPACMERR("Error while getting interface name\n");
+					IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface name\n");
 					return IPACM_FAILURE;
 				}
 
 				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
 				{
 					IPACM_NL_REPORT_ADDR( "Route ADD DST:", msg_ptr->nl_route_info.attr_info.dst_addr );
-					IPACMDBG("%d, metric %d, dev %s\n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "%d, metric %d, dev %s\n",
 									 msg_ptr->nl_route_info.metainfo.rtm_dst_len,
 									 msg_ptr->nl_route_info.attr_info.priority,
 									 dev_name);
@@ -1069,7 +1074,7 @@ static int ipa_nl_decode_nlmsg
 					data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 					if(data_addr == NULL)
 					{
-						IPACMERR("unable to allocate memory for event data_addr\n");
+						IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_addr\n");
 						return IPACM_FAILURE;
 					}
 
@@ -1095,7 +1100,7 @@ static int ipa_nl_decode_nlmsg
 						}
 					}
 
-					IPACMDBG("ADD IPV6 MASK %d: %08x:%08x:%08x:%08x \n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "ADD IPV6 MASK %d: %08x:%08x:%08x:%08x \n",
 									 msg_ptr->nl_route_info.metainfo.rtm_dst_len,
 									 data_addr->ipv6_addr_mask[0],
 									 data_addr->ipv6_addr_mask[1],
@@ -1111,7 +1116,7 @@ static int ipa_nl_decode_nlmsg
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 					data_addr->iptype = IPA_IP_v6;
 
-					IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 addr\n",
+					IPACM_LOG(IPACM_LOG_INFO, "Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 addr\n",
 									 data_addr->if_index);
 					evt_data.evt_data = data_addr;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1120,7 +1125,7 @@ static int ipa_nl_decode_nlmsg
 				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_GATEWAY)
 				{
 					IPACM_NL_REPORT_ADDR( "Route ADD ::/0  Next Hop:", msg_ptr->nl_route_info.attr_info.gateway_addr );
-					IPACMDBG(" metric %d, dev %s\n",
+					IPACM_LOG(IPACM_LOG_DEBUG, " metric %d, dev %s\n",
 									 msg_ptr->nl_route_info.attr_info.priority,
 									 dev_name);
 
@@ -1128,7 +1133,7 @@ static int ipa_nl_decode_nlmsg
 					data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 					if(data_addr == NULL)
 					{
-						IPACMERR("unable to allocate memory for event data_addr\n");
+						IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_addr\n");
 						return IPACM_FAILURE;
 					}
 
@@ -1150,7 +1155,7 @@ static int ipa_nl_decode_nlmsg
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 					data_addr->iptype = IPA_IP_v6;
 
-					IPACMDBG("posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
+					IPACM_LOG(IPACM_LOG_INFO, "posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 address\n",
 									 data_addr->if_index);
 					evt_data.evt_data = data_addr;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1162,7 +1167,7 @@ static int ipa_nl_decode_nlmsg
 		case RTM_DELROUTE:
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_route(buffer, buflen, &(msg_ptr->nl_route_info)))
 			{
-				IPACMERR("Failed to decode rtm route message\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Failed to decode rtm route message\n");
 				return IPACM_FAILURE;
 			}
 			/* take care of route delete of default route & uniroute */
@@ -1178,18 +1183,18 @@ static int ipa_nl_decode_nlmsg
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
 					if(ret_val != IPACM_SUCCESS)
 					{
-						IPACMERR("Error while getting interface name\n");
+						IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
 					IPACM_NL_REPORT_ADDR( "route del -host ", msg_ptr->nl_route_info.attr_info.dst_addr);
 					IPACM_NL_REPORT_ADDR( " gw ", msg_ptr->nl_route_info.attr_info.gateway_addr);
-					IPACMDBG("dev %s\n", dev_name);
+					IPACM_LOG(IPACM_LOG_DEBUG, "dev %s\n", dev_name);
 
 					/* insert to command queue */
 					data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 					if(data_addr == NULL)
 					{
-						IPACMERR("unable to allocate memory for event data_addr\n");
+						IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_addr\n");
 						return IPACM_FAILURE;
 					}
 					IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
@@ -1202,7 +1207,7 @@ static int ipa_nl_decode_nlmsg
 					data_addr->ipv4_addr = ntohl(if_ipv4_addr);
 					data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
 
-					IPACMDBG_H("Posting event IPA_ROUTE_DEL_EVENT with if index:%d, ipv4 address 0x%x, mask:0x%x\n",
+					IPACM_LOG(IPACM_LOG_INFO, "Posting event IPA_ROUTE_DEL_EVENT with if index:%d, ipv4 address 0x%x, mask:0x%x\n",
 									 data_addr->if_index,
 									 data_addr->ipv4_addr,
 									 data_addr->ipv4_addr_mask);
@@ -1215,7 +1220,7 @@ static int ipa_nl_decode_nlmsg
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
 					if(ret_val != IPACM_SUCCESS)
 					{
-						IPACMERR("Error while getting interface name\n");
+						IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
 
@@ -1223,7 +1228,7 @@ static int ipa_nl_decode_nlmsg
 					data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 					if(data_addr == NULL)
 					{
-						IPACMERR("unable to allocate memory for event data_addr\n");
+						IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_addr\n");
 						return IPACM_FAILURE;
 					}
 
@@ -1231,13 +1236,13 @@ static int ipa_nl_decode_nlmsg
 					{
 						if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_PRIORITY)
 						{
-							IPACMDBG("ip -6 route del default dev %s metric %d\n",
+							IPACM_LOG(IPACM_LOG_INFO, "ip -6 route del default dev %s metric %d\n",
 											 dev_name,
 											 msg_ptr->nl_route_info.attr_info.priority);
 						}
 						else
 						{
-							IPACMDBG("ip -6 route del default dev %s\n", dev_name);
+							IPACM_LOG(IPACM_LOG_INFO, "ip -6 route del default dev %s\n", dev_name);
 						}
 						IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
 						data_addr->ipv6_addr[0] = ntohl(data_addr->ipv6_addr[0]);
@@ -1262,7 +1267,7 @@ static int ipa_nl_decode_nlmsg
 					else
 					{
 						IPACM_NL_REPORT_ADDR( "route del default gw", msg_ptr->nl_route_info.attr_info.gateway_addr);
-						IPACMDBG("dev %s\n", dev_name);
+						IPACM_LOG(IPACM_LOG_DEBUG, "dev %s\n", dev_name);
 
 						IPACM_EVENT_COPY_ADDR_v4( data_addr->ipv4_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
 						data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
@@ -1276,7 +1281,7 @@ static int ipa_nl_decode_nlmsg
 					evt_data.event = IPA_ROUTE_DEL_EVENT;
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 
-					IPACMDBG_H("Posting IPA_ROUTE_DEL_EVENT with if index:%d\n",
+					IPACM_LOG(IPACM_LOG_INFO, "Posting IPA_ROUTE_DEL_EVENT with if index:%d\n",
 									 data_addr->if_index);
 					evt_data.evt_data = data_addr;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1290,18 +1295,18 @@ static int ipa_nl_decode_nlmsg
 				 (msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_KERNEL) &&
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
-				IPACMDBG("\n GOT valid v6-RTM_DELROUTE event\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "\n GOT valid v6-RTM_DELROUTE event\n");
 				ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
 				if(ret_val != IPACM_SUCCESS)
 				{
-					IPACMERR("Error while getting interface name");
+					IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface name");
 					return IPACM_FAILURE;
 				}
 
 				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
 				{
 					IPACM_NL_REPORT_ADDR( "DEL", msg_ptr->nl_route_info.attr_info.dst_addr);
-					IPACMDBG("/%d, metric %d, dev %s\n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "/%d, metric %d, dev %s\n",
 									 msg_ptr->nl_route_info.metainfo.rtm_dst_len,
 									 msg_ptr->nl_route_info.attr_info.priority,
 									 dev_name);
@@ -1310,7 +1315,7 @@ static int ipa_nl_decode_nlmsg
 					data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 					if(data_addr == NULL)
 					{
-						IPACMERR("unable to allocate memory for event data_addr\n");
+						IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_addr\n");
 						return IPACM_FAILURE;
 					}
 
@@ -1324,14 +1329,14 @@ static int ipa_nl_decode_nlmsg
 					mask_value_v6 = msg_ptr->nl_route_info.metainfo.rtm_dst_len;
 					for(mask_index = 0; mask_index < 4; mask_index++)
 					{
-						IPACMDBG("%dst %d \n",
+						IPACM_LOG(IPACM_LOG_DEBUG, "%dst %d \n",
 										 mask_index,
 										 mask_value_v6);
 						if(mask_value_v6 >= 32)
 						{
 							mask_v6(32, &data_addr->ipv6_addr_mask[mask_index]);
 							mask_value_v6 -= 32;
-							IPACMDBG("%dst: %08x \n",
+							IPACM_LOG(IPACM_LOG_DEBUG, "%dst: %08x \n",
 											 mask_index,
 											 data_addr->ipv6_addr_mask[mask_index]);
 						}
@@ -1339,19 +1344,19 @@ static int ipa_nl_decode_nlmsg
 						{
 							mask_v6(mask_value_v6, data_addr->ipv6_addr_mask);
 							mask_value_v6 = 0;
-							IPACMDBG("%dst: %08x \n",
+							IPACM_LOG(IPACM_LOG_DEBUG, "%dst: %08x \n",
 											 mask_index,
 											 data_addr->ipv6_addr_mask[mask_index]);
 						}
 					}
 
-					IPACMDBG("DEL IPV6 MASK 0st: %08x ",
+					IPACM_LOG(IPACM_LOG_DEBUG, "DEL IPV6 MASK 0st: %08x ",
 									 data_addr->ipv6_addr_mask[0]);
-					IPACMDBG("1st: %08x ",
+					IPACM_LOG(IPACM_LOG_DEBUG, "1st: %08x ",
 									 data_addr->ipv6_addr_mask[1]);
-					IPACMDBG("2st: %08x ",
+					IPACM_LOG(IPACM_LOG_DEBUG, "2st: %08x ",
 									 data_addr->ipv6_addr_mask[2]);
-					IPACMDBG("3st: %08x \n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "3st: %08x \n",
 									 data_addr->ipv6_addr_mask[3]);
 
 					data_addr->ipv6_addr_mask[0] = ntohl(data_addr->ipv6_addr_mask[0]);
@@ -1363,7 +1368,7 @@ static int ipa_nl_decode_nlmsg
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 					data_addr->iptype = IPA_IP_v6;
 
-					IPACMDBG_H("posting event IPA_ROUTE_DEL_EVENT with if index:%d, ipv4 address\n",
+					IPACM_LOG(IPACM_LOG_INFO, "posting event IPA_ROUTE_DEL_EVENT with if index:%d, ipv4 address\n",
 									 data_addr->if_index);
 					evt_data.evt_data = data_addr;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1375,19 +1380,19 @@ static int ipa_nl_decode_nlmsg
 		case RTM_NEWNEIGH:
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info)))
 			{
-				IPACMERR("Failed to decode rtm neighbor message\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Failed to decode rtm neighbor message\n");
 				return IPACM_FAILURE;
 			}
 
 			ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
 			if(ret_val != IPACM_SUCCESS)
 			{
-				IPACMERR("Error while getting interface index\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface index\n");
 				return IPACM_FAILURE;
 			}
 			else
 				{
-				IPACMDBG("\n GOT RTM_NEWNEIGH event (%s) ip %d\n",dev_name,msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
+				IPACM_LOG(IPACM_LOG_DEBUG, "\n GOT RTM_NEWNEIGH event (%s) ip %d\n",dev_name,msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 			}
 
 
@@ -1395,7 +1400,7 @@ static int ipa_nl_decode_nlmsg
 			if(!(memcmp(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
 						nullMac,sizeof(nullMac))))
 			{
-			  IPACMDBG_H("RTM_NEWNEIGH received with NULL MAC\n");
+			  IPACM_LOG(IPACM_LOG_WARN, "RTM_NEWNEIGH received with NULL MAC\n");
 			  return IPACM_SUCCESS;
 			}
 
@@ -1403,7 +1408,7 @@ static int ipa_nl_decode_nlmsg
 		    data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
 		    if(data_all == NULL)
 			{
-		    	IPACMERR("unable to allocate memory for event data_all\n");
+		    	IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_all\n");
 						return IPACM_FAILURE;
 			}
 
@@ -1428,11 +1433,11 @@ static int ipa_nl_decode_nlmsg
 		    }
 		    else
 		    {
-			IPACMDBG_H("ss_family = %d\n", msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
+			IPACM_LOG(IPACM_LOG_DEBUG, "ss_family = %d\n", msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 		        data_all->iptype = IPA_IP_v6;
 		    }
 
-		    IPACMDBG("NDA_LLADDR:MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		    IPACM_LOG(IPACM_LOG_DEBUG, "NDA_LLADDR:MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[0],
 		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[1],
 		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[2],
@@ -1447,7 +1452,7 @@ static int ipa_nl_decode_nlmsg
 			data_all->if_index = msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
 			strlcpy(data_all->iface_name, dev_name, sizeof(data_all->iface_name));
 
-			IPACMDBG_H("for IF %s, got ndm_family %d, ndm_state %d\n", dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_family,
+			IPACM_LOG(IPACM_LOG_DEBUG, "for IF %s, got ndm_family %d, ndm_state %d\n", dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_family,
 				msg_ptr->nl_neigh_info.metainfo.ndm_state);
 
 			/* Add support to replace src-mac as bridge0 mac */
@@ -1456,7 +1461,7 @@ static int ipa_nl_decode_nlmsg
 		    {
 				/* Posting IPA_BRIDGE_LINK_UP_EVENT event */
 				evt_data.event = IPA_BRIDGE_LINK_UP_EVENT;
-				IPACMDBG_H("posting IPA_BRIDGE_LINK_UP_EVENT (%s):index:%d \n",
+				IPACM_LOG(IPACM_LOG_INFO, "posting IPA_BRIDGE_LINK_UP_EVENT (%s):index:%d \n",
                                  dev_name,
  		                    data_all->if_index);
 			}
@@ -1464,7 +1469,7 @@ static int ipa_nl_decode_nlmsg
 		    {
 				/* Posting new_neigh events for all LAN/WAN clients */
 				evt_data.event = IPA_NEW_NEIGH_EVENT;
-				IPACMDBG_H("posting IPA_NEW_NEIGH_EVENT (%s):index:%d ip-family: %d\n",
+				IPACM_LOG(IPACM_LOG_INFO, "posting IPA_NEW_NEIGH_EVENT (%s):index:%d ip-family: %d\n",
                                  dev_name,
  		                    data_all->if_index,
 		    				 msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
@@ -1477,26 +1482,26 @@ static int ipa_nl_decode_nlmsg
 		case RTM_DELNEIGH:
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info)))
 			{
-				IPACMERR("Failed to decode rtm neighbor message\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Failed to decode rtm neighbor message\n");
 				return IPACM_FAILURE;
 			}
 
 			ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
 			if(ret_val != IPACM_SUCCESS)
 			{
-				IPACMERR("Error while getting interface index\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface index\n");
 				return IPACM_FAILURE;
 			}
 			else
 			{
-				IPACMDBG("\n GOT RTM_DELNEIGH event (%s) ip %d\n",dev_name,msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
+				IPACM_LOG(IPACM_LOG_DEBUG, "\n GOT RTM_DELNEIGH event (%s) ip %d\n",dev_name,msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 			}
 
 			//This check is to prevent handling of netlink messages with NULL MAC addr
 			if(!(memcmp(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
 				nullMac,sizeof(nullMac))))
 			{
-			  IPACMDBG_H("RTM_DELNEIGH received with NULL MAC\n");
+			  IPACM_LOG(IPACM_LOG_WARN, "RTM_DELNEIGH received with NULL MAC\n");
 			  return IPACM_SUCCESS;
 			}
 
@@ -1504,7 +1509,7 @@ static int ipa_nl_decode_nlmsg
 			data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
 			if(data_all == NULL)
 			{
-				IPACMERR("unable to allocate memory for event data_all\n");
+				IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_all\n");
 				return IPACM_FAILURE;
 			}
 
@@ -1535,7 +1540,7 @@ static int ipa_nl_decode_nlmsg
 				data_all->iptype = IPA_IP_v6;
 			}
 
-		    IPACMDBG("NDA_LLADDR:MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		    IPACM_LOG(IPACM_LOG_DEBUG, "NDA_LLADDR:MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[0],
 		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[1],
 		     (unsigned char)(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr).sa_data[2],
@@ -1549,7 +1554,7 @@ static int ipa_nl_decode_nlmsg
 		    evt_data.event = IPA_DEL_NEIGH_EVENT;
 				data_all->if_index = msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
 
-		    IPACMDBG_H("posting IPA_DEL_NEIGH_EVENT (%s):index:%d ip-family: %d\n",
+		    IPACM_LOG(IPACM_LOG_INFO, "posting IPA_DEL_NEIGH_EVENT (%s):index:%d ip-family: %d\n",
                                  dev_name,
  		                    data_all->if_index,
 		    				 msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
@@ -1559,7 +1564,7 @@ static int ipa_nl_decode_nlmsg
 			break;
 
 		default:
-			IPACMDBG(" ignore NL event %d!!!\n ", nlh->nlmsg_type);
+			IPACM_LOG(IPACM_LOG_DEBUG, " ignore NL event %d!!!\n ", nlh->nlmsg_type);
 			break;
 
 		}
@@ -1581,20 +1586,20 @@ int ipa_nl_recv_msg(int fd)
 	nlmsg = (ipa_nl_msg_t *)malloc(sizeof(ipa_nl_msg_t));
 	if(NULL == nlmsg)
 	{
-		IPACMERR("Failed alloc of nlmsg \n");
+		IPACM_LOG(IPACM_LOG_ERR, "Failed alloc of nlmsg \n");
 		goto error;
 	}
 	else
 	{
 		if(IPACM_SUCCESS != ipa_nl_recv(fd, &msghdr, &msglen))
 		{
-			IPACMERR("Failed to receive nl message \n");
+			IPACM_LOG(IPACM_LOG_ERR, "Failed to receive nl message \n");
 			goto error;
 		}
 
 		if(msghdr== NULL)
 		{
-			IPACMERR(" failed to get msghdr\n");
+			IPACM_LOG(IPACM_LOG_ERR, " failed to get msghdr\n");
 			goto error;
 		}
 
@@ -1603,7 +1608,7 @@ int ipa_nl_recv_msg(int fd)
 		memset(nlmsg, 0, sizeof(ipa_nl_msg_t));
 		if(IPACM_SUCCESS != ipa_nl_decode_nlmsg((char *)iov->iov_base, msglen, nlmsg))
 		{
-			IPACMERR("Failed to decode nl message \n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Failed to decode nl message \n");
 			goto error;
 		}
 		/* Release NetLink message buffer */
@@ -1644,23 +1649,23 @@ int ipa_get_if_name
 
 	if((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
-		IPACMERR("get interface name socket create failed \n");
+		IPACM_LOG(IPACM_LOG_ERR, "get interface name socket create failed \n");
 		return IPACM_FAILURE;
 	}
 
 	memset(&ifr, 0, sizeof(struct ifreq));
 	ifr.ifr_ifindex = if_index;
-	IPACMDBG("Interface index %d\n", if_index);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Interface index %d\n", if_index);
 
 	if(ioctl(fd, SIOCGIFNAME, &ifr) < 0)
 	{
-		IPACMERR("call_ioctl_on_dev: ioctl failed: %d:\n", errno);
+		IPACM_LOG(IPACM_LOG_DEBUG, "call_ioctl_on_dev: ioctl failed: %d:\n", errno);
 		close(fd);
 		return IPACM_FAILURE;
 	}
 
 	(void)strlcpy(if_name, ifr.ifr_name, sizeof(ifr.ifr_name));
-	IPACMDBG("interface name %s\n", ifr.ifr_name);
+	IPACM_LOG(IPACM_LOG_DEBUG, "interface name %s\n", ifr.ifr_name);
 	close(fd);
 
 	return IPACM_SUCCESS;
@@ -1679,15 +1684,15 @@ int ipa_nl_listener_init
 	int ret_val;
 
 	memset(&sk_info, 0, sizeof(ipa_nl_sk_info_t));
-	IPACMDBG_H("Entering IPA NL listener init\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Entering IPA NL listener init\n");
 
 	if(ipa_nl_open_socket(&sk_info, nl_type, nl_groups) == IPACM_SUCCESS)
 	{
-		IPACMDBG_H("IPA Open netlink socket succeeds\n");
+		IPACM_LOG(IPACM_LOG_WARN, "IPA Open netlink socket succeeds\n");
 	}
 	else
 	{
-		IPACMERR("Netlink socket open failed\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Netlink socket open failed\n");
 		return IPACM_FAILURE;
 	}
 
@@ -1696,7 +1701,7 @@ int ipa_nl_listener_init
 
 	if(ipa_nl_addfd_map(sk_fdset, sk_info.sk_fd, read_f) != IPACM_SUCCESS)
 	{
-		IPACMERR("cannot add nl routing sock for reading\n");
+		IPACM_LOG(IPACM_LOG_ERR, "cannot add nl routing sock for reading\n");
 		close(sk_info.sk_fd);
 		return IPACM_FAILURE;
 	}
@@ -1706,7 +1711,7 @@ int ipa_nl_listener_init
 
 	if(ret_val != IPACM_SUCCESS)
 	{
-		IPACMERR("Failed to start NL listener\n");
+		IPACM_LOG(IPACM_LOG_WARN, "Failed to start NL listener\n");
 	}
 
 	return IPACM_SUCCESS;

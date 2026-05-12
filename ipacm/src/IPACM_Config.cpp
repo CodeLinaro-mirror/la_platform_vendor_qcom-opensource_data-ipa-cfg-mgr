@@ -310,6 +310,7 @@ IPACM_Config::IPACM_Config()
 #ifdef FEATURE_VLAN_MPDN
 	num_ipv6_prefixes = 0;
 	num_no_offload_ipv6_prefix = 0;
+	memset(rgip_iface_name, 0, sizeof(rgip_iface_name));
 	rgip_ip = 0;
 	memset(ipa_ipv6_prefixes, 0, sizeof(ipa_ipv6_prefixes));
 	memset(ipa_no_offload_ipv6_prefixes, 0, sizeof(ipa_no_offload_ipv6_prefixes));

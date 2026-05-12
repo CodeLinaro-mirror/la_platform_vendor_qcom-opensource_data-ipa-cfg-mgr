@@ -201,6 +201,7 @@ IPACM_Lan::IPACM_Lan(char *iface_name, int iface_index, bool is_ppp_iface) : IPA
 	memset(modem_ul_v6_set, 0, sizeof(modem_ul_v6_set));
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
 	memset(&xlat_ctx, 0, sizeof(xlat_context));
+	memset(tcp_syn_flt_rule_hdl, 0, sizeof(tcp_syn_flt_rule_hdl));
 
 	vlan_hdr_hdl = 0;
 
@@ -214,7 +215,6 @@ IPACM_Lan::IPACM_Lan(char *iface_name, int iface_index, bool is_ppp_iface) : IPA
 #ifdef FEATURE_L2TP
 #ifdef IPA_L2TP_TUNNEL_UDP
 	l2tp_udp_dflt_flt_tule_offset = 0;
-	memset(tcp_syn_flt_rule_hdl, 0, sizeof(tcp_syn_flt_rule_hdl));
 	memset(l2tp_udp_dflt_flt_rule_hdl, 0, sizeof(l2tp_udp_dflt_flt_rule_hdl));
 #endif
 #endif
@@ -17126,6 +17126,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 
 		for(cnt=0; cnt < prop->num_ext_props && index < install_total_rules ; cnt++)
 		{
+			SET_FLT_RULE_PRIORITY(flt_rule_entry, install_total_rules, index);
 			memcpy(&flt_rule_entry.rule.eq_attrib,
 					&prop->prop[cnt].eq_attrib,
 					sizeof(prop->prop[cnt].eq_attrib));
@@ -17272,9 +17273,11 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 			if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
 				prop->prop[cnt].action != IPA_PASS_TO_EXCEPTION)
 			{
-				//duplicate the old rule to new index
+				//duplicate the old rule to new index and update the priority
+				SET_FLT_RULE_PRIORITY(flt_rule_entry, install_total_rules, index);
 				memcpy((void *)pFilteringTable->rules + (index * sizeof(struct ipa_flt_rule_add_v2)),
 					&flt_rule_entry, sizeof(flt_rule_entry));
+
 
 				//change old rule to pass to route and non hashable
 				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
@@ -17308,7 +17311,8 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 
 				flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
 
-				//overwrite the old rule and increment the rule count
+				//overwrite the old rule and increment the rule count and update the priority to one less than original rule
+				SET_FLT_RULE_PRIORITY(flt_rule_entry, install_total_rules, index - 1);
 				memcpy((void *)pFilteringTable->rules + ((index -1) * sizeof(struct ipa_flt_rule_add_v2)),
 					&flt_rule_entry, sizeof(flt_rule_entry));
 				index++;
@@ -23772,7 +23776,11 @@ int IPACM_Lan::construct_mtu_rule(struct ipa_flt_rule *rule, ipa_ip_type iptype,
 	{
 		rule->eq_attrib.ihl_offset_range_16[0].offset = 0x84;
 		//v6 uses payload length which doesnt include v6 header
+		if (IPACM_Iface::ipacmcfg->mape_enable) {
+			rule->eq_attrib.ihl_offset_range_16[0].range_low = mtu  + 1;
+		} else {
 		rule->eq_attrib.ihl_offset_range_16[0].range_low = mtu + 1 - IPV6_HEADER_SIZE;
+	}
 	}
 
 
@@ -24206,6 +24214,7 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule_per_client(int client_num, ipacm_
 				flt_rule_entry.rule.rule_id = prop->prop[cnt].rule_id;
 				/* Rule ID of replicate is same as Q6 rule I.D */
 				flt_index.rule_id_ex[idx_q6] = prop->prop[cnt].rule_id;
+				flt_rule_entry.rule.max_prio = PRIORITY_FLTR_XLAT + pFilteringTable->num_rules;
 
 				/* Check if we can add the MAC address rule. */
 				if (num_offset_meq_128 == IPA_IPFLTR_NUM_MEQ_128_EQNS)

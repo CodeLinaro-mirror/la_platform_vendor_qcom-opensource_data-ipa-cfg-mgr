@@ -1492,6 +1492,32 @@ static int ipa_nl_decode_nlmsg
 					IPACMDBG("Tunnel Delete Done\n");
 				}
 #endif
+#ifdef FEATURE_IPoGRE
+				struct ifinfomsg *ifi2_rgip = (struct ifinfomsg*) NLMSG_DATA(nlh);
+				struct rtattr *attrib1[IFLA_MAX + 1];
+				getAttr(attrib1, IFLA_MAX, IFLA_RTA(ifi2_rgip), nlh->nlmsg_len, 0, false);
+				if (attrib1[IFLA_IFNAME]) {
+					if (strncmp((char*)RTA_DATA(attrib1[IFLA_IFNAME]), IPACM_Iface::ipacmcfg->rgip_iface_name,
+						sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
+					{
+						IPACMDBG_H("RGIP iface %s link down/delete, post IPA_HANDLE_RGIP_DEL\n", dev_name);
+						ipacm_cmd_q_data rgip_evt_data;
+						uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+						if(rgip_v4 == NULL)
+						{
+							IPACMERR("Memory not assigned to rgip\n");
+						}
+						else
+						{
+							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+							rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
+							*rgip_v4 = 0;
+							rgip_evt_data.evt_data = rgip_v4;
+							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+						}
+					}
+				}
+#endif
 				if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE || msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC)
 				{
 					IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n", msg_ptr->nl_link_info.metainfo.ifi_index);
@@ -1521,18 +1547,6 @@ static int ipa_nl_decode_nlmsg
 					}
 					strlcpy(macsec_map.phy_name, msg_ptr->nl_link_info.name, sizeof(macsec_map.phy_name));
 				}
-
-#ifdef FEATURE_IPoGRE
-				if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name, sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
-				{
-					IPACMDBG_H("RGIP iface %s link down/delete, post IPA_HANDLE_RGIP_DEL\n", dev_name);
-					ipacm_cmd_q_data rgip_evt_data;
-					memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
-					rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
-					rgip_evt_data.evt_data = NULL;
-					IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
-				}
-#endif
 
 				if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
 				{
@@ -1705,7 +1719,37 @@ static int ipa_nl_decode_nlmsg
 							rgip_evt_data.evt_data = rgip_v4;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
 							IPACM_Iface::ipacmcfg->rgip_ip = data_addr->ipv4_addr;
-							IPACM_Iface::ipacmcfg->rgip_ip = ntohl(IPACM_Iface::ipacmcfg->rgip_ip);
+						}
+					}
+					/* The RGIP interface was deleted and a new interface came up with a
+					 * different name but the same IPv4 address as the stored rgip_ip.
+					 * Identify it as the new RGIP interface and re-trigger RGIP UP. */
+					else if ((data_addr->iptype == IPA_IP_v4) &&
+					         (IPACM_Iface::ipacmcfg->rgip_ip != 0) &&
+					         (data_addr->ipv4_addr == IPACM_Iface::ipacmcfg->rgip_ip))
+					{
+						IPACMDBG_H("New iface %s has IP 0x%x matching stored rgip_ip — "
+						           "treating as new RGIP iface (old name: %s)\n",
+						           dev_name, data_addr->ipv4_addr,
+						           IPACM_Iface::ipacmcfg->rgip_iface_name);
+						/* Update rgip_iface_name to the new interface name */
+						strlcpy(IPACM_Iface::ipacmcfg->rgip_iface_name, dev_name,
+						        sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name));
+						ipacm_cmd_q_data rgip_evt_data;
+						uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+						if(rgip_v4 == NULL)
+						{
+							IPACMERR("Memory not assigned to rgip\n");
+						}
+						else
+						{
+							memcpy(rgip_v4, &data_addr->ipv4_addr, sizeof(*rgip_v4));
+							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+							rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
+							rgip_evt_data.evt_data = rgip_v4;
+							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+							/* Refresh rgip_ip with the confirmed address */
+							IPACM_Iface::ipacmcfg->rgip_ip = data_addr->ipv4_addr;
 						}
 					}
 #endif
@@ -1716,11 +1760,20 @@ static int ipa_nl_decode_nlmsg
 					if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name, sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
 					{
 						IPACMDBG_H("RGIP iface %s addr deleted, post IPA_HANDLE_RGIP_DEL\n", dev_name);
-						ipacm_cmd_q_data rgip_evt_data;
-						memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
-						rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
-						rgip_evt_data.evt_data = NULL;
-						IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+						ipacm_cmd_q_data rgip_evt_del_data;
+						uint32_t *rgip_v4_del = (uint32_t*) malloc(sizeof(uint32_t));
+						if(rgip_v4_del == NULL)
+						{
+							IPACMERR("Memory not assigned to rgip\n");
+						}
+						else
+						{
+							memset(&rgip_evt_del_data, 0, sizeof(rgip_evt_del_data));
+							rgip_evt_del_data.event = IPA_HANDLE_RGIP_DEL;
+							*rgip_v4_del = 0;
+							rgip_evt_del_data.evt_data = rgip_v4_del;
+							IPACM_EvtDispatcher::PostEvt(&rgip_evt_del_data);
+						}
 					}
 #endif
 					evt_data.event = IPA_ADDR_DEL_EVENT;
@@ -2407,7 +2460,7 @@ process_v6:
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
 
-				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
+				if(AF_INET == msg_ptr->nl_route_info.metainfo.rtm_family && msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
 				{
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
 					if(ret_val != IPACM_SUCCESS)

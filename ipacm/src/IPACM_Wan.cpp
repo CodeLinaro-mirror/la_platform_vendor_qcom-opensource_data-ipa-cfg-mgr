@@ -2523,13 +2523,9 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_vlan_pdn *vlan_data = NULL;
 
-	if((vlan_idx < 0) || (vlan_idx >= IPA_MAX_NUM_SW_PDNS))
-	{
-		IPACMERR("Invalid VLAN Index\n");
-		return;
-	}
-
-	if(pdn_idx < 0 || vlan_idx < 0 || vlan_id <= 0)
+	if((pdn_idx < 0) || (pdn_idx >= IPA_MAX_NUM_SW_PDNS) ||
+           (vlan_idx < 0) || (vlan_idx >= IPA_MAX_NUM_SW_PDNS) ||
+           (vlan_id <= 0))
 	{
 		IPACMERR("Wrong param pdn_idx:%d, vlan_idx:%d, vlan_id:%d\n", pdn_idx, vlan_idx, vlan_id);
 		return;

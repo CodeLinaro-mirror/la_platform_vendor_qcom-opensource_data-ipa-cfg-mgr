@@ -29,7 +29,6 @@
  * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
- *
  */
 /*!
 		@file
@@ -98,6 +97,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WLAN_CLIENT_DEL_EVENT),                /* ipacm_event_data_mac */
 	__stringify(IPA_WLAN_CLIENT_POWER_SAVE_EVENT),         /* ipacm_event_data_mac */
 	__stringify(IPA_WLAN_CLIENT_RECOVER_EVENT),            /* ipacm_event_data_mac */
+	__stringify(IPA_WLAN_BRIDGE_UPDATE_EVENT),             /* ipacm_event_data_all */
 	__stringify(IPA_NEW_NEIGH_EVENT),                      /* ipacm_event_data_all */
 	__stringify(IPA_DEL_NEIGH_EVENT),                      /* ipacm_event_data_all */
 	__stringify(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT),       /* ipacm_event_data_all */
@@ -1597,6 +1597,7 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data, bo
 				data->bridge_ipv4 = it_mapping->bridge_ipv4;
 				data->subnet_mask = it_mapping->subnet_mask;
 				data->lan2lan_sw = it_mapping->lan2lan_sw;
+				data->master_if_index = it_mapping->bridge_if_index;
 				ret = IPACM_SUCCESS;
 
 				if(is_dummy_VID(it_mapping->bridge_associated_VID))
@@ -1613,6 +1614,7 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data, bo
 				data->bridge_ipv4 = it_mapping->bridge_ipv4;
 				data->subnet_mask = it_mapping->subnet_mask;
 				data->lan2lan_sw = it_mapping->lan2lan_sw;
+				data->master_if_index = it_mapping->bridge_if_index;
 				ret = IPACM_SUCCESS;
 				break;
 			}

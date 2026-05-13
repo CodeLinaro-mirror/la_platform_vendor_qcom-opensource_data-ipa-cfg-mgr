@@ -98,6 +98,7 @@ IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index) : IPACM_Lan(iface_name
 	header_name_count = 0;
 	wlan_client = NULL;
 	wlan_client_len = 0;
+	wlan_bridge_idx = -1;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		if (lan_stats_inited == false)
@@ -189,7 +190,14 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	ipacm_event_data_vlan *vlan_data = NULL;
 	ipacm_cmd_q_data evt_data;
 	uint16_t vlan_id = 0;
+	uint16_t bridge_if_id = 0;
 	uint8_t priority = 0;
+	ipa_bridge_vlan_mapping_info mapping_info;
+	ipacm_event_route_vlan *vid_data;
+	char master_dev_name[IF_NAME_LEN]={0};
+	uint32_t br_v4_addr =0, br_v4_mask =0;
+	IPACM_Config* config = IPACM_Config::GetInstance();
+	int ret = 0;
 
 	switch (event)
 	{
@@ -202,6 +210,34 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			{
 				IPACMDBG_H("Received IPA_WLAN_LINK_DOWN_EVENT\n");
 				handle_down_evt();
+				if(!IPACM_Iface::ipacmcfg->get_vlan_id(dev_name, &vlan_id))
+				{
+					memset(master_dev_name,0,IF_NAME_LEN);
+					memset(&mapping_info, 0, sizeof(mapping_info));
+					mapping_info.vlan_id = DUMMY_VLAN_ID_BASE + data->if_index;
+					if(!IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping(&mapping_info, true))
+					{
+						IPACM_Iface::ipacmcfg->del_dummy_vlan_mapping(mapping_info.bridge_name,
+							dev_name, data->if_index);
+						bridge_if_id = mapping_info.master_if_index;
+						IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&bridge_if_id);
+					}
+					vid_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+					if(vid_data != NULL)
+					{
+						memset(vid_data, 0, sizeof(ipacm_event_route_vlan));
+						memset(&evt_data, 0, sizeof(ipacm_cmd_q_data));
+						vid_data->VlanID = DUMMY_VLAN_ID_BASE + data->if_index;
+						evt_data.evt_data = vid_data;
+						evt_data.event = IPA_DUMMY_VLAN_DOWN_EVENT;
+						IPACMDBG_H("Posting event %s with vlan_id: %d\n",
+							IPACM_Iface::ipacmcfg->getEventName(evt_data.event), vid_data->VlanID);
+						if(IPACM_EvtDispatcher::PostEvt(&evt_data) != IPACM_SUCCESS) {
+							free(vid_data);
+							IPACMERR("Failed to post event\n");
+						}
+					}
+				}
 				/* reset the AP-iface category to unknown */
 				IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_cat = UNKNOWN_IF;
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
@@ -535,7 +571,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_UP for VID %d, iptype %d\n",
 				data->VlanID,
 				data->iptype);
-			if(is_vlan_IF(data->VlanID))
+			if(is_vlan_IF(data->VlanID) && (data->VlanID > DUMMY_VLAN_ID_BASE))
 			{
 				if(data->iptype == IPA_IP_v6)
 				{
@@ -578,6 +614,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Received IPA_HANDLE_WAN_VLAN_PDN_DOWN for VID %d, iptype %d\n",
 				data->VlanID,
 				data->iptype);
+			/*data->vlanID is 0 we are deleting all PDN assossiate vlans and clearing the all vlan info*/
 			if(!data->VlanID || is_vlan_IF(data->VlanID))
 			{
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -815,10 +852,38 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_mac *data = (ipacm_event_data_mac *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
-			if ((ipa_interface_index == ipa_if_num) && (!strncmp(data->iface_name, dev_name, strlen(dev_name))))
+			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
+
+			if (ipa_interface_index == ipa_if_num)
 			{
 				IPACMDBG_H("Received IPA_WLAN_CLIENT_DEL_EVENT\n");
+#ifdef IPA_VLAN_PRIORITY
+				if(IPACM_Iface::ipacmcfg->get_vlan_id(dev_name, &vlan_id, &priority))
+#else
+				if(IPACM_Iface::ipacmcfg->get_vlan_id(dev_name, &vlan_id))
+#endif
+				{
+					IPACMDBG_H("Unable to find VLAN ID for Dev %s\n", dev_name);
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL);
+				}
+				else
+				{
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+				}
 				handle_wlan_client_down_evt(data->mac_addr);
+#ifdef IPA_VLAN_PRIORITY
+				if(IPACM_Iface::ipacmcfg->get_vlan_id(dev_name, &vlan_id, &priority))
+#else
+				if(IPACM_Iface::ipacmcfg->get_vlan_id(dev_name, &vlan_id))
+#endif
+				{
+					IPACMERR("Unable to find VLAN ID for Dev %s\n", dev_name);
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL);
+				}
+				else
+				{
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
+				}
 			}
 		}
 		break;
@@ -849,31 +914,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			}
 		}
 		break;
-
-	case IPA_LAN_CLIENT_DEL_EVENT:
-	{
-		ipacm_event_data_all *data = (ipacm_event_data_all *)param;
-		IPACMDBG_H("Received IPA_LAN_CLIENT_DEL_EVENT\n");
-		ipa_interface_index = iface_ipa_index_query(data->if_index);
-		IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
-		if(ipa_interface_index == ipa_if_num)
-		{
-#ifdef IPA_VLAN_PRIORITY
-			if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority))
-#else
-			if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
-#endif
-			{
-				IPACMERR("Unable to find VLAN ID for Dev %s\n", data->iface_name);
-				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL);
-			}
-			else
-			{
-				eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
-			}
-		}
-	}
-	break;
 
 	case IPA_WLAN_CLIENT_POWER_SAVE_EVENT:
 		{
@@ -1244,6 +1284,47 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		}
 	}
 	break;
+
+	case IPA_WLAN_BRIDGE_UPDATE_EVENT:
+		{
+			IPACMDBG_H("Received IPA_WLAN_BRIDGE_UPDATE_EVENT\n");
+			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+			if((wlan_bridge_idx != data->master_if_index) && (ipa_interface_index == ipa_if_num))
+			{
+				IPACMDBG_H("Received event for index: %d dev_name: %s\n",
+						ipa_interface_index, dev_name);
+				wlan_bridge_idx = data->master_if_index;
+
+				ret = ipa_get_if_name(&master_dev_name[0], data->master_if_index);
+				if(ret == IPACM_SUCCESS)
+				{
+					IPACMDBG_H("Received bridge idx: %d, name: %s\n",
+						data->master_if_index, master_dev_name);
+				}
+				if(strncmp(master_dev_name, BRIDGE_0, strlen(master_dev_name)) == 0)
+				{
+					IPACMERR("Not handling for default bridge\n");
+					return;
+				}
+
+				memset(&mapping_info, 0, sizeof(mapping_info));
+				mapping_info.vlan_id = DUMMY_VLAN_ID_BASE+data->if_index;
+				strlcpy(mapping_info.bridge_name, master_dev_name, IF_NAME_LEN);
+				IPACM_Iface::iface_addr_query(data->master_if_index,
+								false, &br_v4_addr, &br_v4_mask);
+				IPACMDBG_H("Received bridge V4: 0x%x mask: 0x%x\n", br_v4_addr, br_v4_mask);
+				mapping_info.bridge_ipv4 = br_v4_addr;
+				mapping_info.subnet_mask = br_v4_mask;
+				mapping_info.master_if_index = data->master_if_index;
+
+				config->add_dummy_vlan_mapping(&master_dev_name[0], dev_name, data->if_index);
+				config->add_bridge_vlan_mapping(&mapping_info);
+				mapping_info.status = 1;
+				config->add_bridge_vlan_mapping(&mapping_info);
+			}
+		}
+		break;
 
 #endif
 
@@ -3100,17 +3181,20 @@ int IPACM_Wlan::handle_down_evt()
 		goto fail;
 	}
 
-	/* delete wan filter rule */
-	if (IPACM_Wan::isWanUP(ipa_if_num) && rx_prop != NULL)
+	if(!IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 	{
-		IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
-		IPACM_Lan::handle_wan_down(IPACM_Wan::backhaul_is_sta_mode);
-	}
+		/* delete wan filter rule */
+		if (IPACM_Wan::isWanUP(ipa_if_num) && rx_prop != NULL)
+		{
+			IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
+			IPACM_Lan::handle_wan_down(IPACM_Wan::backhaul_is_sta_mode);
+		}
 
-	if (IPACM_Wan::isWanUP_V6(ipa_if_num) && rx_prop != NULL)
-	{
-		IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
-		handle_wan_down_v6(IPACM_Wan::backhaul_is_sta_mode, false);
+		if (IPACM_Wan::isWanUP_V6(ipa_if_num) && rx_prop != NULL)
+		{
+			IPACMDBG_H("LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
+			handle_wan_down_v6(IPACM_Wan::backhaul_is_sta_mode, false);
+		}
 	}
 	IPACMDBG_H("finished deleting wan filtering rules\n ");
 
@@ -3823,10 +3907,9 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 		* if this is the first time we have this global ipv6 prefix (or this
 		* is the default pdn prefix) we can notify WAN that it is a v6 vlan pdn
 		*/
-		if(new_prefix ||
-			((IPACM_Wan::backhaul_ipv6_prefix[0] || IPACM_Wan::backhaul_ipv6_prefix[1]) &&
-				(IPACM_Wan::backhaul_ipv6_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
-				(IPACM_Wan::backhaul_ipv6_prefix[1] == data_vlan->data_all.ipv6_addr[1])))
+		/* Posting the IPA_ROUTE_ADD_VLAN_PDN_EVENT for wlan incase of wlan interface goes down/up
+		once neigh is recieved */
+		if(new_prefix || ((data->iptype == IPA_IP_v6) && IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr)))
 		{
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_route_vlan *data;
@@ -3866,7 +3949,6 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_data_all *data)
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
 
-		eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, vlan_id);
 	}
 
 	return IPACM_SUCCESS;

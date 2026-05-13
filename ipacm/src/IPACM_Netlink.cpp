@@ -1790,21 +1790,29 @@ static int ipa_nl_decode_nlmsg
 #ifdef FEATURE_IPoGRE
 					if ((data_addr->iptype == IPA_IP_v4) && (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name, sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0))
 					{
-						IPACMDBG_H("RGIP iface %s addr add, post IPA_HANDLE_RGIP_UP\n", dev_name);
-						ipacm_cmd_q_data rgip_evt_data;
-						uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
-						if(rgip_v4 == NULL)
+						if (IPACM_Iface::ipacmcfg->rgip_ip != 0)
 						{
-							IPACMERR("Memory not assigned to rgip\n");
+							IPACMDBG_H("RGIP iface %s addr add but rgip_ip 0x%x already "
+								"assigned and non-zero, skip IPA_HANDLE_RGIP_UP\n",
+								dev_name, IPACM_Iface::ipacmcfg->rgip_ip);
 						}
-						else
-						{
-							memcpy(rgip_v4,&data_addr->ipv4_addr,sizeof(rgip_v4));
-							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
-							rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
-							rgip_evt_data.evt_data = rgip_v4;
-							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
-							IPACM_Iface::ipacmcfg->rgip_ip = data_addr->ipv4_addr;
+						else {
+							IPACMDBG_H("RGIP iface %s addr add, post IPA_HANDLE_RGIP_UP\n", dev_name);
+							ipacm_cmd_q_data rgip_evt_data;
+							uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+							if(rgip_v4 == NULL)
+							{
+								IPACMERR("Memory not assigned to rgip\n");
+							}
+							else
+							{
+								memcpy(rgip_v4,&data_addr->ipv4_addr,sizeof(rgip_v4));
+								memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+								rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
+								rgip_evt_data.evt_data = rgip_v4;
+								IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+								IPACM_Iface::ipacmcfg->rgip_ip = data_addr->ipv4_addr;
+							}
 						}
 					}
 					/* The RGIP interface was deleted and a new interface came up with a

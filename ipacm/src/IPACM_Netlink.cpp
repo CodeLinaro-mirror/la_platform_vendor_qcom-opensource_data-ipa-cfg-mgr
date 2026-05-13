@@ -1856,7 +1856,7 @@ static int ipa_nl_decode_nlmsg
 						}
 						else
 						{
-							memcpy(rgip_v4, &data_addr->ipv4_addr, sizeof(*rgip_v4));
+							memcpy(rgip_v4,&data_addr->ipv4_addr,sizeof(uint32_t));
 							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
 							rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
 							rgip_evt_data.evt_data = rgip_v4;

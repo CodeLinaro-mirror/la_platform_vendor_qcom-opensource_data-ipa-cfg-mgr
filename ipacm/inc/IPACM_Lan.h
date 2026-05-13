@@ -566,8 +566,6 @@ protected:
 	bool is_l2tp_event(char *event_iface_name);
 #endif //#ifdef FEATURE_L2TP
 #endif //#if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
-	/* check if the IPv6 address is unique local address */
-	bool is_unique_local_ipv6_addr(uint32_t *ipv6_addr);
 
 	int handle_private_subnet_android(ipa_ip_type iptype);
 
@@ -1100,9 +1098,10 @@ public:
 				}
 
 				//vlan case
-				for(int j = 0; j < mux[i].VID_cnt; j++)
+				for(int j = 0; j < IPA_MAX_NUM_HW_PDNS; j++)
 				{
-					if(mux[i].associated_VIDs[j] == vid)
+					if((mux[i].associated_VIDs[j]!=0) &&
+					(mux[i].associated_VIDs[j] == vid))
 					{
 						IPACMDBG_H("mux id %d is up for dev %s, iptype %d, vid %d, VID_cnt = %d\n", mux_id, dev_name, iptype, vid, mux[i].VID_cnt);
 						return true;
@@ -1241,6 +1240,8 @@ private:
 		{
 			if(mux[i].mux_id == 0)
 			{
+				mux[i].VID_cnt = 0;
+				memset(mux[i].associated_VIDs, 0, IPA_MAX_NUM_SW_PDNS*sizeof(uint16_t));
 				mux[i].associated_VIDs[0] = vid;
 				mux[i].VID_cnt++;
 				mux[i].mux_id = mux_id;
@@ -1273,7 +1274,8 @@ private:
 				{
 					for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 					{
-						if(mux[i].associated_VIDs[j] == vid)
+						if((mux[i].associated_VIDs[j]!= 0) &&
+						   (mux[i].associated_VIDs[j] == vid))
 						{
 							mux[i].associated_VIDs[j] = 0;
 							mux[i].VID_cnt--;
@@ -1475,8 +1477,8 @@ private:
 
 	/* handle eth client initial, construct full headers (tx property) */
 	int handle_eth_hdr_init(uint8_t *mac_addr,
-		ipacm_bridge *bridge = NULL,
-		uint16_t vlan_id = 0, bool isVlan = false, uint8_t priority = 0);
+		ipacm_bridge *bridge = NULL, uint16_t vlan_id = 0,
+		 bool isVlan = false, uint8_t priority = 0, bool is_ula_ipv6_addr = 0);
 
 	/* handle eth client ip-address */
 	int handle_eth_client_ipaddr(ipacm_event_data_all *data);

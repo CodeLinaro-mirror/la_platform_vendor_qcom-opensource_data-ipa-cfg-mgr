@@ -66,7 +66,6 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
 #endif
 #endif
-#define IPACM_VLAN_CFG_FILE "/etc/data/ipa/IPACM_vlan_cfg.xml"
 #ifdef DATA_CONFIG_DIR_PATH
 #define IPACM_SWALLOW_FILE DATA_CONFIG_DIR_PATH"/ipa/ipa_filter_cfg.xml"
 #else
@@ -180,6 +179,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_QOS_RULE_DEL_EVENT),                   /* ipacm_qos_rule_del_event */
 	__stringify(IPA_QOS_RULE_FLUSH_EVENT),                 /* ipacm_qos_rule_flush_event */
 	__stringify(IPA_DUMMY_VLAN_DOWN_EVENT),              /* ipacm_event_route_vlan */
+	__stringify(IPA_NOTIFY_VLAN_DOWN),                    /* ipacm_event_data_vlan */
 	__stringify(IPACM_EVENT_MAX),
 };
 
@@ -188,7 +188,6 @@ IPACM_Config::IPACM_Config()
 	iface_table = NULL;
 	alg_table = NULL;
 	pNatIfaces = NULL;
-	vlan_config = NULL;
 	sw_filter_cfg = NULL;
 	memset(&ipa_client_rm_map_tbl, 0, sizeof(ipa_client_rm_map_tbl));
 	memset(&ipa_rm_tbl, 0, sizeof(ipa_rm_tbl));
@@ -920,33 +919,6 @@ skip_fnr_alloc:
 	IPACMDBG_H(" depend MAP-7 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ETHERNET_PROD, IPA_RM_RESOURCE_USB_CONS);
 	IPACMDBG_H(" depend MAP-8 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_ETHERNET_CONS);
 
-        strlcpy(IPACM_config_file, IPACM_VLAN_CFG_FILE, sizeof(IPACM_config_file));
-
-        IPACMDBG_H("\n IPACM VLAN XML file is %s \n", IPACM_config_file);
-        if (IPACM_SUCCESS == ipacm_read_vlan_cfg_xml(IPACM_config_file, cfg))
-        {
-                IPACMDBG_H("\n IPACM XML read OK \n");
-        }
-        else
-        {
-                IPACMERR("\n IPACM XML read failed \n");
-                ret = IPACM_FAILURE;
-                goto fail;
-        }
-
-	if (vlan_config == NULL)
-	{
-		vlan_config = (IPACM_vlan_conf_t *)calloc(1, sizeof(IPACM_vlan_conf_t));
-
-		if(vlan_config == NULL)
-		{
-			IPACMERR("Unable to allocate vlan_config memory.\n");
-			ret = IPACM_FAILURE;
-			goto fail;
-		}
-
-		memcpy(vlan_config, &(cfg->vlan_cfg), sizeof(IPACM_vlan_conf_t));
-	}
 
 fail:
 	if (cfg != NULL)
@@ -1519,7 +1491,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 		memset(&new_mapping, 0, sizeof(new_mapping));
 		new_mapping.bridge_associated_VID = data->vlan_id;
 		new_mapping.bridge_if_index = data->master_if_index;
-		new_mapping.status == 0;
+		new_mapping.status = 0;
 
 		ret = ipa_get_if_name(iface_name, data->master_if_index);
 		if(ret == IPACM_SUCCESS)
@@ -1529,16 +1501,17 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 		}
 
 		m_bridge_vlan_mapping.push_front(new_mapping);
+		pthread_mutex_unlock(&vlan_l2tp_lock);
 		bridge = get_vlan_bridge(data->bridge_name);
-		if(bridge &&!is_dummy_VID(data->vlan_id))
+		if(bridge &&(!is_dummy_VID(data->vlan_id) || check_l2tp_bridge_vlan_id(data->vlan_id)))
 		{
 			IPACMDBG_H("bridge %s already added, update data\n",
 				data->bridge_name);
 			bridge->associate_VID = data->vlan_id;
 		}
+		IPACMDBG_H("added partial Entry with master interface index %d, VID %d\n", data->master_if_index, data->vlan_id);
+		return;
 	}
-
-	IPACMDBG_H("added partial Entry with master interface index %d, VID %d\n", data->master_if_index, data->vlan_id);
 bail:
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 	return;
@@ -1912,7 +1885,7 @@ void IPACM_Config::restore_vlan_nat_ifaces(const char *phys_iface_name)
 void IPACM_Config::del_vlan_iface(ipa_vlan_iface_info *data)
 {
 	list<vlan_iface_info>::iterator it_vlan;
-
+	vlan_iface_info *del_vlan_info = NULL;
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
 		IPACMERR("Unable to lock the mutex\n");
@@ -1954,6 +1927,27 @@ void IPACM_Config::del_vlan_iface(ipa_vlan_iface_info *data)
 	{
 		ipacm_event_eth_bridge *evt_data_eth_bridge;
 		ipacm_cmd_q_data eth_bridge_evt;
+		del_vlan_info = (vlan_iface_info*)malloc(sizeof(*del_vlan_info));
+		if(del_vlan_info == NULL)
+		{
+			IPACMERR("Failed to allocate memory.\n");
+			return;
+		}
+
+		/*
+		 * Call IPA_NOTIFY_VLAN_DOWN to check clear the vlan info
+		 * from LAN class when VLAN is down
+		 */
+		memset(del_vlan_info, 0, sizeof(*del_vlan_info));
+		memcpy(del_vlan_info->vlan_iface_name, data->name,
+			sizeof(del_vlan_info->vlan_iface_name));
+		del_vlan_info->vlan_id = data->vlan_id;
+		eth_bridge_evt.evt_data = (void*)del_vlan_info;
+		eth_bridge_evt.event = IPA_NOTIFY_VLAN_DOWN;
+
+		IPACMDBG_H("Posting event %s\n",
+			IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
+		IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 
 		evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
 		if(evt_data_eth_bridge == NULL)
@@ -4579,3 +4573,25 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 	IPACMDBG_H("Flushed qos params list size now :%d \n", m_qos_params.size());
 	return;
 }
+
+bool IPACM_Config::is_unique_local_ipv6_addr(uint32_t* ipv6_addr)
+{
+	uint32_t ipv6_unique_local_prefix, ipv6_unique_local_prefix_mask;
+
+	if(ipv6_addr == NULL)
+	{
+		IPACMERR("IPv6 address is empty.\n");
+		return false;
+	}
+	IPACMDBG_H("Get ipv6 address with first word 0x%08x.\n", ipv6_addr[0]);
+
+	ipv6_unique_local_prefix = 0xFD000000;
+	ipv6_unique_local_prefix_mask = 0xFF000000;
+	if((ipv6_addr[0] & ipv6_unique_local_prefix_mask) == (ipv6_unique_local_prefix & ipv6_unique_local_prefix_mask))
+	{
+		IPACMDBG_H("This IPv6 address is unique local IPv6 address.\n");
+		return true;
+	}
+	return false;
+}
+

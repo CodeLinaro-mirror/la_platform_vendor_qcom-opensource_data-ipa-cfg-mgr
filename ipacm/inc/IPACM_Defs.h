@@ -306,6 +306,7 @@ typedef enum
 	IPA_QOS_RULE_DEL_EVENT,                   /* ipacm_qos_rule_del_event */
 	IPA_QOS_RULE_FLUSH_EVENT,                 /* ipacm_qos_rule_flush_event */
 	IPA_DUMMY_VLAN_DOWN_EVENT,               /* ipacm_event_route_vlan */
+	IPA_NOTIFY_VLAN_DOWN,                     /* vlan_iface_info */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -347,6 +348,13 @@ typedef struct
 	uint8_t bridge_mac[IPA_MAC_ADDR_SIZE];
 	uint32_t associate_VID;
 }ipacm_bridge;
+
+struct query_nl_conntrack {
+	bool is_ipv4;
+	uint32_t ipv4_addr;
+	bool is_ipv6;
+	uint32_t ipv6_addr[4];
+};
 
 typedef struct
 {

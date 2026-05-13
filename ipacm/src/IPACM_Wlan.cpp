@@ -1775,7 +1775,7 @@ int IPACM_Wlan::handle_wlan_client_ipaddr(ipacm_event_data_all *data)
 		{
 			IPACMDBG_H("ipv6 address: 0x%x:%x:%x:%x\n", data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
 #ifdef FEATURE_IPV6_NAT
-			if(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_unique_local_ipv6_addr(data->ipv6_addr))
+			if(IPACM_Iface::ipacmcfg->ipv6_nat_enable && IPACM_Iface::ipacmcfg->is_unique_local_ipv6_addr(data->ipv6_addr))
 			{
 				IPACMDBG_H("ipv6 nat enabled - add ULA ip address\n")
 			}
@@ -1786,14 +1786,14 @@ int IPACM_Wlan::handle_wlan_client_ipaddr(ipacm_event_data_all *data)
 					/* returns true if a VLAN PDN or default PDN should be offloaded */
 					IPACM_Iface::ipacmcfg->is_offload_ipv6_prefix(data->ipv6_addr) != true)
 #ifdef FEATURE_IPV6_NAT
-					&& (!(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_unique_local_ipv6_addr(data->ipv6_addr))))
+					&& (!(IPACM_Iface::ipacmcfg->ipv6_nat_enable && IPACM_Iface::ipacmcfg->is_unique_local_ipv6_addr(data->ipv6_addr))))
 #else
 					)
 #endif
 #else
 					memcmp(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix)) != 0)
 #ifdef FEATURE_IPV6_NAT
-					&& (!(IPACM_Iface::ipacmcfg->ipv6_nat_enable && is_unique_local_ipv6_addr(data->ipv6_addr))))
+					&& (!(IPACM_Iface::ipacmcfg->ipv6_nat_enable && IPACM_Iface::ipacmcfg->is_unique_local_ipv6_addr(data->ipv6_addr))))
 #else
 					)
 #endif

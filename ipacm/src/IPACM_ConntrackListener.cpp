@@ -38,6 +38,8 @@
 #include <errno.h>
 #include <libnetfilter_conntrack/libnetfilter_conntrack.h>
 #include <libnetfilter_conntrack/libnetfilter_conntrack_tcp.h>
+#include <fcntl.h>
+#include <pthread.h>
 
 #include "IPACM_ConntrackListener.h"
 #include "IPACM_ConntrackClient.h"
@@ -46,6 +48,7 @@
 #include "IPACM_Wan.h"
 
 void ParseCTV6Message(struct nf_conntrack *ct);
+void *query_conntracks(void *arguments);
 
 IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	WanUp_v6(false),
@@ -700,6 +703,9 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 {
 	bool NatIface = false;
 	int i, ret;
+	pthread_t query_ct_thread = 0;
+	struct query_nl_conntrack *query_nl_ct = NULL;
+	void* exit_status;
 
 	ret = CheckNatIface(data->if_index, &NatIface);
 	if (NatIface && ret == IPACM_SUCCESS)
@@ -767,7 +773,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 						/* check if we already got vlan_pdn_up event for this ip */
 						if(vlan_pdns[pdn_idx].public_ip == public_ip)
 						{
-							for(vlan_idx = 0; vlan_idx < vlan_pdns[pdn_idx].VID_cnt; vlan_idx++)
+							for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_HW_PDNS; vlan_idx++)
 							{
 								if(nat_clients[i].vlan_id == vlan_pdns[pdn_idx].associated_VIDs[vlan_idx])
 								{
@@ -822,8 +828,22 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 				nat_inst->FlushTempEntries(data->ipv4_addr, true);
 
 			}
-			IPACMDBG("Flushing ipv4 conntrack entries\n");
-			query_conntracks(AF_INET, data->ipv4_addr, data->ipv6_addr);
+			query_nl_ct = (struct query_nl_conntrack *)calloc(1, sizeof(struct query_nl_conntrack));
+		        if (!query_nl_ct) {
+		            IPACMERR("Failed to allocate memory for query_nl_ct\n");
+		            return;
+		        }
+			query_nl_ct->is_ipv4 = true;
+			query_nl_ct->ipv4_addr = data->ipv4_addr;
+			query_nl_ct->is_ipv6 = false;
+			ret = pthread_create(&query_ct_thread, NULL, query_conntracks, (void*)query_nl_ct);
+			if (ret != 0) {
+				IPACMERR("Failed to create query thread: %d\n", ret);
+				free(query_nl_ct);
+				return;
+			}
+			pthread_detach(query_ct_thread);
+			IPACMDBG("thread detached\n");
 		}
 	}
 	return;
@@ -831,7 +851,12 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 
 void IPACM_ConntrackListener::HandleIPPassPDNInfoUpdate(void *in_param)
 {
+	pthread_t query_ct_ippass_thread = 0;
+	struct query_nl_conntrack *query_nl_ct = NULL;
+	void* exit_status;
 	ipacm_event_vlan_pdn *pdn_data = (ipacm_event_vlan_pdn *)in_param;
+	int ret = 0;
+
 	IPACMDBG_H("Recevied below information after VLAN PDN up,\n");
 	IPACMDBG_H("PDN IP 0x%x\n", pdn_data->ipv4_addr);
 	IPACMDBG_H("ip_passthrough: %d, ip_pass_dummy_ip:0x%x, ip_pass_skip_nat %d\n",
@@ -874,7 +899,22 @@ void IPACM_ConntrackListener::HandleIPPassPDNInfoUpdate(void *in_param)
 				if (pdn_data->ip_pass_enable && !pdn_data->ip_pass_skip_nat)
 				{
 					nat_inst->DelDummyNatEntries(wan_ipaddr);
-					query_conntracks(AF_INET, wan_ipaddr, 0);
+					query_nl_ct = (struct query_nl_conntrack *)calloc(1, sizeof(struct query_nl_conntrack));
+					if (!query_nl_ct) {
+					    IPACMERR("Failed to allocate memory for query_nl_ct\n");
+					    return;
+					}
+					query_nl_ct->is_ipv4 = true;
+					query_nl_ct->ipv4_addr = pdn_data->ipv4_addr;
+					query_nl_ct->is_ipv6 = false;
+					ret = pthread_create(&query_ct_ippass_thread, NULL, query_conntracks, (void*)query_nl_ct);
+					if (ret != 0) {
+						IPACMERR("Failed to create query thread: %d\n", ret);
+						free(query_nl_ct);
+						return;
+					}
+					pthread_detach(query_ct_ippass_thread);
+					IPACMDBG("thread detached\n");
 				}
 		}
 	}
@@ -883,10 +923,11 @@ void IPACM_ConntrackListener::HandleIPPassPDNInfoUpdate(void *in_param)
 
 void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *data)
 {
-	IPACMDBG_H("\n");
-
 	const IpAddress& ip = Ipv6IpAddress(data->ipv6_addr, false);
-	int i;
+	int i = 0, ret = 0;
+	void* exit_status;
+	pthread_t query_ct_ipv6_thread = 0;
+	struct query_nl_conntrack *query_nl_ct = NULL;
 
 	if (!IsIpv6CTEnabled() || !ip.Valid())
 	{
@@ -897,7 +938,7 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *d
 	ip.DebugDump("Add NAT interface with following address\n");
 
 	bool NatIface = false;
-	int ret = CheckNatIface(data->if_index, &NatIface);
+	ret = CheckNatIface(data->if_index, &NatIface);
 
 	if (!NatIface || ret != IPACM_SUCCESS)
 	{
@@ -1000,8 +1041,23 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *d
 				ipv6ct_inst->ResetPwrSaveIf(ip);
 				ipv6ct_inst->FlushTempEntries(ip, true, false, false);
 			}
-			IPACMDBG("Flushing ipv6 conntrack entries\n");
-			query_conntracks(AF_INET6, data->ipv4_addr, data->ipv6_addr);
+			query_nl_ct = (struct query_nl_conntrack *)calloc(1, sizeof(struct query_nl_conntrack));
+			if (!query_nl_ct) {
+			    IPACMERR("Failed to allocate memory for query_nl_ct\n");
+			    return;
+			}
+			query_nl_ct->is_ipv4 = false;
+			query_nl_ct->ipv4_addr = 0;
+			query_nl_ct->is_ipv6 = true;
+			memcpy(query_nl_ct->ipv6_addr, data->ipv6_addr, sizeof(data->ipv6_addr));
+			ret = pthread_create(&query_ct_ipv6_thread, NULL, query_conntracks, (void*)query_nl_ct);
+			if (ret != 0) {
+				IPACMERR("Failed to create query thread: %d\n", ret);
+				free(query_nl_ct);
+				return;
+			}
+			pthread_detach(query_ct_ipv6_thread);
+			IPACMDBG("thread detached\n");
 		}
 	}
 
@@ -1263,6 +1319,8 @@ void IPACM_ConntrackListener::HandleVlanUpV6(void *in_param)
 void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlanup_data = (ipacm_event_vlan_pdn *)in_param;
+	int available_idx = -1;;
+
 	IPACMDBG_H("Received below information during VLAN PDN up,\n");
 	IPACMDBG_H("IPType: %d, vlan_id:%d, mux id %d\n",
 		vlanup_data->iptype,
@@ -1297,23 +1355,38 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		}
 		else
 		{
-			if(vlan_pdns[0].public_ip == vlanup_data->ipv4_addr) {
-				for(int i = 0; i < vlan_pdns[0].VID_cnt; i++)
+			if(vlan_pdns[0].public_ip == vlanup_data->ipv4_addr)
+			{
+				available_idx = -1;
+				for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 				{
 					if (vlanup_data->VlanID == vlan_pdns[0].associated_VIDs[i])
 					{
-						IPACMDBG_H("found existing PDN entry in 0, with vlan %d\n", vlanup_data->VlanID);
+						IPACMDBG_H("found existing PDN entry in 0, with vlan %d\n",
+								vlanup_data->VlanID);
 						return;
 					}
+					else if((vlan_pdns[0].associated_VIDs[i] == 0) && (available_idx == -1))
+					{
+						available_idx = i;
+					}
 				}
-				IPACMDBG_H("found existing PDN entry in 0, but got new VLAN id. Adding vlan %d to the entry\n", vlanup_data->VlanID);
-				vlan_pdns[0].associated_VIDs[vlan_pdns[0].VID_cnt] = vlanup_data->VlanID;
-				vlan_pdns[0].VID_cnt++;
-				return;
+				if (available_idx != -1)
+				{
+					IPACMDBG_H("found existing PDN entry in 0, but got new VLAN id. "
+						   "Adding vlan %d to the entry to pdn vlan index is %d\n",
+						vlanup_data->VlanID, available_idx);
+					vlan_pdns[0].associated_VIDs[available_idx] = vlanup_data->VlanID;
+					vlan_pdns[0].VID_cnt++;
+					IPACMDBG_H("Now no of vlans mapped to PDN entry in 0 is %d\n",
+							vlan_pdns[0].VID_cnt);
+					return;
+				}
 			}
 			if(vlan_pdns[0].public_ip == 0)
 			{
 				IPACMDBG_H("found empty PDN entry in 0 index num_vlan_pdns %d\n", num_vlan_pdns);
+				vlan_pdns[0].VID_cnt = 0;
 				vlan_pdns[0].public_ip = vlanup_data->ipv4_addr;
 				vlan_pdns[0].associated_VIDs[vlan_pdns[0].VID_cnt] = vlanup_data->VlanID;
 				vlan_pdns[0].VID_cnt++;
@@ -1340,20 +1413,33 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 			/* Check if pdn is allocated as well as saved in vlan pdn cache*/
 			for(int i = 1; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
+				available_idx = -1;
 				if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
 				{
-					for(int j = 0; j < vlan_pdns[i].VID_cnt; j ++)
+					for(int j = 0; j < IPA_MAX_NUM_HW_PDNS; j ++)
 					{
 						if (vlanup_data->VlanID == vlan_pdns[i].associated_VIDs[j])
 						{
-							IPACMDBG_H("found existing PDN entry in %d, with vlan %d\n", i, vlanup_data->VlanID);
+							IPACMDBG_H("found existing PDN entry at idx %d, with vlan %d\n",
+									i, vlanup_data->VlanID);
 							return;
 						}
+						else if((vlan_pdns[i].associated_VIDs[j] == 0) && (available_idx == -1))
+						{
+							available_idx = j;
+						}
 					}
-					IPACMDBG_H("found existing PDN entry in %d, but got new VLAN id. Adding vlan %d to the entry\n", i, vlanup_data->VlanID);
-					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
-					vlan_pdns[i].VID_cnt++;
-					return;
+					if (available_idx != -1)
+					{
+						IPACMDBG_H("found existing PDN entry in %d, but got new VLAN id. "
+							   "Adding vlan %d to the entry to pdn vlan index is %d\n",
+								 i, vlanup_data->VlanID, available_idx);
+						vlan_pdns[i].associated_VIDs[available_idx] = vlanup_data->VlanID;
+						vlan_pdns[i].VID_cnt++;
+						IPACMDBG_H("Now no of vlans mapped to PDN entry in 0 is %d\n",
+								vlan_pdns[i].VID_cnt);
+						return;
+					}
 				}
 			}
 
@@ -1362,6 +1448,7 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 				if(vlan_pdns[i].public_ip == 0)
 				{
 					IPACMDBG_H("found empty PDN entry in %d num_vlan_pdns %d\n", i, num_vlan_pdns);
+					vlan_pdns[i].VID_cnt = 0;
 					vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
 					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
 					vlan_pdns[i].VID_cnt++;
@@ -2191,18 +2278,31 @@ int v6_conntracks_callback(enum nf_conntrack_msg_type type,struct nf_conntrack *
 	return NFCT_CB_CONTINUE;
 }
 
-void IPACM_ConntrackListener::query_conntracks(int af_family, uint32_t ipv4_addr,
-	uint32_t *ipv6_addr)
+void* query_conntracks(void *arguments)
 {
 	int ret;
 	struct nfct_handle *handle;
 	struct nf_conntrack *ct;
-	int family = af_family;
+	struct query_nl_conntrack *args = (struct query_nl_conntrack *)arguments;
+	int family;
+	IPACMDBG_H("quering ct for ipv4 %d \n",args->is_ipv4);
+	IPACMDBG_H("quering ct for ipv6 %d \n",args->is_ipv6);
+
+	if(args->is_ipv4)
+		family = AF_INET;
+	else if(args->is_ipv6)
+		family = AF_INET6;
+	else
+	{
+		IPACMERR("Invalid address family\n");
+		goto exit;
+	}
+
 	ct = nfct_new();
 
 	if (!ct) {
 		IPACMERR("nfct_new failed");
-		return;
+		goto exit;
 	}
 
 	handle = nfct_open(CONNTRACK, 0);
@@ -2210,18 +2310,20 @@ void IPACM_ConntrackListener::query_conntracks(int af_family, uint32_t ipv4_addr
 	if (!handle) {
 		IPACMERR("nfct_open failed");
 		nfct_destroy(ct);
-		return ;
+		goto exit;
 	}
 
 	if(family == AF_INET)
 	{
-		nfct_callback_register(handle, NFCT_T_ALL, v4_conntrack_callback, &ipv4_addr);
-		IPACMDBG("quering ipv4 conntracks\n");
+		nfct_callback_register(handle, NFCT_T_ALL, v4_conntrack_callback, &args->ipv4_addr);
+		IPACMDBG("quering ipv4 conntracks for 0x%X\n", args->ipv4_addr);
 	}
-	else
+	else if(family == AF_INET6)
 	{
-		nfct_callback_register(handle, NFCT_T_ALL, v6_conntracks_callback, ipv6_addr);
-		IPACMDBG("quering ipv4 conntracks\n");
+		nfct_callback_register(handle, NFCT_T_ALL, v6_conntracks_callback, args->ipv6_addr);
+		IPACMDBG("quering ipv6 conntracks for  0x%08x:%08x:%08x:%08x\n", args->ipv6_addr[0],
+						args->ipv6_addr[1], args->ipv6_addr[2],
+						args->ipv6_addr[3]);
 	}
 
 	ret = nfct_query(handle, NFCT_Q_DUMP, &family);
@@ -2233,7 +2335,18 @@ void IPACM_ConntrackListener::query_conntracks(int af_family, uint32_t ipv4_addr
 
 	nfct_destroy(ct);
 	nfct_close(handle);
-	return;
+
+exit:
+	if(args->is_ipv4)
+		IPACMDBG_H("Exited the conntrack query thread created for IPv4: 0x%X\n", args->ipv4_addr);
+	else if(args->is_ipv6)
+		IPACMDBG("Exited the conntrack query thread created for IPv6: 0x%08x:%08x:%08x:%08x\n", args->ipv6_addr[0],
+						args->ipv6_addr[1], args->ipv6_addr[2],
+						args->ipv6_addr[3]);
+	if(args)
+		free(args);
+	pthread_exit((void*) 0);
+	return 0;
 }
 
 void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry)
@@ -3165,7 +3278,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 				/* check if we already got vlan_pdn_up event for this ip */
 				if(vlan_pdns[i].public_ip == orig_dst_ip)
 				{
-					for(vlan_idx = 0; vlan_idx < vlan_pdns[i].VID_cnt; vlan_idx++)
+					for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_HW_PDNS; vlan_idx++)
 					{
 						if(VlanID == vlan_pdns[i].associated_VIDs[vlan_idx])
 						{
@@ -3207,7 +3320,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 				/* check if we already got vlan_pdn_up event for this ip */
 				if(vlan_pdns[i].public_ip == repl_dst_ip)
 				{
-					for(vlan_idx = 0; vlan_idx < vlan_pdns[i].VID_cnt; vlan_idx++)
+					for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_HW_PDNS; vlan_idx++)
 					{
 						if(VlanID == vlan_pdns[i].associated_VIDs[vlan_idx])
 						{
@@ -3494,7 +3607,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 					((src_ipv6_msb & 0x00000000FFFFFFFF) ==
 						v6_vlan_pdns[i].ipv6_prefix[1]))
 				{
-					for(vlan_idx = 0; vlan_idx < v6_vlan_pdns[i].VID_cnt; vlan_idx++)
+					for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_SW_PDNS; vlan_idx++)
 					{
 						if(VlanID == v6_vlan_pdns[i].associated_VIDs[vlan_idx])
 						{

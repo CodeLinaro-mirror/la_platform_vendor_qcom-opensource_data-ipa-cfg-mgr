@@ -1613,8 +1613,15 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 #ifndef FEATURE_SOCKSv5
 	if (!wan_ipaddr_v6.Valid())
 	{
-		IPACMERR("Invalid WAN address,ignoring WAN UP event\n");
-		return;
+		if (IPACM_Iface::ipacmcfg->delegate_prefix_valid)
+		{
+			IPACMDBG_H("Invalid WAN address but delegate prefix is valid, proceeding with WAN UP event\n");
+		}
+		else
+		{
+			IPACMERR("Invalid WAN address,ignoring WAN UP event\n");
+			return;
+		}
 	}
 #endif
 	IPACMDBG_H("Recevied below information during wanup\n");
@@ -5327,13 +5334,13 @@ bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
 		ret = ip.IsSameSubnet(wan_ipaddr_v6);
 	}
 
-	if(pConfig->blackhole_valid == true)
+	if(pConfig->delegate_prefix_valid == true)
 	{
-		int len =  pConfig->ipv6_blackhole_len;
+		int len =  pConfig->ipv6_delegate_prefix_len;
 		const Ipv6IpAddress& ipv6 = static_cast<const Ipv6IpAddress&>(ip);
 		uint32_t v6_address[4];
 		/* Note: Assuming incoming ipv6 =  2001:0db8:85a3:0099:1111:2222:3333:4444
-		 * and Blackhole Prefix: 2001:0db8:85a3:0000::/56
+		 * and delegate_prefix Prefix: 2001:0db8:85a3:0000::/56
 		 * Assuming they are correctly populated into four 32-bit blocks for example:
 		 * v6_address[0] = 0x20010db8
 		 * v6_address[1] = 0x85a30099
@@ -5387,7 +5394,7 @@ bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
 			 * prefix[1] & mask:     0x85a30000 & 0xFFFFFF00 = 0x85a30000
 			 * They match! Continue loop.
 			 */
-			if ((v6_address[i] & mask) != (pConfig->ipv6_blackhole_prefix[i] & mask)) {
+			if ((v6_address[i] & mask) != (pConfig->ipv6_delegate_prefix[i] & mask)) {
 				return false;
 			}
 

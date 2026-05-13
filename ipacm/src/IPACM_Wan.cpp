@@ -2505,8 +2505,27 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					if(ipv6_prefix[0] == 0 && ipv6_prefix[1] == 0)
 					{
-						IPACMDBG_H("IPv6 default route comes earlier than global IP, ignore.\n");
-						return;
+						//Type-1 prefix delegation
+						//No v6 global address assigned at wan interface
+						if(IPACM_Iface::ipacmcfg->delegate_prefix_valid == true &&
+						   IPACM_Iface::ipacmcfg->ipv6_delegate_prefix_len <= 128)
+						{
+							IPACMDBG_H("Stored delegate_prefix prefix 0x%08x%08x%08x%08x length: %d\n",
+									IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[0],
+									IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[1],
+									IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[2],
+									IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[3],
+									IPACM_Iface::ipacmcfg->ipv6_delegate_prefix_len);
+							ipv6_prefix[0] = IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[0];
+							ipv6_prefix[1] = IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[1];
+							/* Note: ipv6_prefix array size is 2 in IPACM_Wan class */
+							IPACMDBG_H("IPv6 default route comes earlier than global IP, process.\n");
+						}
+						else
+						{
+							IPACMDBG_H("IPv6 default route comes earlier than global IP, ignore.\n");
+							return;
+						}
 					}
 					IPACMDBG_H("\n get default v6 route (dst:00.00.00.00)\n");
 

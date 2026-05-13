@@ -640,9 +640,9 @@ public:
 	bool rt_tbl_inter_l2l_v4_set;
 	bool rt_tbl_inter_l2l_v6_set;
 
-	uint32_t ipv6_blackhole_prefix[4];
-	uint32_t ipv6_blackhole_len;
-	bool blackhole_valid;
+	uint32_t ipv6_delegate_prefix[4];
+	uint32_t ipv6_delegate_prefix_len;
+	bool delegate_prefix_valid;
 	/* Indicates current number of client ipv6 */
 	int ipa_num_clients_ipv6;
 
@@ -1504,7 +1504,7 @@ public:
 			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0])
 				&& (prefix[1] == ipa_ipv6_prefixes[i].addr[1])
 				&& (vlan_id == ipa_ipv6_prefixes[i].vlan_id)
-			    && (is_bridge == ipa_ipv6_prefixes[i].is_bridge))
+			    && ((multi_vlan_bridge_config_enable) ? (is_bridge == ipa_ipv6_prefixes[i].is_bridge) : true))
 			{
 				IPACMDBG_H("prefix 0x[%X][%X] already exists vlan_id inp %d saved %d\n is_bridge %d",
 					prefix[0], prefix[1], vlan_id, ipa_ipv6_prefixes[i].vlan_id, ipa_ipv6_prefixes[i].is_bridge);
@@ -1656,14 +1656,14 @@ public:
 				IPACMDBG("no match with [%X][%X]\n", ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
 			}
 		}
-		int len  = ipv6_blackhole_len;
-		if(blackhole_valid == true)
+		int len  = ipv6_delegate_prefix_len;
+		if(delegate_prefix_valid == true)
 		{
 			for (int i = 0; i < 4; ++i) {
 				/* Note: Assuming incoming prefix =  2001:0db8:85a3:0099:1111:2222:3333:4444
 				 * prefix[0] = 0x20010db8
 				 * prefix[1] = 0x85a30099
-				 * and Blackhole Prefix: 2001:0db8:85a3:0000::/56
+				 * and delegate_prefix Prefix: 2001:0db8:85a3:0000::/56
 				 * example len = 56
 				 * If no bits left to check, it's a match
 				 * ITERATION 1 (i=0): len is 56. (Skip)
@@ -1699,15 +1699,15 @@ public:
 				/* Compare the masked values
 				 * ITERATION 1 (i=0):
 				 * prefix[0] & mask: 0x20010db8 & 0xFFFFFFFF = 0x20010db8
-				 * ipv6_blackhole_prefix[0] & mask:     0x20010db8 & 0xFFFFFFFF = 0x20010db8
+				 * ipv6_delegate_prefix[0] & mask:     0x20010db8 & 0xFFFFFFFF = 0x20010db8
 				 * They match! Continue loop.
 				 *
 				 * ITERATION 2 (i=1):
 				 * prefix[1] & mask: 0x85a30099 & 0xFFFFFF00 = 0x85a30000
-				 * ipv6_blackhole_prefix[1] & mask:     0x85a30000 & 0xFFFFFF00 = 0x85a30000
+				 * ipv6_delegate_prefix[1] & mask:     0x85a30000 & 0xFFFFFF00 = 0x85a30000
 				 * They match! Continue loop.
 				 */
-				if ((prefix[i] & mask) != (ipv6_blackhole_prefix[i] & mask)) {
+				if ((prefix[i] & mask) != (ipv6_delegate_prefix[i] & mask)) {
 					return false;
 				}
 

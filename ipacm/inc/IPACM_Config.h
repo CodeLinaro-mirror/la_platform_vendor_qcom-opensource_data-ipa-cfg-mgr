@@ -53,6 +53,7 @@
 #else
 #include <list>
 #endif
+#include <array>
 #include <set>
 #include <unordered_set>
 #include <map>
@@ -325,6 +326,9 @@ public:
 	struct ipa_ioc_get_rt_tbl rt_tbl_odu_v4, rt_tbl_odu_v6;
 
 	bool isMCC_Mode;
+
+	std::list<uint32_t> queried_v4_list;
+	std::list<std::array<uint32_t, 4>> queried_v6_list;
 
 #ifdef IPA_L2TP_TUNNEL_UDP
 	int num_ipa_l2tp_tunnel;

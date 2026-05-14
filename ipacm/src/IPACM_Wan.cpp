@@ -6453,16 +6453,16 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 				flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 				flt_rule_entry.rule.attrib.u.v4.dst_addr = 0x00000000;
+				if (sta_vlan_id > 0 && !is_ppp_iface)
+				{
+					flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+					flt_rule_entry.rule.attrib.vlan_id = sta_vlan_id;
+				}
 				if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
 					IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 					strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 					IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] && (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 				{
-					if(!is_ppp_iface)
-					{
-						flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
-						flt_rule_entry.rule.attrib.vlan_id = sta_vlan_id;
-					}
 					memcpy(&(m_pFilteringTableafter->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 					if (false == m_filtering.AddFilteringRuleAfter(m_pFilteringTableafter))
 					{
@@ -6575,16 +6575,16 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 					sizeof(struct ipa_rule_attrib));
 				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
 				flt_rule_entry.rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_ICMP6;
+				if (sta_vlan_id > 0 && !is_ppp_iface)
+				{
+					flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+					flt_rule_entry.rule.attrib.vlan_id = sta_vlan_id;
+				}
 				if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
 					IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 					strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 					(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 				{
-					if(!is_ppp_iface)
-					{
-						flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
-						flt_rule_entry.rule.attrib.vlan_id = sta_vlan_id;
-					}
 					memcpy(&(m_pFilteringTableafter->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 					if (false == m_filtering.AddFilteringRuleAfter(m_pFilteringTableafter))
 					{

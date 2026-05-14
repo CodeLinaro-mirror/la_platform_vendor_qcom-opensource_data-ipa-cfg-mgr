@@ -3421,6 +3421,46 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_DOWN\n");
 		gre_down();
 		break;
+
+	case IPA_HANDLE_RGIP_UP:
+	{
+		/*
+		 * If IPoGRE WAN is not yet up, ipgre_do_rt_work() will call
+		 * ipgre_add_rgip_rt_rule() with the correct rgip_ip when IPoGRE UP
+		 * is processed. Only act here if IPoGRE WAN is already up, meaning
+		 * the RGIP rule was previously installed before rgip_ip was assigned.
+		 */
+		if (!IPACM_Iface::ipacmcfg->pmip_details.pmipv6_up_wan)
+		{
+			IPACMDBG_H("IPA_HANDLE_RGIP_UP: IPoGRE not yet up, RGIP rule deferred to IPoGRE UP\n");
+			break;
+		}
+
+		ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->ipgre_info;
+
+		IPACMDBG_H("IPA_HANDLE_RGIP_UP after IPoGRE UP: reinstalling RGIP src route rule (rgip_ip 0x%x)\n",
+			IPACM_Iface::ipacmcfg->rgip_ip);
+
+		/* Remove stale RGIP proc_ctx and rt_rule installed during IPoGRE UP (when rgip_ip was 0) */
+		if (IPACM_Wan::ipgre_route_data[ipgre_info.iptype].rt_gre_add_hdl_rgip)
+		{
+			m_routing.DeleteRoutingHdl(
+				IPACM_Wan::ipgre_route_data[ipgre_info.iptype].rt_gre_add_hdl_rgip,
+				IPA_IP_v4);
+			IPACM_Wan::ipgre_route_data[ipgre_info.iptype].rt_gre_add_hdl_rgip = 0;
+		}
+		if (IPACM_Wan::ipgre_route_data[ipgre_info.iptype].proc_ctx_gre_add_hdl_rgip)
+		{
+			m_header.DeleteHeaderProcCtx(
+				IPACM_Wan::ipgre_route_data[ipgre_info.iptype].proc_ctx_gre_add_hdl_rgip);
+			IPACM_Wan::ipgre_route_data[ipgre_info.iptype].proc_ctx_gre_add_hdl_rgip = 0;
+		}
+
+		ipgre_info.iptype = IPA_IP_v4;
+		if (ipgre_add_rgip_rt_rule(ipgre_info) != IPACM_SUCCESS)
+			IPACMERR("IPA_HANDLE_RGIP_UP: ipgre_add_rgip_rt_rule failed\n");
+		break;
+	}
 #endif
 
 #ifdef FEATURE_IPA_IPSEC
@@ -16644,7 +16684,11 @@ int IPACM_Wan::ipgre_add_rgip_rt_rule(
 		IPACMDBG_H("rgip route rule is only applicable for IPv4, skipping\n");
 		return IPACM_SUCCESS;
 	}
-
+	if ( IPACM_Iface::ipacmcfg->rgip_ip == 0)
+	{
+		IPACMDBG_H("RGIP not assigned yet, not installing route rule\n");
+		return IPACM_SUCCESS;
+	}
 	uint32_t hdr_2use = IPACM_Wan::ipgre_route_data[IPA_IP_v6].ul_header_hdl_c;
 
 

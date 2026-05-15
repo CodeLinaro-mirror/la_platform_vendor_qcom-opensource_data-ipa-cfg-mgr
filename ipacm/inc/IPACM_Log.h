@@ -141,12 +141,14 @@ void log_deinit();
 	do { \
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		ipacm_log_dump(buffer_send); \
 		DLT_LOG(ctx, DLT_LOG_ERROR, DLT_CSTRING(buffer_send)); \
 	} while (0)
 #define IPACMDBG_H(fmt, ...) \
 	do { \
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		ipacm_log_dump(buffer_send); \
 		DLT_LOG(ctx, DLT_LOG_DEBUG, DLT_CSTRING(buffer_send)); \
 	} while (0)
 #else
@@ -181,6 +183,7 @@ void log_deinit();
 	do { \
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		ipacm_log_dump(buffer_send); \
 		DLT_LOG(ctx, DLT_LOG_DEBUG, DLT_CSTRING(buffer_send)); \
 	} while (0)
 
@@ -188,6 +191,7 @@ void log_deinit();
 	do { \
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send, MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(timestamp_buf, TimeStamp_buff_len), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		ipacm_log_dump(buffer_send); \
 		DLT_LOG(ctx, DLT_LOG_INFO, DLT_CSTRING(buffer_send)); \
 	} while (0)
 #else

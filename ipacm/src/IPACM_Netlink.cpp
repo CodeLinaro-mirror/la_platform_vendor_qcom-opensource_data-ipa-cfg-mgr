@@ -468,7 +468,7 @@ error:
 	return IPACM_FAILURE;
 }
 
-#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPOGRE)
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 static int get_eogre_tunnel_details(struct ifinfomsg* ifi, int len, int type)
 {
 	struct rtattr *attrib[IFLA_MAX + 1];
@@ -720,7 +720,7 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 
 			memcpy(&(pConfig->ipgre_info),&ipgre_info,sizeof(ipa_ipgre_info));
 			IPACMDBG("GRE info, src addr: %x, dst addr %x, link %d\n", ipgre_info.ipv4_src,ipgre_info.ipv4_dst,link);
-#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPOGRE)
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 			if(pConfig->pmip_details.pmipv6_enabled)
 			{
 				/* Send GRE UP event */
@@ -780,7 +780,7 @@ static int tunnel_delete(struct ifinfomsg* ifi, int len, int type)
 		if (attrib[IFLA_IFNAME])
 		{
 			IPACMDBG("Tunnel Delete: ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
-#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPOGRE)
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 			if(strncmp(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), strlen(pConfig->pmip_details.tunnel_name)) == 0)
 			{
 				IPACMDBG("Tunnel name matched, Cleaning up\n");
@@ -1592,7 +1592,7 @@ static int ipa_nl_decode_nlmsg
 				 *    but this should be processed in case of MDM for Ehernet interface.
 				 */
 				struct ifinfomsg *ifi2;
-#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPOGRE)
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 				if(msg_ptr->nl_link_info.metainfo.ifi_type == 778 || msg_ptr->nl_link_info.metainfo.ifi_type == 823 || msg_ptr->nl_link_info.metainfo.ifi_type == 769)
 				{//GRE tunnel
 						ifi2 = (struct ifinfomsg*) NLMSG_DATA(nlh);

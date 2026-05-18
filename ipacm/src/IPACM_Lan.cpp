@@ -1116,7 +1116,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						gre_up(true);
 					}
 #endif
-#ifdef FEATURE_IPOGRE
+#ifdef FEATURE_IPoGRE
 					if(IPACM_Iface::ipacmcfg->ipogre_enabled)
 					{
 						IPACMDBG_H(

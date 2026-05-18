@@ -2592,15 +2592,20 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	}
 
 	eth_index = get_eth_client_index(data->mac_addr, vlan_id);
-	if (eth_index == IPACM_INVALID_INDEX)
-	{
-		IPACMERR("eth client not found/attached \n");
-		return IPACM_FAILURE;
-	}
 
 #ifdef IPA_L2TP_TUNNEL_UDP
 	if(!IPACM_Iface::ipacmcfg->check_l2tp_iface(data->iface_name))
 	{
+		/* If the interface is of type L2TP then get_eth_client_index
+		 * return INVALID is expected, For other vlan interface it is
+		 * not expected so at that time need to return IPACM failure
+		 */
+		if (eth_index == IPACM_INVALID_INDEX)
+		{
+			IPACMERR("eth client not found/attached \n");
+			return IPACM_FAILURE;
+		}
+
 		if(data_vlan->data_all.iptype == IPA_IP_v4)
 		{
 			IPACMDBG_H("construct ETH header and route rules \n");
@@ -2633,6 +2638,17 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		}
 	}
 #else
+	/* In case on non L2TP if get_eth_client_index return
+	 * invalid then return failure
+	 * Moving the check here to avoid code duplicate
+	 * for both V4 and V6 scenario
+	 */
+	if (eth_index == IPACM_INVALID_INDEX)
+	{
+		IPACMERR("eth client not found/attached \n");
+		return IPACM_FAILURE;
+	}
+
 	if(data_vlan->data_all.iptype == IPA_IP_v4)
 	{
 		IPACMDBG_H("construct ETH header and route rules \n");

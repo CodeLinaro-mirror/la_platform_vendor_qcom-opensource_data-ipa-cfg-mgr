@@ -533,7 +533,7 @@ static int ipa_nl_decode_rtm_link
 						 RTA_DATA(attrib),
 						 sizeof(link_info->master_interface_index));
 			IPACMDBG("Extracted master interface index %d\n",
-					link_info->metainfo.ifi_index);
+					link_info->master_interface_index);
 		}
 	}
 	return IPACM_SUCCESS;
@@ -815,7 +815,9 @@ static int ipa_nl_decode_nlmsg
 (
 	const char   *buffer,
 	unsigned int  buflen,
-	ipa_nl_msg_t  *msg_ptr
+	ipa_nl_msg_t  *msg_ptr,
+	char	      *iface_name,
+	bool          query = false
 )
 {
 	char dev_name[IF_NAME_LEN] = {0};
@@ -833,15 +835,16 @@ static int ipa_nl_decode_nlmsg
 	uint32_t ipv6_unique_local_prefix = 0xFD000000;
 	uint32_t ipv6_unique_local_prefix_mask = 0xFF000000;
 
-	ipacm_cmd_q_data evt_data;
-	ipacm_cmd_q_data vlan_event;
+	ipacm_cmd_q_data evt_data = {};
+	ipacm_cmd_q_data bridge_evt_data = {};
+	ipacm_cmd_q_data vlan_event = {};
 	ipacm_event_data_all *data_all = NULL;
 	ipacm_event_data_fid *data_fid = NULL;
 	ipacm_event_data_addr *data_addr = NULL;
 	ipacm_event_data_all *vlan_data = NULL;
 	struct ipa_vlan_iface_info vlan_info;
 	struct ipa_macsec_map macsec_map, *macsec_map_data = NULL;
-	IPACM_Config* config = NULL;
+	IPACM_Config* config = IPACM_Config::GetInstance();
 	int idx = 0;
 
 	memset(nullMac, 0, sizeof(nullMac));
@@ -900,6 +903,30 @@ static int ipa_nl_decode_nlmsg
 						if (ret_val != IPACM_SUCCESS) {
 							IPACMERR("Error while getting interface name\n");
 							goto fail;
+						}
+
+						/* Handle non-default AP. AP mode iface: wlan0
+						   AP+STA mode iface: wlan1 */
+						idx = IPACM_Iface::iface_ipa_index_query(msg_ptr->nl_link_info.metainfo.ifi_index);
+						if((msg_ptr->nl_link_info.master_interface_index != 0) &&
+						   (idx != INVALID_IFACE) && (config->iface_table[idx].if_cat != WAN_IF) &&
+						   (strncmp(dev_name, WLAN_INTF, strlen(WLAN_INTF)) == 0))
+						{
+							IPACMDBG_H("Received NEWLINK on %s. ifi_idx: %d, master_idx: %d\n",
+									dev_name,
+									msg_ptr->nl_link_info.metainfo.ifi_index,
+									msg_ptr->nl_link_info.master_interface_index);
+							data_all = (ipacm_event_data_all *)calloc(1, sizeof(*data_all));
+							if(!data_all) {
+								IPACMERR("malloc failed\n");
+								ret_val = -ENOMEM;
+								goto fail;
+							}
+							data_all->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+							data_all->master_if_index = msg_ptr->nl_link_info.master_interface_index;
+							bridge_evt_data.evt_data = data_all;
+							bridge_evt_data.event = IPA_WLAN_BRIDGE_UPDATE_EVENT;
+							IPACM_EvtDispatcher::PostEvt(&bridge_evt_data);
 						}
 
 						if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN) {
@@ -991,91 +1018,93 @@ static int ipa_nl_decode_nlmsg
 							evt_data.evt_data = data_fid;
 							IPACM_EvtDispatcher::PostEvt(&evt_data);
 						}
-
-						/* Add IPACM support for ECM plug-in/plug_out */
-						/*--------------------------------------------------------------------------
-						  Check if the interface is running.If its a RTM_NEWLINK and the interface
-						  is running then it means that its a link up event
-						  ---------------------------------------------------------------------------*/
-						if ((msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_RUNNING) &&
-								(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP)) {
-							data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
-							if (data_fid == NULL) {
-								IPACMERR("unable to allocate memory for event data_fid\n");
-								ret_val = -ENOMEM;
-								goto fail;
-							}
-							data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-
-							IPACMDBG("Got a usb link_up event (Interface %s, %d) \n", dev_name,
-									msg_ptr->nl_link_info.metainfo.ifi_index);
-							strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
-							if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
-								IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
+						else
+						{
+							/* Add IPACM support for ECM plug-in/plug_out */
 							/*--------------------------------------------------------------------------
-							  Post LAN iface (ECM) link up event
+							  Check if the interface is running.If its a RTM_NEWLINK and the interface
+							  is running then it means that its a link up event
 							  ---------------------------------------------------------------------------*/
-							evt_data.event = IPA_USB_LINK_UP_EVENT;
-							evt_data.evt_data = data_fid;
-							IPACMDBG_H("Posting usb IPA_LINK_UP_EVENT with if index: %d\n", data_fid->if_index);
-							IPACM_EvtDispatcher::PostEvt(&evt_data);
-						} else if (!(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP)) {
-							data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
-							if (data_fid == NULL) {
-								IPACMERR("unable to allocate memory for event data_fid\n");
-								ret_val = -ENOMEM;
-								goto fail;
-							}
-
-							ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
-							if(ret_val != IPACM_SUCCESS)
-							{
-								IPACMERR("Error while getting interface name\n");
-								free(data_fid);
-								goto fail;
-							}
-							IPACMDBG_H("Got a usb link_down event (Interface %s) \n", dev_name);
-
-
-							if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
-								IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
-							if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
-								if (!IPACM_Iface::ipacmcfg->getMacsecMapping(msg_ptr->nl_link_info.metainfo.ifi_index,
-											&macsec_map))
-									IPACMERR("getMacsecMapping failed\n");
-								if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
-									evt_data.event = IPA_HANDLE_MACSEC_DEL;
-									macsec_map_data = static_cast<decltype(macsec_map_data)>
-										(malloc(sizeof(*macsec_map_data)));
-									if (!macsec_map_data) {
-										IPACMERR("malloc failed\n");
-										ret_val = -ENOMEM;
-										goto fail;
-									}
-									memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
-									evt_data.evt_data = macsec_map_data;
-									IPACM_EvtDispatcher::PostEvt(&evt_data);
+							if ((msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_RUNNING) &&
+									(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP)) {
+								data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+								if (data_fid == NULL) {
+									IPACMERR("unable to allocate memory for event data_fid\n");
+									ret_val = -ENOMEM;
+									goto fail;
 								}
-							}
-							if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE ||
-									msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC) {
-								IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n",
-										msg_ptr->nl_link_info.metainfo.ifi_index);
-								uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-								IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
-								free(data_fid);
-								goto next_msg;
-							}
+								data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
 
-							data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
-							strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
-							/*--------------------------------------------------------------------------
-							  Post LAN iface (ECM) link down event
-							  ---------------------------------------------------------------------------*/
-							evt_data.event = IPA_LINK_DOWN_EVENT;
-							evt_data.evt_data = data_fid;
-							IPACMDBG_H("Posting usb IPA_LINK_DOWN_EVENT with if index: %d\n", data_fid->if_index);
-							IPACM_EvtDispatcher::PostEvt(&evt_data);
+								IPACMDBG("Got a usb link_up event (Interface %s, %d) \n", dev_name,
+										msg_ptr->nl_link_info.metainfo.ifi_index);
+								strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
+								if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
+									IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
+								/*--------------------------------------------------------------------------
+								  Post LAN iface (ECM) link up event
+								  ---------------------------------------------------------------------------*/
+								evt_data.event = IPA_USB_LINK_UP_EVENT;
+								evt_data.evt_data = data_fid;
+								IPACMDBG_H("Posting usb IPA_LINK_UP_EVENT with if index: %d\n", data_fid->if_index);
+								IPACM_EvtDispatcher::PostEvt(&evt_data);
+							} else if (!(msg_ptr->nl_link_info.metainfo.ifi_flags & IFF_LOWER_UP)) {
+								data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+								if (data_fid == NULL) {
+									IPACMERR("unable to allocate memory for event data_fid\n");
+									ret_val = -ENOMEM;
+									goto fail;
+								}
+
+								ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
+								if(ret_val != IPACM_SUCCESS)
+								{
+									IPACMERR("Error while getting interface name\n");
+									free(data_fid);
+									goto fail;
+								}
+								IPACMDBG_H("Got a usb link_down event (Interface %s) \n", dev_name);
+
+
+								if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN)
+									IPACM_Iface::ipacmcfg->del_vlan_iface(&vlan_info);
+								if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
+									if (!IPACM_Iface::ipacmcfg->getMacsecMapping(msg_ptr->nl_link_info.metainfo.ifi_index,
+												&macsec_map))
+										IPACMERR("getMacsecMapping failed\n");
+									if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
+										evt_data.event = IPA_HANDLE_MACSEC_DEL;
+										macsec_map_data = static_cast<decltype(macsec_map_data)>
+											(malloc(sizeof(*macsec_map_data)));
+										if (!macsec_map_data) {
+											IPACMERR("malloc failed\n");
+											ret_val = -ENOMEM;
+											goto fail;
+										}
+										memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
+										evt_data.evt_data = macsec_map_data;
+										IPACM_EvtDispatcher::PostEvt(&evt_data);
+									}
+								}
+								if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE ||
+										msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC) {
+									IPACMDBG("Deleting the bridge<->vlan mapping entry with intterface index %d\n",
+											msg_ptr->nl_link_info.metainfo.ifi_index);
+									uint16_t vlan_master_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+									IPACM_Iface::ipacmcfg->del_bridge_vlan_mapping(&vlan_master_interface_index);
+									free(data_fid);
+									goto next_msg;
+								}
+
+								data_fid->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+								strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
+								/*--------------------------------------------------------------------------
+								  Post LAN iface (ECM) link down event
+								  ---------------------------------------------------------------------------*/
+								evt_data.event = IPA_LINK_DOWN_EVENT;
+								evt_data.evt_data = data_fid;
+								IPACMDBG_H("Posting usb IPA_LINK_DOWN_EVENT with if index: %d\n", data_fid->if_index);
+								IPACM_EvtDispatcher::PostEvt(&evt_data);
+							}
 						}
 					}
 				}
@@ -1115,7 +1144,7 @@ static int ipa_nl_decode_nlmsg
 					}
 
 					if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN) {
-						data_all = (ipacm_event_data_all *)malloc(sizeof(*data_all));
+						data_all = (ipacm_event_data_all *)calloc(1, sizeof(*data_all));
 						if (!data_all) {
 							IPACMERR("malloc failed\n");
 							ret_val = -ENOMEM;
@@ -1904,6 +1933,16 @@ static int ipa_nl_decode_nlmsg
 				}
 				IPACMDBG("Neighbour event with interface index %d master interface index %d family %d\n", msg_ptr->nl_neigh_info.metainfo.ndm_ifindex, msg_ptr->nl_neigh_info.master_interface_index, msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 
+				if(iface_name != NULL)
+				{
+					if(strncmp(iface_name, dev_name, strlen(iface_name)) != 0)
+					{
+						IPACMDBG("Skiping this neighbor as it does not belong"
+							 " to interface %s\n", iface_name);
+						goto fail;
+					}
+				}
+
 				if(((msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET) ||
 							(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET6)) &&
 						(msg_ptr->nl_neigh_info.metainfo.ndm_state != NUD_REACHABLE) && (msg_ptr->nl_neigh_info.metainfo.ndm_state != NUD_PERMANENT))
@@ -1984,6 +2023,16 @@ static int ipa_nl_decode_nlmsg
 					data_all->ipv6_addr[2]=ntohl(data_all->ipv6_addr[2]);
 					data_all->ipv6_addr[3]=ntohl(data_all->ipv6_addr[3]);
 					data_all->iptype = IPA_IP_v6;
+					if(query)
+					{
+						IPACMDBG("Queried Neighbor V6 address: 0x%x:%x:%x:%x\n",
+							data_all->ipv6_addr[0], data_all->ipv6_addr[1],
+							data_all->ipv6_addr[2], data_all->ipv6_addr[3]);
+						config->queried_v6_list.push_back({data_all->ipv6_addr[0],
+										data_all->ipv6_addr[1],
+										data_all->ipv6_addr[2],
+										data_all->ipv6_addr[3]});
+					}
 				}
 				else if (msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET)
 				{
@@ -1991,6 +2040,11 @@ static int ipa_nl_decode_nlmsg
 					IPACM_EVENT_COPY_ADDR_v4( data_all->ipv4_addr, msg_ptr->nl_neigh_info.attr_info.local_addr);
 					data_all->ipv4_addr = ntohl(data_all->ipv4_addr);
 					data_all->iptype = IPA_IP_v4;
+					if(query)
+					{
+						IPACMDBG("Queried Neighbor V4 address: 0x%x\n", data_all->ipv4_addr);
+						config->queried_v4_list.push_back(data_all->ipv4_addr);
+					}
 				}
 				else
 				{
@@ -2025,8 +2079,6 @@ static int ipa_nl_decode_nlmsg
 							dev_name, data_all->if_index,
 							msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 
-					config = IPACM_Config::GetInstance();
-
 					/* Add Dummy VLAN Mapping for Non-Vlan Ifaces */
 					idx = IPACM_Iface::iface_ipa_index_query(msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
 					if((config != NULL) && ((idx != INVALID_IFACE && config->iface_table[idx].if_cat != WAN_IF &&
@@ -2058,15 +2110,17 @@ static int ipa_nl_decode_nlmsg
 								else
 #endif
 								{
-									/* Currently we support dummy VLAN logic only on On-Demand Bridge */
-									if(strncmp(master_dev_name, BRIDGE_0, strlen(master_dev_name)) != 0)
-									{
-										config->add_dummy_vlan_mapping(master_dev_name,
-												data_all->iface_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
-										config->add_bridge_vlan_mapping(&vlan_bridge_data);
-										vlan_bridge_data.status = 1;
-										config->add_bridge_vlan_mapping(&vlan_bridge_data);
+									vlan_data = (ipacm_event_data_all *)calloc(1, sizeof(*vlan_data));
+									if(!vlan_data) {
+										IPACMERR("malloc failed\n");
+										ret_val = -ENOMEM;
+										goto fail;
 									}
+									vlan_data->if_index = msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
+									vlan_data->master_if_index = msg_ptr->nl_neigh_info.master_interface_index;
+									bridge_evt_data.evt_data = vlan_data;
+									bridge_evt_data.event = IPA_WLAN_BRIDGE_UPDATE_EVENT;
+									IPACM_EvtDispatcher::PostEvt(&bridge_evt_data);
 								}
 							}
 						}
@@ -2176,56 +2230,6 @@ static int ipa_nl_decode_nlmsg
 						msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 				evt_data.evt_data = data_all;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
-				/* finish command queue */
-
-				config = IPACM_Config::GetInstance();
-
-				/* Remove Dummy VLAN Mapping for Non-Vlan Ifaces */
-				idx = IPACM_Iface::iface_ipa_index_query(msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
-				if((config != NULL) && ((idx != INVALID_IFACE && config->iface_table[idx].if_cat != WAN_IF &&
-								!config->iface_in_vlan_mode(dev_name)) || config->check_l2tp_iface(data_all->iface_name)))
-				{
-					if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != msg_ptr->nl_neigh_info.master_interface_index))
-					{
-						memset(master_dev_name,0,IF_NAME_LEN);
-						if(msg_ptr->nl_neigh_info.master_interface_index &&
-								ipa_get_if_name(master_dev_name, msg_ptr->nl_neigh_info.master_interface_index) == IPACM_SUCCESS)
-						{
-							if(strncmp(master_dev_name, BRIDGE_0, strlen(master_dev_name)) != 0)
-							{
-								IPACMDBG_H("[Dummy] Deleing neigh iface < %s > idx[%d] m_idx[%d]\n",
-										dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex, msg_ptr->nl_neigh_info.master_interface_index);
-								uint16_t if_idx = 0;
-								memset(&vlan_bridge_data, 0, sizeof(vlan_bridge_data));
-								vlan_bridge_data.vlan_id = DUMMY_VLAN_ID_BASE + msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
-								if_idx = (uint16_t)msg_ptr->nl_neigh_info.master_interface_index;
-								strlcpy(vlan_bridge_data.bridge_name, master_dev_name, IF_NAME_LEN);
-								config->del_dummy_vlan_mapping(master_dev_name,
-										data_all->iface_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
-								config->del_bridge_vlan_mapping(&if_idx, &(vlan_bridge_data.vlan_id));
-
-								vlan_rt_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
-								if(vlan_rt_data == NULL)
-								{
-									IPACMERR("Failed to allocate memory.\n");
-									ret_val = -ENOMEM;
-									goto fail;
-								}
-								memset(vlan_rt_data, 0, sizeof(ipacm_event_route_vlan));
-								memset(&evt_data, 0, sizeof(ipacm_cmd_q_data));
-
-								vlan_rt_data->VlanID = DUMMY_VLAN_ID_BASE + msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
-
-								evt_data.evt_data = vlan_rt_data;
-								evt_data.event = IPA_DUMMY_VLAN_DOWN_EVENT;
-
-								IPACMDBG_H("Posting event %s with vlan_id: %d\n",
-										IPACM_Iface::ipacmcfg->getEventName(evt_data.event), vlan_rt_data->VlanID);
-								IPACM_EvtDispatcher::PostEvt(&evt_data);
-							}
-						}
-					}
-				}
 				break;
 
 			default:
@@ -2272,12 +2276,12 @@ int ipa_nl_recv_msg(int fd)
 		iov = msghdr->msg_iov;
 
 		memset(nlmsg, 0, sizeof(ipa_nl_msg_t));
-		ret_val = ipa_nl_decode_nlmsg((char *)iov->iov_base, msglen, nlmsg);
-		if(IPACM_SUCCESS != ret_val)
+		if(IPACM_SUCCESS != ipa_nl_decode_nlmsg((char *)iov->iov_base, msglen, nlmsg, NULL))
 		{
 			IPACMERR("Failed to decode nl message, ret_val[%d]\n", ret_val);
 			goto error;
 		}
+		ret_val = IPACM_SUCCESS;
 	}
 
 error:
@@ -2657,8 +2661,7 @@ handle:
 }
 
 
-/* To get dump of routes from kernel in case of RTM_GETROUTE */
-int ipa_nl_route_receive(int fd, struct msghdr *msg, int flags)
+int ipa_nl_receive(int fd, struct msghdr *msg, int flags)
 {
 	int len = 0;
 
@@ -2682,7 +2685,7 @@ int ipa_nl_route_receive(int fd, struct msghdr *msg, int flags)
 	return len;
 }
 
-int ipa_nl_route_recvmsg(int fd, struct msghdr *msg, char **result)
+int ipa_nl_recvmsg(int fd, struct msghdr *msg, char **result)
 {
 	struct iovec *iov = msg->msg_iov;
 	char *buf = NULL;
@@ -2691,7 +2694,7 @@ int ipa_nl_route_recvmsg(int fd, struct msghdr *msg, char **result)
 	iov->iov_base = NULL;
 	iov->iov_len = 0;
 
-	len = ipa_nl_route_receive(fd, msg, MSG_PEEK | MSG_TRUNC);
+	len = ipa_nl_receive(fd, msg, MSG_PEEK | MSG_TRUNC);
 
 	IPACMDBG_DMESG("Netlink route message length : %d\n", len);
 
@@ -2712,7 +2715,7 @@ int ipa_nl_route_recvmsg(int fd, struct msghdr *msg, char **result)
 	iov->iov_base = buf;
 	iov->iov_len = len;
 
-	len = ipa_nl_route_receive(fd, msg, 0);
+	len = ipa_nl_receive(fd, msg, 0);
 
 	if (len < 0)
 	{
@@ -2725,7 +2728,7 @@ int ipa_nl_route_recvmsg(int fd, struct msghdr *msg, char **result)
 	return len;
 }
 
-int ipa_nl_send_getroute(ipa_ip_type ip_type)
+int ipa_nl_send_getroute(ipa_ip_type ip_type, char * iface_name)
 {
 
 	ipacm_event_data_addr *data_addr = NULL;
@@ -2784,7 +2787,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 		.msg_iovlen = 1,
 	};
 
-	msglen = ipa_nl_route_recvmsg(nl_sock, &msg, &buf);
+	msglen = ipa_nl_recvmsg(nl_sock, &msg, &buf);
 
 	if(msglen <= 0)
 	{
@@ -2842,14 +2845,19 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					IPACMERR("Error while getting interface name\n");
 					goto error;
 				}
-		
+				if((iface_name != NULL) && memcmp(dev_name, iface_name, sizeof(dev_name)))
+				{
+					IPACMERR("iface %s is not matching with  %s dev_name, so skipping the route query\n",iface_name , dev_name);
+					h = NLMSG_NEXT(h, msglen);
+					continue;
+				}
 				IPACM_NL_REPORT_ADDR( "route add -host", nl_route_info_get_route.attr_info.dst_addr );
 				IPACM_NL_REPORT_ADDR( "gw", nl_route_info_get_route.attr_info.gateway_addr );
 				IPACMDBG("dev %s\n",dev_name );
 				/* insert to command queue */
 				IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr, nl_route_info_get_route.attr_info.dst_addr);
 				temp = (-1);
-		
+
 				evt_data.event = IPA_ROUTE_ADD_EVENT;
 				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 				if(data_addr == NULL)
@@ -2857,12 +2865,12 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					IPACMERR("unable to allocate memory for event data_addr\n");
 					goto error;
 				}
-		
+
 				data_addr->if_index = nl_route_info_get_route.attr_info.oif_index;
 				data_addr->iptype = IPA_IP_v4;
 				data_addr->ipv4_addr = ntohl(if_ipv4_addr);
 				data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
-		
+
 				IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 address 0x%x, mask:0x%x\n",
 								 data_addr->if_index,
 								 data_addr->ipv4_addr,
@@ -2870,7 +2878,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				evt_data.evt_data = data_addr;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 				/* finish command queue */
-		
+
 			}
 			else
 			{
@@ -2884,8 +2892,14 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				{
 					IPACM_NL_REPORT_ADDR( "route add default gw \n", nl_route_info_get_route.attr_info.gateway_addr );
 					IPACMDBG_H("dev %s \n", dev_name);
+					if((iface_name != NULL) && memcmp(dev_name, iface_name, sizeof(dev_name)))
+					{
+						IPACMERR("iface %s is not matching with  %s dev_name, so skipping the route query\n",iface_name , dev_name);
+						h = NLMSG_NEXT(h, msglen);
+						continue;
+					}
 					IPACM_NL_REPORT_ADDR( "dstIP:", nl_route_info_get_route.attr_info.dst_addr );
-		
+
 					/* insert to command queue */
 					data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 					if(data_addr == NULL)
@@ -2893,7 +2907,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 						IPACMERR("unable to allocate memory for event data_addr\n");
 						goto error;
 					}
-		
+
 					IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr, nl_route_info_get_route.attr_info.dst_addr);
 					IPACM_EVENT_COPY_ADDR_v4( if_ipipv4_addr_mask, nl_route_info_get_route.attr_info.dst_addr);
 					IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr_gw, nl_route_info_get_route.attr_info.gateway_addr);
@@ -2969,7 +2983,13 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				IPACMERR("Error while getting interface name\n");
 				goto error;
 			}
-		
+			if((iface_name != NULL) && memcmp(dev_name, iface_name, sizeof(dev_name)))
+			{
+				IPACMERR("iface %s is not matching with  %s dev_name, so skipping the route query\n",iface_name , dev_name);
+				h = NLMSG_NEXT(h, msglen);
+				continue;
+			}
+
 			if(nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_DST)
 			{
 				IPACM_NL_REPORT_ADDR( "Route ADD DST:", nl_route_info_get_route.attr_info.dst_addr );
@@ -2977,7 +2997,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 								 nl_route_info_get_route.metainfo.rtm_dst_len,
 								 nl_route_info_get_route.attr_info.priority,
 								 dev_name);
-		
+
 				/* insert to command queue */
 				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 				if(data_addr == NULL)
@@ -2992,7 +3012,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				data_addr->ipv6_addr[1] = ntohl(data_addr->ipv6_addr[1]);
 				data_addr->ipv6_addr[2] = ntohl(data_addr->ipv6_addr[2]);
 				data_addr->ipv6_addr[3] = ntohl(data_addr->ipv6_addr[3]);
-		
+
 				mask_value_v6 = nl_route_info_get_route.metainfo.rtm_dst_len;
 				for(mask_index = 0; mask_index < 4; mask_index++)
 				{
@@ -3007,7 +3027,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 						mask_value_v6 = 0;
 					}
 				}
-		
+
 				IPACMDBG("ADD IPV6 MASK %d: %08x:%08x:%08x:%08x \n",
 								nl_route_info_get_route.metainfo.rtm_dst_len,
 								 data_addr->ipv6_addr_mask[0],
@@ -3019,11 +3039,11 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				data_addr->ipv6_addr_mask[1] = ntohl(data_addr->ipv6_addr_mask[1]);
 				data_addr->ipv6_addr_mask[2] = ntohl(data_addr->ipv6_addr_mask[2]);
 				data_addr->ipv6_addr_mask[3] = ntohl(data_addr->ipv6_addr_mask[3]);
-		
+
 				evt_data.event = IPA_ROUTE_ADD_EVENT;
 				data_addr->if_index = nl_route_info_get_route.attr_info.oif_index;
 				data_addr->iptype = IPA_IP_v6;
-		
+
 				IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv6 addr\n",
 								 data_addr->if_index);
 				evt_data.evt_data = data_addr;
@@ -3036,7 +3056,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				IPACMDBG(" metric %d, dev %s\n",
 								 nl_route_info_get_route.attr_info.priority,
 								 dev_name);
-		
+
 				/* insert to command queue */
 				data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
 				if(data_addr == NULL)
@@ -3044,7 +3064,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					IPACMERR("unable to allocate memory for event data_addr\n");
 					goto error;
 				}
-		
+
 				if(nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_PRIORITY)
 				{
 					IPACMDBG_H("ip -6 route add default dev %s metric %d\n",
@@ -3057,19 +3077,19 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				}
 				memset(data_addr,0,sizeof(ipacm_event_data_addr));
 				IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr, nl_route_info_get_route.attr_info.dst_addr);
-		
+
 				data_addr->ipv6_addr[0]=ntohl(data_addr->ipv6_addr[0]);
 				data_addr->ipv6_addr[1]=ntohl(data_addr->ipv6_addr[1]);
 				data_addr->ipv6_addr[2]=ntohl(data_addr->ipv6_addr[2]);
 				data_addr->ipv6_addr[3]=ntohl(data_addr->ipv6_addr[3]);
-		
+
 				IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_mask, nl_route_info_get_route.attr_info.dst_addr);
-		
+
 				data_addr->ipv6_addr_mask[0]=ntohl(data_addr->ipv6_addr_mask[0]);
 				data_addr->ipv6_addr_mask[1]=ntohl(data_addr->ipv6_addr_mask[1]);
 				data_addr->ipv6_addr_mask[2]=ntohl(data_addr->ipv6_addr_mask[2]);
 				data_addr->ipv6_addr_mask[3]=ntohl(data_addr->ipv6_addr_mask[3]);
-		
+
 				IPACM_EVENT_COPY_ADDR_v6( data_addr->ipv6_addr_gw, nl_route_info_get_route.attr_info.gateway_addr);
 				data_addr->ipv6_addr_gw[0] = ntohl(data_addr->ipv6_addr_gw[0]);
 				data_addr->ipv6_addr_gw[1] = ntohl(data_addr->ipv6_addr_gw[1]);
@@ -3405,7 +3425,8 @@ int  ipa_nl_query_getlink(int af_family)
 			{
 				if(iface_info->ifi_flags & IFF_UP)
 				{
-					if (ipa_nl_decode_nlmsg((const char*)nl_hdr, nl_hdr->nlmsg_len, msg_ptr))
+					if (ipa_nl_decode_nlmsg((const char*)nl_hdr, nl_hdr->nlmsg_len,
+								 msg_ptr, NULL))
 					{
 						IPACMERR("Failed to decode rtm link message\n");
 						goto next_msg;
@@ -3481,7 +3502,7 @@ int ipa_nl_query_ip_addr_info(int af_family)
 		.msg_iovlen = 1,
 	};
 
-	msglen = ipa_nl_route_recvmsg(nl_sock, &msg, &buf);
+	msglen = ipa_nl_recvmsg(nl_sock, &msg, &buf);
 
 	if((msglen <= 0) || (nladdr.nl_pid != 0))
 	{
@@ -3492,7 +3513,7 @@ int ipa_nl_query_ip_addr_info(int af_family)
 
 	IPACMDBG("Route msg_len : %d\n", msglen);
 
-	ret_val = ipa_nl_decode_nlmsg((const char*)buf, msglen, msg_ptr);
+	ret_val = ipa_nl_decode_nlmsg((const char*)buf, msglen, msg_ptr, NULL);
 	if (IPACM_SUCCESS != ret_val) {
 		IPACMERR("Failed to decode rtm link message\n");
 		goto end;
@@ -3509,7 +3530,7 @@ end:
 	return ret_val;
 }
 
-int ipa_nl_query_newneigh(int af_family, char* dev_name)
+int ipa_nl_query_newneigh(int af_family, char* dev_name, bool query)
 {
 	IPACMDBG("entered ipa_nl_send_getneigh \n");
 	int ret_val = IPACM_FAILURE, msglen = 0, nl_sock = 0;
@@ -3563,7 +3584,7 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name)
 		.msg_iovlen = 1,
 	};
 
-	msglen = ipa_nl_route_recvmsg(nl_sock, &msg, &buf);
+	msglen = ipa_nl_recvmsg(nl_sock, &msg, &buf);
 
 	if((msglen <= 0) || (nladdr.nl_pid != 0))
 	{
@@ -3571,7 +3592,8 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name)
 		goto end;
 	}
 
-	ret_val = ipa_nl_decode_nlmsg((const char*)buf, msglen, msg_ptr);
+	ret_val = ipa_nl_decode_nlmsg((const char*)buf, msglen, msg_ptr, dev_name, query);
+
 	if (IPACM_SUCCESS != ret_val) {
 		IPACMERR("Failed to decode rtm link message\n");
 		goto end;
@@ -3697,12 +3719,16 @@ void ipa_query_nl_getevents()
 		l2tp_nl_tunnel_get(L2TP_CMD_SESSION_GET);
 	}
 	ipa_nl_query_newneigh(AF_BRIDGE);
-	ipa_nl_query_newneigh(AF_INET6);
-	ipa_nl_query_newneigh(AF_INET);
+	/* Query conntracks only if ipacm is restarted */
+	ipa_nl_query_newneigh(AF_INET6, NULL, ipacm_restarted);
+	ipa_nl_query_newneigh(AF_INET, NULL, ipacm_restarted);
 	IPACMDBG("Send GETNEIGH is completed\n");
 	ipa_nl_send_getroute(IPA_IP_v6);
 	ipa_nl_send_getroute(IPA_IP_v4);
 	IPACMDBG("Send GETROUTE is completed\n");
 	ipa_query_active_feature();
 	IPACMDBG_DMESG("IPACM process started, ipa path is re-established\n");
+	/* Make it false as conntrack query is take care above */
+	if(ipacm_restarted)
+		ipacm_restarted = false;
 }

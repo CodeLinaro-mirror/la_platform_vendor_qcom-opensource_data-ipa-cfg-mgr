@@ -53,6 +53,7 @@
 #else
 #include <list>
 #endif
+#include <array>
 #include <set>
 #include <unordered_set>
 #include <map>
@@ -326,6 +327,9 @@ public:
 
 	bool isMCC_Mode;
 
+	std::list<uint32_t> queried_v4_list;
+	std::list<std::array<uint32_t, 4>> queried_v6_list;
+
 #ifdef IPA_L2TP_TUNNEL_UDP
 	int num_ipa_l2tp_tunnel;
 	int num_ipa_l2tp_session;
@@ -411,6 +415,8 @@ public:
 	void del_l2tp_tunnel_info(uint32_t data);
 
 	void add_l2tp_mtu_info(uint16_t mtu , char * iface_name);
+
+	void remove_l2tp_vlan_pdn_mapping();
 #endif //#ifdef IPA_L2TP_TUNNEL_UDP
 #endif //#ifdef FEATURE_L2TP
 #endif //defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)

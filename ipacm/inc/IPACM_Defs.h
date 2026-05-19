@@ -101,7 +101,7 @@ extern "C"
 #define ETH1_INTF "eth1"
 #define RNDIS_INTF "rndis0"
 #define ECM_INTF "ecm0"
-
+#define WLAN_INTF "wlan"
 
 #ifndef FEATURE_IPA_V3
 #define IPA_MAX_FLT_RULE 50
@@ -195,6 +195,9 @@ extern "C"
 #if defined(FEATURE_L2TP)
 #define L2TP_BRIDGE_VLAN_ID_START 4096
 #endif
+
+extern bool ipacm_restarted;
+
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/
@@ -248,6 +251,7 @@ typedef enum
 	IPA_WAN_GW_ADDR_ADD_EVENT,                /* ipacm_event_data_addr */
 	IPA_EXTERNAL_EVENT_MAX,
 
+	IPA_WLAN_BRIDGE_UPDATE_EVENT,             /* ipacm_event_data_all */
 	IPA_HANDLE_WAN_UP,                        /* ipacm_event_iface_up  */
 	IPA_HANDLE_WAN_DOWN,                      /* ipacm_event_iface_up  */
 	IPA_HANDLE_WAN_UP_V6,                     /* ipacm_event_iface_up */
@@ -385,8 +389,8 @@ typedef struct
 typedef struct _ipacm_event_data_all
 {
 	enum ipa_ip_type iptype;
-	uint8_t if_index;
-	uint8_t master_if_index;
+	int if_index;
+	int master_if_index;
 	uint32_t  ipv4_addr;
 	uint32_t  ipv6_addr[4];
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
@@ -503,7 +507,7 @@ typedef struct _ipacm_event_iface_up
 
 typedef struct _ipacm_event_iface_up_tether
 {
-	uint32_t if_index_tether;
+	int if_index_tether;
 	uint32_t ipv6_prefix[2];
 	bool is_sta;
 }ipacm_event_iface_up_tehter;
@@ -626,7 +630,7 @@ struct ipa_bridge_vlan_mapping_info {
 		uint16_t vlan_id;
 		uint32_t bridge_ipv4;
 		uint32_t subnet_mask;
-		uint8_t master_if_index;
+		int master_if_index;
 		uint8_t status;
 };
 
@@ -637,7 +641,7 @@ struct bridge_vlan_mapping_info
 	uint32_t bridge_ipv4;
 	uint32_t subnet_mask;
 	uint8_t lan2lan_sw;
-	uint8_t bridge_if_index;
+	int bridge_if_index;
 	uint8_t status;
 };
 

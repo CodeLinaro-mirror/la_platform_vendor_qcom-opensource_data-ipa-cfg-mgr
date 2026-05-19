@@ -49,6 +49,8 @@
 
 #include <sys/socket.h>
 #include <signal.h>
+#include <unistd.h>
+#include <sys/types.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <sys/ioctl.h>
@@ -150,6 +152,7 @@ ipacm_thread_info ipacm_child_threads[IPACM_CHILD_THREADS_MAX] = {
 
 IPACM_Neighbor *neigh = NULL;
 
+bool ipacm_restarted = false;
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
 
 void ipa_is_ipacm_running(void);
@@ -1066,7 +1069,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	ucontext_t *p;
 	int addr;
 	void *array[MAX_IPACM_TRACE_STACK];
-	int size, i;
+	int size = 0, i;
 	char **messages;
 	void* res = NULL;
 
@@ -1241,9 +1244,17 @@ int main(int argc, char **argv)
 		IPACMDBG_H("Create ipacmcfg instance\n");
 		IPACM_Iface::ipacmcfg = IPACM_Config::GetInstance();
 	}
+
 #ifdef IPA_HW_FNR_STATS
-	IPACM_Iface::ipacmcfg->alloc_fnr_counter();
-	IPACMDBG_H("Reallocation FNR Counter: Done\n");
+	if (IPACM_Iface::ipacmcfg != NULL)
+	{
+		IPACM_Iface::ipacmcfg->alloc_fnr_counter();
+		IPACMDBG_H("Reallocation FNR Counter: Done\n");
+	}
+	else
+	{
+		IPACMERR("Failed to get IPACM_Config instance\n");
+	}
 #endif
 
 	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
@@ -1356,6 +1367,38 @@ void ipa_is_ipacm_running(void) {
 	}
 	else
 	{
+		char pid_buf[16];
+		int pid_len;
+		pid_t old_pid = 0;
+
+		pid_len = read(fd, pid_buf, sizeof(pid_buf) - 1);
+		if (pid_len > 0)
+		{
+			pid_buf[pid_len] = '\0';
+			old_pid = atoi(pid_buf);
+			if (old_pid != 0 && old_pid != getpid())
+			{
+				ipacm_restarted = true;
+				IPACMDBG_H("IPACM is restarted. Old PID: %d, New PID: %d\n", old_pid, getpid());
+			}
+		}
+
+		if (lseek(fd, 0, SEEK_SET) < 0)
+		{
+			IPACMERR("lseek failed on pid file");
+		}
+
+		if (ftruncate(fd, 0) < 0)
+		{
+			IPACMERR("ftruncate failed on pid file");
+		}
+
+		pid_len = snprintf(pid_buf, sizeof(pid_buf), "%d\n", getpid());
+		if (pid_len > 0 && write(fd, pid_buf, pid_len) != pid_len)
+		{
+			IPACMERR("write failed on pid file");
+		}
+
 		IPACMERR("PID %d is IPACM main process\n", getpid());
 	}
 

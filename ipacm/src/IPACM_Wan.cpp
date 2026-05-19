@@ -1406,7 +1406,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 					/*to handle if we have missed new route and neigh events before
                                         creation of interface*/
-					ipa_nl_send_getroute(data->iptype);
+					ipa_nl_send_getroute(data->iptype, dev_name);
 					ipa_nl_query_newneigh(AF_INET6, dev_name);
 				}
 			}
@@ -2523,13 +2523,9 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_vlan_pdn *vlan_data = NULL;
 
-	if((vlan_idx < 0) || (vlan_idx >= IPA_MAX_NUM_SW_PDNS))
-	{
-		IPACMERR("Invalid VLAN Index\n");
-		return;
-	}
-
-	if(pdn_idx < 0 || vlan_idx < 0 || vlan_id <= 0)
+	if((pdn_idx < 0) || (pdn_idx >= IPA_MAX_NUM_SW_PDNS) ||
+           (vlan_idx < 0) || (vlan_idx >= IPA_MAX_NUM_SW_PDNS) ||
+           (vlan_id <= 0))
 	{
 		IPACMERR("Wrong param pdn_idx:%d, vlan_idx:%d, vlan_id:%d\n", pdn_idx, vlan_idx, vlan_id);
 		return;
@@ -3409,7 +3405,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 				}
 			}
 		}
-		else if((iptype==IPA_IP_v6 || iptype == IPA_IP_MAX) && (header_set_v6 != true))
+		if((iptype==IPA_IP_v6 || iptype == IPA_IP_MAX) && (header_set_v6 != true))
 		{
 			header_partial_default_wan_v6 = true;
 			IPACMDBG_H("STA ipv6-header haven't constructed \n");
@@ -4159,6 +4155,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			if(m_header.GetHeaderHandle(&hdr) == false)
 			{
 				IPACMERR("Failed to get QMAP header.\n");
+				free(rt_rule);
 				return IPACM_FAILURE;
 			}
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
@@ -4313,6 +4310,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			if(pdn_update == NULL)
 			{
 				IPACMERR("Unable to allocate memory\n");
+				free(rt_rule);
 				return IPACM_FAILURE;
 			}
 			memset(pdn_update, 0, sizeof(ipacm_event_vlan_pdn));
@@ -4394,6 +4392,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 				if(fd_wwan_ioctl < 0)
 				{
 					IPACMERR("Failed to open %s.\n",WWAN_QMI_IOCTL_DEVICE_NAME);
+					free(rt_rule);
 					return false;
 				}
 				IPACMDBG_H("send WAN_IOC_NOTIFY_WAN_STATE up to IPA_PM\n");
@@ -8322,6 +8321,7 @@ int IPACM_Wan::handle_down_evt()
 				vlandown_data->iptype = IPA_IP_v6;
 				vlandown_data->VlanID = *it;
 				vlandown_data->mux_id = 0;
+				memcpy(vlandown_data->ipv6_prefix, ipv6_prefix, sizeof(ipv6_prefix));
 				evt_data.event = IPA_HANDLE_WAN_VLAN_PDN_DOWN;
 				evt_data.evt_data = (void *)vlandown_data;
 				IPACMDBG_H("Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",

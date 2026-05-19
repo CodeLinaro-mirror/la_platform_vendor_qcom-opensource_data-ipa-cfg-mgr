@@ -29,7 +29,6 @@
  * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
- *
  */
 /*!
 		@file
@@ -98,6 +97,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WLAN_CLIENT_DEL_EVENT),                /* ipacm_event_data_mac */
 	__stringify(IPA_WLAN_CLIENT_POWER_SAVE_EVENT),         /* ipacm_event_data_mac */
 	__stringify(IPA_WLAN_CLIENT_RECOVER_EVENT),            /* ipacm_event_data_mac */
+	__stringify(IPA_WLAN_BRIDGE_UPDATE_EVENT),             /* ipacm_event_data_all */
 	__stringify(IPA_NEW_NEIGH_EVENT),                      /* ipacm_event_data_all */
 	__stringify(IPA_DEL_NEIGH_EVENT),                      /* ipacm_event_data_all */
 	__stringify(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT),       /* ipacm_event_data_all */
@@ -531,7 +531,7 @@ int IPACM_Config::Init(void)
 	struct statvfs stat;
 	int64_t available_partition_size_bytes = 0;
 	int64_t quota_allowed_size_bytes = 0;
-	char ipacm_log_file[] = IPACM_LOG_COLLECTION_FILE;
+	char ipacm_log_file[IPA_MAX_FILE_LEN];
 	char *ipacm_log_dir = NULL;
 
 	cfg = (IPACM_conf_t *)malloc(sizeof(IPACM_conf_t));
@@ -584,6 +584,9 @@ int IPACM_Config::Init(void)
 				cfg->max_file_size_quota, IPACM_DEF_LOG_FILE_SIZE_QUOTA);
 		cfg->max_file_size_quota = IPACM_DEF_LOG_FILE_SIZE_QUOTA;
 	}
+
+	memset(ipacm_log_file, '\0', sizeof(ipacm_log_file));
+	strlcpy(ipacm_log_file, IPACM_LOG_COLLECTION_FILE, (sizeof(ipacm_log_file) - 1));
 	ipacm_log_dir = dirname(ipacm_log_file);
 
 	/* Read the available partition size */
@@ -1425,6 +1428,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 	ipacm_bridge *bridge = NULL;
 	char iface_name[IPA_IFACE_NAME_LEN] = {0};
 	int ret = IPACM_FAILURE;
+	bool new_entry = false;
 #ifdef IPA_L2TP_TUNNEL_UDP
 	list<l2tp_vlan_mapping_info>::iterator it_l2tp_mapping;
 #endif
@@ -1514,6 +1518,12 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 	}
 bail:
 	pthread_mutex_unlock(&vlan_l2tp_lock);
+	if(new_entry)
+	{
+		IPACMDBG_H("Querying the neighbors fo bridge %s\n",
+				data->bridge_name);
+		ipa_nl_query_newneigh(AF_INET, new_mapping.bridge_iface_name);
+	}
 	return;
 }
 
@@ -1594,6 +1604,7 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data, bo
 				data->bridge_ipv4 = it_mapping->bridge_ipv4;
 				data->subnet_mask = it_mapping->subnet_mask;
 				data->lan2lan_sw = it_mapping->lan2lan_sw;
+				data->master_if_index = it_mapping->bridge_if_index;
 				ret = IPACM_SUCCESS;
 
 				if(is_dummy_VID(it_mapping->bridge_associated_VID))
@@ -1610,6 +1621,7 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data, bo
 				data->bridge_ipv4 = it_mapping->bridge_ipv4;
 				data->subnet_mask = it_mapping->subnet_mask;
 				data->lan2lan_sw = it_mapping->lan2lan_sw;
+				data->master_if_index = it_mapping->bridge_if_index;
 				ret = IPACM_SUCCESS;
 				break;
 			}
@@ -1843,10 +1855,6 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	/* Sending Getneigh to receive missing neighbor in case if missed early */
 	IPACMDBG_H("Query Getneigh for physical ifaces\n");
 	ipa_nl_query_newneigh(AF_BRIDGE, data->name);
-	IPACMDBG_H("Query Getneigh for v4\n");
-	ipa_nl_query_newneigh(AF_INET, data->name);
-	IPACMDBG_H("Query Getneigh for v6\n");
-	ipa_nl_query_newneigh(AF_INET6, data->name);
 
 	return;
 }
@@ -2909,6 +2917,40 @@ void IPACM_Config::add_l2tp_vlan_mapping(l2tp_session_info *data)
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 
 	return;
+}
+
+void IPACM_Config::remove_l2tp_vlan_pdn_mapping()
+{
+	list<l2tp_vlan_mapping_info>::iterator it;
+	ipacm_event_route_vlan *vlan_data;
+	ipacm_cmd_q_data vlan_down_evt;
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+	for(it = m_l2tp_vlan_mapping.begin(); it != m_l2tp_vlan_mapping.end(); it++)
+	{
+		if (it->l2tp_bridge_vlan_id != 0)
+		{
+			vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+			if(vlan_data == NULL)
+			{
+				IPACMERR("Failed to allocate memory.\n");
+				pthread_mutex_unlock(&vlan_l2tp_lock);
+				return;
+			}
+			memset(vlan_data, 0, sizeof(ipacm_event_route_vlan));
+			memset(&vlan_down_evt, 0, sizeof(ipacm_cmd_q_data));
+			vlan_data->VlanID = it->l2tp_bridge_vlan_id;
+			vlan_down_evt.evt_data = vlan_data;
+			vlan_down_evt.event = IPA_ROUTE_DEL_L2TP_VLAN_EVENT;
+			IPACMDBG_H("Posting event %s with vlan_id: %d\n",
+			IPACM_Iface::ipacmcfg->getEventName(vlan_down_evt.event), vlan_data->VlanID);
+			IPACM_EvtDispatcher::PostEvt(&vlan_down_evt);
+		}
+	}
+	pthread_mutex_unlock(&vlan_l2tp_lock);
 }
 
 void IPACM_Config::del_l2tp_vlan_mapping(l2tp_session_info *data)

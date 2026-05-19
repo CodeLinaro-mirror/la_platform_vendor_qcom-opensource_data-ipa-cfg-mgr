@@ -3019,11 +3019,12 @@ void IPACM_LanToLan_Iface::del_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type)
 void IPACM_LanToLan_Iface::add_hdr_proc_ctx_double_vlan(ipa_hdr_l2_type peer_l2_type, uint16_t vlan_id, uint16_t outer_vlan_id)
 {
 	uint32_t hdr_proc_ctx_hdl[IPA_MAX_NUM_PROPS] = {0};
+	uint32_t hdr_hdl;
 
 	if (!is_entry_present_wlan_svap_hpc_hdl(vlan_id, peer_l2_type, outer_vlan_id))
 	{
-		m_p_iface->eth_bridge_add_hdr_proc_ctx(peer_l2_type, hdr_proc_ctx_hdl, vlan_id, outer_vlan_id);
-		add_wlan_svap_hpc_hdl(vlan_id, peer_l2_type, hdr_proc_ctx_hdl, outer_vlan_id);
+		m_p_iface->eth_bridge_add_hdr_proc_ctx(peer_l2_type, hdr_proc_ctx_hdl, vlan_id, outer_vlan_id, &hdr_hdl);
+		add_wlan_svap_hpc_hdl(vlan_id, peer_l2_type, hdr_proc_ctx_hdl, outer_vlan_id, hdr_hdl);
 		IPACMDBG_H("Installed inter-interface hdr proc ctx on iface %s: handle %d\n", m_p_iface->dev_name, hdr_proc_ctx_hdl);
 	}
 	return;

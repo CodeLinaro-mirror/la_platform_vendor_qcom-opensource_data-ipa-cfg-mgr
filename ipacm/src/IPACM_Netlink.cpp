@@ -1965,6 +1965,9 @@ static int ipa_nl_decode_nlmsg
 					IPACMDBG_H("RTM_NEWNEIGH received with ipv4 brodcast mac address. So Ignoring\n");
 					goto next_msg;
 				}
+
+				memset(&vlan_event, 0, sizeof(vlan_event));
+
 				if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != 0) && (msg_ptr->nl_neigh_info.master_interface_index == 0) &&
 						(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family != 0))
 				{
@@ -1981,7 +1984,7 @@ static int ipa_nl_decode_nlmsg
 				}
 				if((vlan_event.event == IPA_ADD_BRIDGE_VLAN_BR_INTF) || (vlan_event.event == IPA_ADD_BRIDGE_VLAN_PHY_INTF))
 				{
-					vlan_data = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+					vlan_data = (ipacm_event_data_all *)calloc(1, sizeof(ipacm_event_data_all));
 					if(vlan_data == NULL)
 					{
 						IPACMERR("unable to allocate memory for vlan_data\n");

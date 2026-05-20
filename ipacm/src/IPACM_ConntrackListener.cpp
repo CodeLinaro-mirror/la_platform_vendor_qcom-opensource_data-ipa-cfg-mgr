@@ -5146,13 +5146,17 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 	Ipv6ctEntry& entry) const
 {
 	IPACMDBG_H("\n");
-	struct nfct_attr_grp_ipv6 orig_params, host_params;
+	struct nfct_attr_grp_ipv6 orig_params, host_params, repl_params;
 	nfct_get_attr_grp(evt_data->ct, ATTR_GRP_ORIG_IPV6, (void *)&orig_params);
 	const Ipv6IpAddress srcAddr(orig_params.src, true), dstAddr(orig_params.dst, true);
+	nfct_get_attr_grp(evt_data->ct, ATTR_GRP_REPL_IPV6, (void *)&repl_params);
+	const Ipv6IpAddress srcAddr_repl(repl_params.src, true), dstAddr_repl(repl_params.dst, true);
 	for(int i=0; i<4; i++)
 	{
 		host_params.src[i] = ntohl(orig_params.src[i]);
 		host_params.dst[i] = ntohl(orig_params.dst[i]);
+		repl_params.src[i] = ntohl(repl_params.src[i]);
+		repl_params.dst[i] = ntohl(repl_params.dst[i]);
 	}
 
 	uint16_t srcPort = nfct_get_attr_u16(evt_data->ct, ATTR_ORIG_PORT_SRC);
@@ -5182,6 +5186,7 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 		IPACMDBG("addresses aren't global, bail\n");
 		goto bail;
 	}
+#ifdef FEATURE_IPoGRE
 	/*
 	 *  If either the source or the destination address shares
 	 * the same /64 subnet as wan_ipaddr_v6 (the rmnet_data v6 address), this
@@ -5190,13 +5195,13 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 	 */
 	if (wan_ipaddr_v6.Valid() && IPACM_Iface::ipacmcfg->ipogre_enabled == true)
 	{
-		if (wan_ipaddr_v6.IsSameSubnet(srcAddr) || wan_ipaddr_v6.IsSameSubnet(dstAddr))
+		if (wan_ipaddr_v6.IsSameSubnet(srcAddr) || wan_ipaddr_v6.IsSameSubnet(dstAddr) || wan_ipaddr_v6.IsSameSubnet(srcAddr_repl) || wan_ipaddr_v6.IsSameSubnet(dstAddr_repl))
 		{
 			IPACMDBG_H("v6 conntrack src/dst in rmnet_data v6 subnet, ignoring session\n");
 			goto bail;
 		}
 	}
-
+#endif
 	if (nat_iface_ipv6_addr.Find(srcAddr) != NULL)
 	{
 		entry.m_direction = NatEntryBase::DirectionOutbound;

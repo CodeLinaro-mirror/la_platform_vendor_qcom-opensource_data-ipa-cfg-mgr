@@ -261,8 +261,8 @@ void IPACM_LanToLan::event_callback(ipa_cm_event_id event, void* param)
 		default:
 			break;
 	}
-
-	print_data_structure_info();
+	if (g_ipacm_logs_enabled)
+		print_data_structure_info();
 	return;
 }
 
@@ -2152,7 +2152,7 @@ void IPACM_LanToLan_Iface::handle_down_event()
 				it_other_iface_peer_info != other_iface->m_peer_iface_info.end();
 				it_other_iface_peer_info++)
 			{
-				if(it_other_iface_peer_info->peer == this)	//found myself in other iface's peer info list
+				if(it_other_iface_peer_info->peer && it_other_iface_peer_info->peer == this)	//found myself in other iface's peer info list
 				{
 					IPACMDBG_H("Found the right peer info on other iface.\n");
 
@@ -2908,10 +2908,27 @@ void IPACM_LanToLan_Iface::add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type)
 
 void IPACM_LanToLan_Iface::del_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type)
 {
+	uint32_t hdr_proc_ctx_hdl;
+
+	if ((peer_l2_type >= IPA_HDR_L2_MAX) || (peer_l2_type < 0))
+	{
+		IPACMDBG_H("Invalid peer_l2_type: %d\n", peer_l2_type);
+		return;
+	}
+
 	if(ref_cnt_peer_l2_hdr_type[peer_l2_type] == 0)
 	{
-		m_p_iface->eth_bridge_del_hdr_proc_ctx(hdr_proc_ctx_for_inter_interface[peer_l2_type]);
-		IPACMDBG_H("Hdr proc ctx with hdl %d is deleted.\n", hdr_proc_ctx_for_inter_interface[peer_l2_type]);
+		hdr_proc_ctx_hdl = hdr_proc_ctx_for_inter_interface[peer_l2_type];
+		if (hdr_proc_ctx_hdl == 0)
+		{
+			IPACMDBG_H("Hdr proc ctx already cleared for peer l2 type %s.\n",
+				ipa_l2_hdr_type[peer_l2_type]);
+			return;
+		}
+
+		m_p_iface->eth_bridge_del_hdr_proc_ctx(hdr_proc_ctx_hdl);
+		hdr_proc_ctx_for_inter_interface[peer_l2_type] = 0;
+		IPACMDBG_H("Hdr proc ctx with hdl %d is deleted.\n", hdr_proc_ctx_hdl);
 	}
 	return;
 }
@@ -2947,6 +2964,8 @@ void IPACM_LanToLan_Iface::print_data_structure_info()
 	list<client_info>::iterator it_client;
 	int i, j, k;
 
+	if (g_ipacm_logs_enabled)
+		return;
 	IPACMDBG_H("\n");
 	IPACMDBG_H("Interface %s:\n", m_p_iface->dev_name);
 	IPACMDBG_H("Is IPv4 addr assigned? %d\n", m_is_ip_addr_assigned[IPA_IP_v4]);
@@ -3125,6 +3144,8 @@ void IPACM_LanToLan_Iface::print_peer_info(peer_iface_info *peer_info , bool int
 		return;
 	}
 
+	if (g_ipacm_logs_enabled)
+		return;
 	IPACMDBG_H("Printing peer info for iface %s:\n", peer_info->peer->m_p_iface->dev_name);
 
 	IPACMDBG_H("There are %zu flt info in total.\n", peer_info->flt_rule.size());

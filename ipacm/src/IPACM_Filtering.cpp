@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -353,6 +353,10 @@ bool IPACM_Filtering::AddFilteringRule(struct ipa_ioc_add_flt_rule const *ruleTa
 		{
 			IPACMERR("Adding Filter rule:%d failed with status:%d\n",
 							 cnt, ruleTable->rules[cnt].status);
+		}
+		else
+		{
+			IPACMDBG("Added Filter rule:%d with handle:%d\n", cnt, ruleTable->rules[cnt].flt_rule_hdl);
 		}
 	}
 

@@ -137,8 +137,14 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				break;
 			}
 			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, IPA_IFACE_NAME_LEN);
-			/* check if it's WAN_IF */
-			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF)
+			/* check the interface type */
+			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == UNKNOWN_IF ||
+				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WLAN_IF)
+			{
+				IPACMDBG_H("Ignoring IPA_USB_LINK_UP_EVENT event for WLAN interface: %s",
+					evt_data->iface_name);
+			}
+			else if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF)
 			{
 				/* usb-backhaul using sta_mode ECM_WAN*/
 				IPACMDBG_H("WAN-usb (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, evt_data->if_index);

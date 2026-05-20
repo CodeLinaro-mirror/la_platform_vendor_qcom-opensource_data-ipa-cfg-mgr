@@ -515,8 +515,12 @@ uint32_t IPACM_Wan::GetQCMAPhdrByName(char* pdn_name)
 
 	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 	{
-		if(strncmp(pdn_name, ipv6_to_iface[i].pIface->dev_name, sizeof(pdn_name)) == 0)
+		if(ipv6_to_iface[i].pIface && strncmp(pdn_name, ipv6_to_iface[i].pIface->dev_name, sizeof(pdn_name)) == 0)
 		{
+			if (!ipv6_to_iface[i].pIface->tx_prop) {
+				IPACMERR("couldn't find PDN tx prop %s\n", pdn_name);
+				return 0;
+			}
 			strlcpy(hdr.name, ipv6_to_iface[i].pIface->tx_prop->tx[0].hdr_name, sizeof(hdr.name));
 			hdr.name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 			if(m_header.GetHeaderHandle(&hdr) == false)
@@ -5071,7 +5075,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 					}
 				}
 	#ifdef FEATURE_IPA_V3
-				flt_rule_entry.rule.hashable = false;
+				flt_rule_entry.rule.hashable = true;
 	#endif
 				memcpy(&flt_rule_entry.rule.attrib,
 					&rx_prop->rx[idx].attrib,
@@ -5323,7 +5327,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				}
 			}
 #ifdef FEATURE_IPA_V3
-			flt_rule_entry.rule.hashable = false;
+			flt_rule_entry.rule.hashable = true;
 #endif
 			memcpy(&flt_rule_entry.rule.attrib,
 				&rx_prop->rx[idx].attrib,
@@ -8293,6 +8297,12 @@ int IPACM_Wan::handle_down_evt_ex()
 			}
 			memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 
+			if (ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt || ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt)
+			{
+				num_offloaded_pdns--;
+				IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
+			}
+
 			if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan &&
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
 			{
@@ -8327,12 +8337,6 @@ int IPACM_Wan::handle_down_evt_ex()
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
 				memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
 				ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
-			}
-
-			if (ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt || ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt)
-			{
-				num_offloaded_pdns--;
-				IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 			}
 
 			vlandown_data->VlanID = associated_VID;

@@ -173,6 +173,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_ROUTE_ADD_VLAN_PDN_EVENT),             /* ipacm_event_route_vlan */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_UP),               /* ipacm_event_vlan_pdn */
 	__stringify(IPA_HANDLE_WAN_VLAN_PDN_DOWN),             /* ipacm_event_vlan_pdn */
+	__stringify(IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC),      /* ipacm_event_vlan_pdn */
 	__stringify(IPA_NOTIFY_VLAN_UP),                       /* NULL */
 #endif
 #ifdef FEATURE_SOCKSv5
@@ -181,7 +182,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_HANDLE_SOCKSv5_DOWN),                  /* NULL */
 	__stringify(IPA_ADD_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
-	__stringify(IPA_UPDATE_SOCKSv5_CONN),                  /* NULL */
+	__stringify(IPA_UPDATE_SOCKSv5_v6_CONN),               /* NULL */
 #endif
 	__stringify(IPA_MAC_ADD_DEL_FLT_EVENT),                /* ipacm_event_data_mac */
 	__stringify(IPA_IP_COLLISION_UPDATE_EVENT),          /* ipacm_ip_collision_pdn_info */
@@ -213,14 +214,25 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_HANDLE_IPSEC_UL_FLT_DEL),              /* Handle IPsec UL policy flt delete */
 	__stringify(IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT),     /* Internal event for a new LAN client route */
 #endif
+#ifdef FEATURE_STATIC_POLICY
+	__stringify(IPA_PDN_DSCP_UPDATE_EVENT),                /* ipacm_event_pdn_dscp_info */
+	__stringify(IPA_PDN_MUX_ID_UPDATE),                    /* ipacm_event_pdn_mux_info */
+#endif
 	__stringify(IPA_QOS_RULE_ADD_EVENT),                   /* ipacm_qos_rule_add_event */
 	__stringify(IPA_QOS_RULE_DEL_EVENT),                   /* ipacm_qos_rule_del_event */
 	__stringify(IPA_QOS_RULE_FLUSH_EVENT),                 /* ipacm_qos_rule_flush_event */
+	__stringify(IPA_HANDLE_NEW_NEIGH_EVENT),               /* ipacm_event_data_fid */
 	__stringify(IPACM_EVENT_MAX)
 };
 
 IPACM_Config::IPACM_Config()
 {
+	size_t event_name_count = sizeof(ipacm_event_name) / sizeof(ipacm_event_name[0]);
+	if (event_name_count != (size_t)(IPACM_EVENT_MAX + 1))
+	{
+		IPACMERR("Event name array mismatch at startup! entries=%zu expected=%d\n",
+			event_name_count, IPACM_EVENT_MAX + 1);
+	}
 	iface_table = NULL;
 	alg_table = NULL;
 	pNatIfaces = NULL;

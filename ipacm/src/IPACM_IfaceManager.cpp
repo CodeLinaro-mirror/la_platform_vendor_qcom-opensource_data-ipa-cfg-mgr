@@ -692,10 +692,16 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						if(param->is_ppp_iface &&
 							IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
 						{
-							if(IPACM_Iface::ipacmcfg->get_pppoe_vlan_id(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
-								&sta_vlan_id))
+							if (IPACM_Iface::ipacmcfg->check_eth_wan_br_wan_enable() == false)
 							{
-								IPACMERR("failed to get iface vlan ID\n");
+								if(IPACM_Iface::ipacmcfg->get_pppoe_vlan_id(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, &sta_vlan_id))
+								{
+									IPACMERR("failed to get iface vlan ID\n");
+								}
+							}
+							else
+							{
+								IPACM_Iface::ipacmcfg->get_pppoe_vlan_id_proc(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, &sta_vlan_id);
 							}
 							IPACMDBG_H("Update PPPoE config even if ioctl received or not: pppoe_dev_name: %s phy_dev_name:%s vlan_id: %d \n",
 								IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,

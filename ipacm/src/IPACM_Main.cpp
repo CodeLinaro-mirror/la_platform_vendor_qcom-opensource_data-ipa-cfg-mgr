@@ -1657,17 +1657,26 @@ void* ipa_driver_msg_notifier(void *param)
 				"vlan_id: %d pppoe_dev_name: %s enable: %d\n",
 				pppoe_info->dev_name, pppoe_info->vlan_id, pppoe_info->pppoe_dev_name,
 				pppoe_info->add);
-			if(pppoe_info->add)
+
+			if (IPACM_Iface::ipacmcfg->check_eth_wan_br_wan_enable() == false)
 			{
-				IPACM_Iface::ipacmcfg->pppoe_config_update(pppoe_info, pppoe_info->add, 0, NULL);
-				IPACM_Iface::ipacmcfg->get_pppoe_session_info(pppoe_info->pppoe_dev_name, pppoe_info->dev_name, pppoe_info->vlan_id);
-				IPACMDBG_H("Got ppp pdn config, Get Routes for v4 and v6\n");
-				ipa_nl_send_getroute(IPA_IP_v4);
-				ipa_nl_send_getroute(IPA_IP_v6);
+				IPACMDBG_H("Ignoring  IPA_PPPOE_ADD_MAPPING_EVENT evt.\n");
+				continue;
 			}
-			else if(!pppoe_info->add)
+			else
 			{
-				IPACM_Iface::ipacmcfg->pppoe_config_update(pppoe_info, pppoe_info->add, 0, NULL);
+				if (pppoe_info->add)
+				{
+					IPACM_Iface::ipacmcfg->pppoe_config_update(pppoe_info, pppoe_info->add, 0, NULL);
+					IPACM_Iface::ipacmcfg->get_pppoe_session_info(pppoe_info->pppoe_dev_name, pppoe_info->dev_name, pppoe_info->vlan_id);
+					IPACMDBG_H("Got ppp pdn config, Get Routes for v4 and v6\n");
+					ipa_nl_send_getroute(IPA_IP_v4);
+					ipa_nl_send_getroute(IPA_IP_v6);
+				}
+				else if (!pppoe_info->add)
+				{
+					IPACM_Iface::ipacmcfg->pppoe_config_update(pppoe_info, pppoe_info->add, 0, NULL);
+				}
 			}
 			continue;
 #endif

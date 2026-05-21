@@ -437,7 +437,14 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 #ifdef FEATURE_PPPOE
 	if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && is_ppp_iface)
 	{
-		IPACM_Iface::ipacmcfg->get_pppoe_vlan_id(dev_name, &sta_vlan_id);
+		if (IPACM_Iface::ipacmcfg->check_eth_wan_br_wan_enable() == false)
+		{
+			IPACM_Iface::ipacmcfg->get_pppoe_vlan_id_proc(dev_name, &sta_vlan_id);
+		}
+		else
+		{
+			IPACM_Iface::ipacmcfg->get_pppoe_vlan_id(dev_name, &sta_vlan_id);
+		}
 	}
 #endif
 	if(IPACM_Iface::ipacmcfg->get_vlan_id(dev_name, &sta_vlan_id))
@@ -3002,18 +3009,32 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_PPPOE
 				if(is_ppp_iface)
 				{
-					if((indx = IPACM_Iface::ipacmcfg->get_pppoe_indx(dev_name)) != IPACM_FAILURE)
+					if (IPACM_Iface::ipacmcfg->check_eth_wan_br_wan_enable() == false)
 					{
-						IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT in STA mode for indx (%d) of dev_name %s\n",
-							indx, dev_name);
-						memcpy(data->mac_addr,
-							IPACM_Iface::ipacmcfg->pppoe_mpdn_table[indx].mac_addr,
-							sizeof(IPACM_Iface::ipacmcfg->pppoe_mpdn_table[indx].mac_addr));
+						if (IPACM_Iface::ipacmcfg->get_mac_name_from_proc(dev_name, data->mac_addr) != IPACM_SUCCESS)
+						{
+							IPACMERR("Failed to get associated pppoe mac for wan dev name %s\n", dev_name);
+							return;
+						}
+						IPACMDBG_H("PPPoE Dev %s has MAC address: %02x:%02x:%02x:%02x:%02x:%02x\n",
+							dev_name, data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+							data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
 					}
 					else
 					{
-						IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT in STA mode (%d)\n", m_is_sta_mode);
-						return;
+						if((indx = IPACM_Iface::ipacmcfg->get_pppoe_indx(dev_name)) != IPACM_FAILURE)
+						{
+							IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT in STA mode for indx (%d) of dev_name %s\n",
+									indx, dev_name);
+							memcpy(data->mac_addr,
+									IPACM_Iface::ipacmcfg->pppoe_mpdn_table[indx].mac_addr,
+									sizeof(IPACM_Iface::ipacmcfg->pppoe_mpdn_table[indx].mac_addr));
+						}
+						else
+						{
+							IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT in STA mode (%d)\n", m_is_sta_mode);
+							return;
+						}
 					}
 				}
 #endif
@@ -11777,7 +11798,11 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 									/*Non-VLAN PPPoE*/
 									if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true && is_ppp_iface)
 									{
-										session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+										if (IPACM_Iface::ipacmcfg->check_eth_wan_br_wan_enable() == false)
+											session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id_from_proc(dev_name, sta_vlan_id);
+										else
+											session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+
 										IPACMDBG_H("WAN %s has session_id: %x\n", dev_name, session_id);
 										sCopyHeader.hdr_len = 22;
 										pHeaderDescriptor->hdr[0].hdr[12] = (PPPOE_SESSION_ETH_TYPE >> 8) & 0xFF;
@@ -11812,7 +11837,11 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 											/*PPPoE*/
 											if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true && is_ppp_iface)
 											{
-												session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+												if (IPACM_Iface::ipacmcfg->check_eth_wan_br_wan_enable() == false)
+													session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id_from_proc(dev_name, sta_vlan_id);
+												else
+													session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+
 												IPACMDBG_H("WAN %s has session_id: %x\n", dev_name, session_id);
 												sCopyHeader.hdr_len = 26;
 												pHeaderDescriptor->hdr[0].hdr[16] = (PPPOE_SESSION_ETH_TYPE >> 8) & 0xFF;
@@ -11945,7 +11974,11 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 					/*Non-VLAN PPPoE*/
 					if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true && is_ppp_iface)
 					{
-						session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+						if (IPACM_Iface::ipacmcfg->check_eth_wan_br_wan_enable() == false)
+							session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id_from_proc(dev_name, sta_vlan_id);
+						else
+							session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+
 						IPACMDBG_H("WAN %s has session_id: %x\n", dev_name, session_id);
 						sCopyHeader.hdr_len = 22;
 						pHeaderDescriptor->hdr[0].hdr[12] = (PPPOE_SESSION_ETH_TYPE >> 8) & 0xFF;
@@ -11979,7 +12012,11 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 						/*PPPoE*/
 						if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true && is_ppp_iface)
 						{
-							session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+							if (IPACM_Iface::ipacmcfg->check_eth_wan_br_wan_enable() == false)
+								session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id_from_proc(dev_name, sta_vlan_id);
+							else
+								session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+
 							IPACMDBG_H("WAN %s has session_id: %x\n", dev_name, session_id);
 							sCopyHeader.hdr_len = 26;
 							pHeaderDescriptor->hdr[0].hdr[16] = (PPPOE_SESSION_ETH_TYPE >> 8) & 0xFF;

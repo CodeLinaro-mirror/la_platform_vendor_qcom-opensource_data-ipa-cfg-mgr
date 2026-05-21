@@ -92,7 +92,7 @@ typedef struct _ipa_rm_client
 #ifdef FEATURE_PPPOE
 #define IPA_PPPOE_TABLE IPA_TMP_DIR"/ipa_pppoe_table.txt"
 #define MAX_PPPOE_ROW_LEN 200
-#define MAX_PPPOE_PARAM_CNT 3
+#define MAX_PPPOE_PARAM_CNT 4
 #define MAX_PPPOE_PARAM_LEN 50
 #define IPA_SYS_CMD_LEN 200
 #endif
@@ -764,12 +764,22 @@ public:
 
 #ifdef FEATURE_PPPOE
 	uint16_t pppoe_get_session_id(const char *pppoe_dev_name);
+	uint16_t pppoe_get_session_id_from_proc(const char *ppp_dev_name, uint16_t vlan_id);
+	int get_mac_name_from_proc(const char *p_dev_name, uint8_t *mac_addr);
 	void get_pppoe_session_info(const char *pppoe_dev_name, const char *phy_dev_name = NULL, uint16_t vlan_id = 0);
 	void update_pppoe_session_info(const char *pppoe_dev_name, char *params[MAX_PPPOE_PARAM_CNT]);
 	int get_pppoe_vlan_pcp( uint16_t *vlan_id, uint8_t *pcp);
 	int get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id);
+	int get_pppoe_vlan_id_proc(const char *ppp_dev_name, uint16_t *vlan_id);
+	int get_phy_name_from_proc(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN]);
 	int get_pppoe_indx(char *pppoe_dev_name);
 	int get_phy_name_from_bridge_iface(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN]);
+	/* Check if eth_wan_br_wan_enable is set by reading /proc/net/pppoe.
+	 * Scans all PPPoE sessions; if any session's device field contains
+	 * "br-wanpppoe", sets eth_wan_br_wan_enable = true and returns true.
+	 * Returns false if no br-wan PPPoE session is found.
+	 */
+	bool check_eth_wan_br_wan_enable(void);
 #endif
 	bool is_svap_related(const char *phy_inf);
 

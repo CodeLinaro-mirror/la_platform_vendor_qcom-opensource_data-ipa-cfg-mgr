@@ -5371,6 +5371,57 @@ void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name, const char
 	fclose(fp);
 }
 
+bool IPACM_Config::check_eth_wan_br_wan_enable(void)
+{
+	FILE *fp = NULL;
+	char *tok = NULL, *ptr = NULL;
+	char *params[MAX_PPPOE_PARAM_CNT] = { NULL };
+	char pppoe_row[MAX_PPPOE_ROW_LEN] = {0}, cmd_pppoe_row[MAX_PPPOE_ROW_LEN] = {0};
+	int i;
+
+	fp = fopen("/proc/net/pppoe", "r");
+	if (fp == NULL)
+	{
+		IPACMERR("can't open /proc/net/pppoe\n");
+		return false;
+	}
+
+	while (fgets(pppoe_row, MAX_PPPOE_ROW_LEN, fp) != NULL)
+	{
+		snprintf(cmd_pppoe_row, MAX_PPPOE_ROW_LEN, "Id");
+		if (strstr(pppoe_row,cmd_pppoe_row))
+		{
+			continue;
+		}
+
+		/*parse the fdb entry*/
+		tok = strtok_r(pppoe_row, " ", &ptr);
+		for (i = 0; (tok != NULL) && i < MAX_PPPOE_PARAM_CNT; ++i )
+		{
+			params[i] = tok;
+			tok = strtok_r(NULL, " ", &ptr);
+		}
+
+		char *dev_name = params[2];
+		if (dev_name == NULL)
+		{
+			IPACMERR("Invalid dev_name parameter, continue.\n");
+			continue;
+		}
+
+		if (strstr(dev_name, "br-wanpppoe"))
+		{
+			IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable = true;
+			IPACMDBG_H("Got session info for %s br-wan enabled %d\n", dev_name, IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
+			fclose(fp);
+			return true;
+		}
+	}
+	IPACMDBG_H("Got session but br-wan enabled %d\n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
+	fclose(fp);
+	return false;
+}
+
 void IPACM_Config::update_pppoe_session_info(const char *pppoe_dev_name, char *params[MAX_PPPOE_PARAM_CNT])
 {
 	char *end_ptr = NULL, *is_vlan = NULL, *copy_param = NULL, *phy_name = NULL, *ptr = NULL;
@@ -5480,13 +5531,14 @@ int IPACM_Config::get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id)
 			sizeof(pppoe_mpdn_table[i].pppoe_dev_name)) == 0)
 		{
 			IPACMDBG_H("Found pppoe iface in pppoe list: %s with vlan id: %d\n",
-				pppoe_mpdn_table[i].pppoe_dev_name);
+				pppoe_mpdn_table[i].pppoe_dev_name, pppoe_mpdn_table[i].vlan_id);
 			*vlan_id = pppoe_mpdn_table[i].vlan_id;
 			ret = IPACM_SUCCESS;
 			break;
 		}
 	}
-
+	if (ret != IPACM_SUCCESS)
+		IPACMERR("No VLAN found in /proc/net/pppoe for %s\n", pppoe_dev_name);
 	pthread_mutex_unlock(&pppoe_map_lock);
 
 	return ret;
@@ -5544,6 +5596,183 @@ int IPACM_Config::get_pppoe_indx(char *pppoe_dev_name)
 	pthread_mutex_unlock(&pppoe_map_lock);
 
 	return ret;
+}
+
+int IPACM_Config::get_phy_name_from_proc(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN])
+{
+	FILE *fp = NULL;
+	char line[256], session_id[32], mac[32], phy_device[32], ppp_dev[32];
+
+	if (p_dev_name == NULL || phy_name == NULL)
+	{
+		IPACMERR("Null argument passed\n");
+		return IPACM_FAILURE;
+	}
+
+	fp = fopen("/proc/net/pppoe", "r");
+	if (!fp)
+	{
+		IPACMERR("Failed to open /proc/net/pppoe\n");
+		return IPACM_FAILURE;
+	}
+	/* Skip header line */
+	if (fgets(line, sizeof(line), fp) == NULL)
+	{
+		fclose(fp);
+		return IPACM_FAILURE;
+	}
+
+	while (fgets(line, sizeof(line), fp))
+	{
+		/* Fields: Id(hex)  MAC(xx:xx:xx:xx:xx:xx)  Device  PPP-Device */
+		if (sscanf(line, "%15s %17s %15s %15s", session_id, mac, phy_device, ppp_dev) != 4)
+			continue;
+		if (strcmp(ppp_dev, p_dev_name) == 0)
+		{
+			char *dot = strchr(phy_device, '.');
+			if (dot)
+				*dot = '\0';
+			IPACMDBG_H("PPPoE dev %s phy name found %s\n", p_dev_name, phy_device);
+			strlcpy(phy_name, phy_device, ETH_PHY_IFACE_LEN);
+			fclose(fp);
+			return IPACM_SUCCESS;
+		}
+	}
+	IPACMERR("PPPoE devname %s not found\n", p_dev_name);
+	fclose(fp);
+	return IPACM_FAILURE;
+}
+
+int IPACM_Config::get_pppoe_vlan_id_proc(const char *ppp_dev_name, uint16_t *vlan_id)
+{
+	FILE *fp = NULL;
+	char line[MAX_LINE_LEN];
+	char session_id[32], mac[32], phy_device[32], ppp_dev[32];
+
+	if (ppp_dev_name == NULL || vlan_id == NULL)
+	{
+		IPACMERR("Null argument passed\n");
+		return IPACM_FAILURE;
+	}
+
+	fp = fopen("/proc/net/pppoe", "r");
+	if (fp == NULL)
+	{
+		IPACMERR("Failed to open /proc/net/pppoe\n");
+		return IPACM_FAILURE;
+	}
+
+	/* skip header line */
+	if (fgets(line, sizeof(line), fp) == NULL)
+	{
+		fclose(fp);
+		return IPACM_FAILURE;
+	}
+
+	while (fgets(line, sizeof(line), fp))
+	{
+		/* Fields: Id(hex)  MAC(xx:xx:xx:xx:xx:xx)  Device  PPP-Device */
+		if (sscanf(line, "%15s %17s %15s %15s", session_id, mac, phy_device, ppp_dev) != 4)
+			continue;
+		if (strcmp(ppp_dev, ppp_dev_name) == 0)
+		{
+			char *dot = strchr(phy_device, '.');
+			if (dot)
+			{
+				*vlan_id = (uint16_t)atoi(dot + 1);
+				IPACMDBG_H("PPPoE dev %s -> phy %s -> VLAN ID %d\n",
+					ppp_dev_name, phy_device, *vlan_id);
+				fclose(fp);
+				return IPACM_SUCCESS;
+			}
+		}
+	}
+	fclose(fp);
+
+	IPACMDBG_H("No VLAN found in /proc/net/pppoe for %s\n", ppp_dev_name);
+	return IPACM_FAILURE;
+}
+
+uint16_t IPACM_Config::pppoe_get_session_id_from_proc(const char *ppp_dev_name, uint16_t vlan_id)
+{
+FILE *fp = NULL;
+		char line[256], session_id[32], mac[32], device[32], ppp_dev[32];
+		if(!ppp_dev_name)
+			return 0;
+
+		fp = fopen("/proc/net/pppoe", "r");
+		if (!fp)
+		{
+			IPACMERR("Failed to open %s\n", "/proc/net/pppoe");
+			return 0;
+    }
+		/* Skip header line */
+		fgets(line, sizeof(line), fp);
+		while (fgets(line, sizeof(line), fp))
+		{
+			 /* Fields: Id(hex)  MAC(xx:xx:xx:xx:xx:xx)  Device  PPP-Device */
+			if (sscanf(line, "%15s %17s %15s %15s", session_id, mac, device, ppp_dev) != 4)
+					continue;
+			if (strcmp(ppp_dev, ppp_dev_name) == 0)
+			{
+				uint16_t id = (uint16_t)strtol(session_id, NULL, 16);
+				IPACMDBG("PPPOE dev %s session_id found %d\n",
+						ppp_dev_name, id);
+				fclose(fp);
+				return id;
+			}
+		}
+		IPACMERR("PPPoe devname %s not found\n", ppp_dev_name);
+		fclose(fp);
+		return 0;
+}
+
+int IPACM_Config::get_mac_name_from_proc(const char *p_dev_name, uint8_t *mac_addr)
+{
+FILE *fp = NULL;
+	char line[256], session_id[32], mac[32], phy_device[32], ppp_dev[32];
+	int tmp_var[IPA_MAC_ADDR_SIZE];
+
+	fp = fopen("/proc/net/pppoe", "r");
+	if (!fp)
+	{
+		IPACMERR("Failed to open %s\n", "/proc/net/pppoe");
+		return IPACM_FAILURE;
+	}
+	/* Skip header line */
+	fgets(line, sizeof(line), fp);
+
+	while (fgets(line, sizeof(line), fp))
+	{
+			/* Fields: Id(hex)  MAC(xx:xx:xx:xx:xx:xx)  Device  PPP-Device */
+		if (sscanf(line, "%15s %17s %15s %15s", session_id, mac, phy_device, ppp_dev) != 4)
+				continue;
+			if (strcmp(ppp_dev, p_dev_name) == 0)
+			{
+				if( IPA_MAC_ADDR_SIZE != sscanf( mac, "%x:%x:%x:%x:%x:%x%*c",
+					&tmp_var[0], &tmp_var[1], &tmp_var[2],
+					&tmp_var[3], &tmp_var[4], &tmp_var[5] ) )
+				{
+					IPACMERR("couldnt parse the mac address\n");
+					fclose(fp);
+					return IPACM_FAILURE;
+				}
+				else
+				{
+					for (int j = 0 ; j < IPA_MAC_ADDR_SIZE; j++)
+					{
+						mac_addr[j] = (uint8_t)tmp_var[j];
+					}
+				}
+				IPACMDBG("PPPOE dev %s mac name found %s\n",
+						ppp_dev, mac);
+				fclose(fp);
+				return IPACM_SUCCESS;
+			}
+	}
+	IPACMERR("PPPoe devname %s not found\n", ppp_dev);
+	fclose(fp);
+	return IPACM_FAILURE;
 }
 
 int IPACM_Config::get_phy_name_from_bridge_iface(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN])

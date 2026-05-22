@@ -169,7 +169,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("WLAN AP (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
 				ifmgr_data.if_index = evt_data->if_index;
 				ifmgr_data.if_type = Q6_WAN;
-
+				ifmgr_data.mlo_enabled = evt_data->mlo_enabled;
 				strlcpy(ifmgr_data.iface_name, evt_data->iface_name, sizeof(ifmgr_data.iface_name));
 				create_iface_instance(&ifmgr_data);
 			}
@@ -179,7 +179,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 					evt_data->iface_name,evt_data->if_index,ipa_interface_index);
 				ifmgr_data.if_index = evt_data->if_index;
 				ifmgr_data.if_type = Q6_WAN;
-
+				ifmgr_data.mlo_enabled = evt_data->mlo_enabled;
 				strlcpy(ifmgr_data.iface_name, evt_data->iface_name, sizeof(ifmgr_data.iface_name));
 				create_iface_instance(&ifmgr_data);
 			}
@@ -486,6 +486,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					wl->delete_iface();
 					return IPACM_FAILURE;
 				}
+				/* For MLO per-link ifaces (e.g. wlan0_0/wlan0_1), set the MLO fields now
+				 * that construction and property query are validated. */
+				if (param->mlo_enabled)
+					wl->set_mlo_link(param->iface_name);
 				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, wl);
 #ifdef FEATURE_IPv6CT_DISABLED
                                 IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, wl);			// register for Firewall change event

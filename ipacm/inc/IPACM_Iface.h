@@ -96,6 +96,18 @@ public:
 	/* IPACM Device type. */
 	ipacm_per_client_device_type device_type;
 
+	/* Per-link name for MLO links (e.g. wlan0_0/wlan0_1); empty for non-MLO */
+	const char* get_mlo_link_name() const { return mlo_link_name; }
+	/* Returns true only for MLO per-link WLAN ifaces */
+	bool get_is_mlo_link() const
+	{
+		IPACMDBG_H("get_is_mlo_link: iface %s mlo_link_name %s is_mlo_link %d\n",
+			dev_name, mlo_link_name, is_mlo_link);
+		return is_mlo_link;
+	}
+	/* Configure MLO per-link fields after construction; called from IfaceManager */
+	void set_mlo_link(const char *link_name);
+
 	/* IPACM interface iptype v4, v6 or both */
 	ipa_ip_type ip_type;
 
@@ -166,6 +178,11 @@ protected:
 private:
 
 	static const char *DEVICE_NAME;
+
+	/* Per-link name for MLO (e.g. wlan0_0/wlan0_1); empty for non-MLO. Set via set_mlo_link(). */
+	char mlo_link_name[IF_NAME_LEN];
+	/* True only for MLO per-link WLAN ifaces (wlan0_0/wlan0_1). Set via set_mlo_link(). */
+	bool is_mlo_link;
 };
 
 #endif /* IPACM_IFACE_H */

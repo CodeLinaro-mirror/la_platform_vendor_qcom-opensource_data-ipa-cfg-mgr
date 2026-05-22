@@ -77,15 +77,22 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index)
 	tx_prop = NULL;
 	rx_prop = NULL;
 
+	/* Original logic: for wlan ifaces use the passed iface_name (e.g. wlan0_0 for MLO)
+	 * so query_iface_property() queries the correct per-link endpoint properties. */
 	if((iface_name != NULL) && (strstr(iface_name, "wlan")))
 	{
-		memcpy(dev_name, iface_name, sizeof(iface_name));
+		memcpy(dev_name, iface_name, sizeof(dev_name));
 	}
 	else
 	{
 		memcpy(dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name,
 		sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].iface_name));
 	}
+
+	/* MLO fields — initialised to defaults here; set_mlo_link() configures them
+	 * after construction if this is an MLO per-link interface. */
+	memset(mlo_link_name, 0, sizeof(mlo_link_name));
+	is_mlo_link = false;
 
 	if (virtualIface = IPACM_Iface::ipacmcfg->iface_table[iface_index].virtualIface)
 	{
@@ -108,6 +115,19 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index)
 	query_iface_property();
 	IPACMDBG_H(" create iface-index(%d) constructor\n", ipa_if_num);
 	return;
+}
+
+/* Set MLO per-link fields after construction is complete and validated.
+ * Restores dev_name to the logical base name and saves the per-link name. */
+void IPACM_Iface::set_mlo_link(const char *link_name)
+{
+	is_mlo_link = true;
+	strlcpy(mlo_link_name, link_name, sizeof(mlo_link_name));
+	/* Restore dev_name to the base interface name (e.g. "wlan0") from iface_table */
+	strlcpy(dev_name,
+	        IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name,
+	        sizeof(dev_name));
+	IPACMDBG_H("set_mlo_link: dev_name=%s mlo_link_name=%s\n", dev_name, mlo_link_name);
 }
 
 /* software routing enable */
@@ -622,12 +642,18 @@ int IPACM_Iface::query_iface_property(void)
 		close(fd);
 		return IPACM_FAILURE;
 	}
-	IPACMDBG_H("iface name %s\n", dev_name);
+	IPACMDBG_H("iface name %s mlo_link_name %s\n", dev_name, mlo_link_name[0] ? mlo_link_name : "N/A");
 	if(virtualIface)
 	{
 		IPACMDBG_H("phy name %s\n", physDevName);
 		queriedName = physDevName;
 		queriedNameSize = sizeof(physDevName);
+	}
+	else if(is_mlo_link)
+	{
+		/* MLO link: driver registers tx/rx props under the per-link name (e.g. wlan0_0) */
+		queriedName = mlo_link_name;
+		queriedNameSize = sizeof(mlo_link_name);
 	}
 	else
 	{

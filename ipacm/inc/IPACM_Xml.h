@@ -270,6 +270,11 @@ if (!(a)) {                                                 \
 #define Multi_Vlan_Bridge_Config_TAG         "MultiVlanBridgeConfig"
 #define Multi_Vlan_Bridge_Config_Enable      "MultiVlanOnBridgeEnable"
 
+// Tunnel Config entries
+#define PMIPv6_Enabled_TAG                   "PMIPV6Enable"
+#define PMIPv6_TAG                           "PMIPV6"
+
+
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -326,7 +331,10 @@ typedef struct
 #endif
 } IPACM_extd_firewall_entry_conf_t;
 
-
+typedef struct
+{
+	uint8_t pmipv6_enable;
+}IPACM_tunnel_conf_t;
 /*---------------------------------------------------------------------------
            Extended FireWall configuration.
 ---------------------------------------------------------------------------*/
@@ -464,5 +472,6 @@ int IPACM_read_firewall_xml
 	IPACM_firewall_t &firewall_config            /* Mobile AP firewall config data */
 );
 int IPACM_read_firewall_xml(const char *xml_file, IPACM_firewall_conf_t &default_pdn_firewall_config);
+int IPACM_read_tunnel_xml(const char *xml_file, IPACM_tunnel_conf_t* tunnel_cfg);
 
 #endif //IPACM_XML

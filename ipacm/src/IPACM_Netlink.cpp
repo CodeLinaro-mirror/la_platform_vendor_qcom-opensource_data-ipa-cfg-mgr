@@ -1355,6 +1355,7 @@ static int ipa_nl_decode_nlmsg
 										}
 									else
 									{
+										IPACM_Iface::ipacmcfg->rgip_ip = queried_ip;
 										*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip;
 										memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
 										rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
@@ -1788,9 +1789,7 @@ static int ipa_nl_decode_nlmsg
 						}
 						else {
 							IPACMDBG_H("RGIP iface %s addr add, post IPA_HANDLE_RGIP_UP\n", dev_name);
-							ipacm_cmd_q_data rgip_evt_data;
-							uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
-							if(rgip_v4 == NULL)
+							if(data_addr->ipv4_addr >> 24 == DUMMY_RGIP_ADDRESS)
 							{
 								IPACMDBG_H("RGIP iface %s got dummy IP 0x%x (169.x.x.x), "
 										"skip IPA_HANDLE_RGIP_UP and rgip_ip update\n",
@@ -1798,6 +1797,7 @@ static int ipa_nl_decode_nlmsg
 
 								IPACMDBG_H("RGIP iface %s link up, post IPA_HANDLE_RGIP_UP with stored ip 0x%x\n",
 									dev_name, IPACM_Iface::ipacmcfg->rgip_ip_ippt);
+								IPACM_Iface::ipacmcfg->rgip_ip = IPACM_Iface::ipacmcfg->rgip_ip_ippt;
 								ipacm_cmd_q_data rgip_evt_data;
 								uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
 								if(rgip_v4 == NULL)

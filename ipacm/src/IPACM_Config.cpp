@@ -289,6 +289,7 @@ IPACM_Config::IPACM_Config()
 	num_no_offload_ipv6_prefix = 0;
 	memset(rgip_iface_name, 0, sizeof(rgip_iface_name));
 	rgip_ip = 0;
+	rgip_ip_ippt = 0;
 	memset(ipa_ipv6_prefixes, 0, sizeof(ipa_ipv6_prefixes));
 	memset(ipa_no_offload_ipv6_prefixes, 0, sizeof(ipa_no_offload_ipv6_prefixes));
 	memset(vlan_bridges, 0, IPA_MAX_NUM_BRIDGES * sizeof(vlan_bridges[0]));

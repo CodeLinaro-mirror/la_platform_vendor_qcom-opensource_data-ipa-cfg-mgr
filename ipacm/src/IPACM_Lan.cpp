@@ -941,7 +941,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						gre_up(true);
 					}
 #endif
-#ifdef FEATURE_IPOGRE
+#ifdef FEATURE_IPoGRE
 					if(IPACM_Iface::ipacmcfg->ipogre_enabled)
 					{
 						IPACMDBG_H(
@@ -12593,7 +12593,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		return IPACM_SUCCESS;
 	}
 
-#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 
 	ipa_ipgre_info ipgre_info;
 	bool compatible_gre;
@@ -12765,7 +12765,11 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			bool wan_odu_bridge = (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode());
 			/* When IPoGRE is enabled with v6 iptype, v4 rules are for outside-tunnel traffic.
 			 * These must use IPA_PASS_TO_ROUTING since NAT is handled in the first pass. */
+#ifdef FEATURE_IPoGRE
 			bool ipogre_v6_tunnel = (is_ipogre && IPACM_Iface::ipacmcfg->ipogre_enabled && ipgre_info.iptype == IPA_IP_v6);
+#else
+			bool ipogre_v6_tunnel = false;
+#endif
 
 			if (wan_odu_bridge || compatible_gre || IPACM_Iface::ipacmcfg->is_public_ip_support_enabled || ipogre_v6_tunnel) {
 				IPACMDBG_H(
@@ -12909,7 +12913,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			}
 #endif
 
-#ifdef FEATURE_EoGRE  || defined(FEATURE_PMIPV6)
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 			if (compatible_gre)
 			{
 				ipa_ioc_generate_flt_eq flt_eq;
@@ -16317,8 +16321,8 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 			IPACMDBG_H("total %d MTU rules are needed\n", mtu_rule_cnt);
 		}
 
-#ifdef FEATURE_EoGRE  || defined(FEATURE_PMIPV6)
-		IPACMDBG("pmipv6 = %d\n", IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled);	
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
+		IPACMDBG("pmipv6 = %d\n", IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled);
 		/* if in GRE mode, also query MTU since WanUP flag is false but WAN is up */
 		if (IPACM_Iface::ipacmcfg->eogre_enabled || IPACM_Iface::ipacmcfg->ipogre_enabled) {
 			/* re-calculate the ipv4 mtu based on GRE tunnel type*/
@@ -16480,7 +16484,7 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 			}
 		}
 
-#ifdef FEATURE_EoGRE || defined(FEATURE_PMIPV6)
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 		//Case where eogre is enabled for opposite iptype. Need to install MTU rule with no subnets
 		if (IPACM_Iface::ipacmcfg->ipa_num_private_subnet == 0 && IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6) {
 			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[0])) IPACMERR("Failed to modify MTU filtering rule.\n");
@@ -16681,7 +16685,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 	}
 #endif
 
-#ifdef FEATURE_EoGRE || defined(FEATURE_PMIPV6)
+#ifdef FEATURE_EoGRE || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 		/* if in GRE mode, also query MTU since WANup_v6 flag is false but WANv6 is up*/
 		if (IPACM_Iface::ipacmcfg->eogre_enabled || IPACM_Iface::ipacmcfg->ipogre_enabled)
 		{
@@ -16874,7 +16878,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 		}
 
-#ifdef FEATURE_EoGRE | defined(FEATURE_PMIPV6)
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 		//Case where eogre is enabled for opposite iptype. Need to install MTU rule with no prefixes
 		if (IPACM_Iface::ipacmcfg->num_ipv6_prefixes == 0 && IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4) {
 			memcpy(
@@ -21036,6 +21040,7 @@ int IPACM_Lan::delete_icmp_filter_rule(
 {
 	int idx = 0;
 	int j = 0;
+	uint32_t *icmp_flt_rule_hdl;
 	if ( ! VALID_IPA_IP_TYPE(iptype) )
 	{
 		IPACMERR("Bad iptype(%u)\n", iptype);
@@ -21070,40 +21075,57 @@ int IPACM_Lan::delete_icmp_filter_rule(
 		}
 
 		if (iptype == IPA_IP_v4) {
-			if (ipv4_icmp_flt_rule_hdl[j][0]) {
-				IPACMDBG_H("Attempting to delete v4 icmp filter rule.\n");
+			// assign handle array always, since it's statically allocated
+			icmp_flt_rule_hdl = ipv4_icmp_flt_rule_hdl[j];
+			IPACMDBG_H("Will try to delete icmp handle %d\n", icmp_flt_rule_hdl[0]);
+			// check for valid handle before use
+			if (icmp_flt_rule_hdl == NULL || icmp_flt_rule_hdl[0] == 0) {
+				IPACMERR("NULL v4 icmp filter rule hdl passed or, rules deleted already...\n");
+				return IPACM_SUCCESS;
+			}
 
-				if (m_filtering.DeleteFilteringHdls(
-						ipv4_icmp_flt_rule_hdl[j], IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE) == true) {
-					IPACMDBG_H("Deleted v4 icmp filter rule successfully.\n");
-					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-						rx_prop->rx[idx].src_pipe, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE);
-					memset(
-						ipv4_icmp_flt_rule_hdl[j],
-						0,
-						sizeof(uint32_t) * NUM_IPV4_ICMP_FLT_RULE);
-				} else {
-					IPACMERR("Error deleting v4 icmp filter rule...\n");
-					return IPACM_FAILURE;
-				}
+			IPACMDBG_H("Attempting to delete v4 icmp filter rule.\n");
+
+			if (m_filtering.DeleteFilteringHdls(
+					ipv4_icmp_flt_rule_hdl[j], IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE) == true) {
+				IPACMDBG_H("Deleted v4 icmp filter rule successfully.\n");
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
+					rx_prop->rx[idx].src_pipe, IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE);
+				memset(
+					icmp_flt_rule_hdl,
+					0,
+					sizeof(uint32_t) * NUM_IPV4_ICMP_FLT_RULE);
+				ipv4_icmp_flt_rule_hdl[j][0] = 0;
+			} else {
+				IPACMERR("Error deleting v4 icmp filter rule...\n");
+				return IPACM_FAILURE;
 			}
 		} else { /* iptype == IPA_IP_v6 */
-			if (ipv6_icmp_flt_rule_hdl[j][0]) {
-				IPACMDBG_H("Attempting to delete v6 icmp filter rule.\n");
+			// assign handle array always, since it's statically allocated
+			icmp_flt_rule_hdl = ipv6_icmp_flt_rule_hdl[j];
 
-				if (m_filtering.DeleteFilteringHdls(
-						ipv6_icmp_flt_rule_hdl[j], IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE) == true) {
-					IPACMDBG_H("Deleted v6 icmp filter rule successfully.\n");
-					IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-						rx_prop->rx[idx].src_pipe, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE);
-					memset(
-						ipv6_icmp_flt_rule_hdl[j],
-						0,
-						sizeof(uint32_t) * NUM_IPV6_ICMP_FLT_RULE);
-				} else {
-					IPACMERR("Error deleting v6 icmp filter rule...\n");
-					return IPACM_FAILURE;
-				}
+			// check for valid handle before use
+			if (icmp_flt_rule_hdl == NULL || icmp_flt_rule_hdl[0] == 0) {
+				IPACMERR("NULL v6 icmp filter rule hdl passed or, rules deleted already...\n");
+				return IPACM_SUCCESS;
+			}
+			IPACMDBG_H("Will try to delete icmp handle %d\n", icmp_flt_rule_hdl[0]);
+
+			IPACMDBG_H("Attempting to delete v6 icmp filter rule.\n");
+
+			if (m_filtering.DeleteFilteringHdls(
+					icmp_flt_rule_hdl, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE) == true) {
+				IPACMDBG_H("Deleted v6 icmp filter rule successfully.\n");
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
+					rx_prop->rx[idx].src_pipe, IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE);
+				memset(
+					icmp_flt_rule_hdl,
+					0,
+					sizeof(uint32_t) * NUM_IPV6_ICMP_FLT_RULE);
+				ipv6_icmp_flt_rule_hdl[j][0] = 0;
+			} else {
+				IPACMERR("Error deleting v6 icmp filter rule...\n");
+				return IPACM_FAILURE;
 			}
 		}
 	}

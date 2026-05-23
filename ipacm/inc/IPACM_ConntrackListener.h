@@ -129,6 +129,10 @@ private:
 	uint8_t ip_pass_enable_default_pdn;
 	uint32_t ip_pass_dummy_ip_default_pdn;
 	uint8_t ip_pass_skip_nat_default_pdn;
+	/* Set when RGIP v4 address is assigned to tethered client (RGIP passthrough mode).
+	 * In this mode the modem keeps its own WAN IP; the RGIP client traffic gets a
+	 * no-op dummy NAT entry (private_ip == public_ip == rgip_addr). */
+	uint8_t rgip_pass_enable;
 	bool WanUp_v6;
 	bool is_acct_enabled;
 	NatApp *nat_inst;
@@ -256,6 +260,7 @@ public:
 	bool IsVlanIPv4(uint32_t ipv4_address, uint16_t *VlanId);
 #endif
 	bool IsVlanIPv6(const Ipv6IpAddress& ip, uint16_t *VlanId);
+	void query_conntracks(int af_family, uint32_t ipv4_addr, uint32_t *ipv6_addr);
 };
 
 extern IPACM_ConntrackListener *CtList;

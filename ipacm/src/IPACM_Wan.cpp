@@ -8809,7 +8809,7 @@ int IPACM_Wan::handle_down_evt_ex()
 	mtu_v6 = DEFAULT_MTU_SIZE;
 	mtu_v6_set = false;
 #endif
-#ifdef FEATURE_IPOGRE
+#ifdef FEATURE_IPoGRE
 	if(IPACM_Iface::ipacmcfg->ipogre_enabled == true)
 	{
 		gre_down();

@@ -3950,6 +3950,98 @@ error:
 	return IPACM_FAILURE;
 }
 
+int ipa_nl_query_newneigh(int af_family)
+{
+	IPACMDBG("ipa_nl_send_getneigh\n");
+	int ret_val = IPACM_FAILURE, msglen = 0, nl_sock = 0;
+	ssize_t msgsent_len = 0;
+	char *buf = NULL;
+	nl_request_t nl_request;
+	struct sockaddr_nl nladdr;
+	struct msghdr msg;
+	struct nlmsghdr *h = NULL;
+	struct iovec iov;
+	nl_sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+	if (nl_sock < 0)
+	{
+		IPACMERR("Failed to open netlink socket");
+		return IPACM_FAILURE;
+	}
+
+	ipa_nl_msg_t  *msg_ptr = (ipa_nl_msg_t*)calloc(1, sizeof(ipa_nl_msg_t));
+	memset(&nl_request, 0, sizeof(nl_request));
+	memset(&nladdr, 0, sizeof(sockaddr_nl));
+	memset(&msg, 0, sizeof(msghdr));
+	memset(&iov, 0, sizeof(iovec));
+
+	nl_request.nlh.nlmsg_type = RTM_GETNEIGH;
+	nl_request.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+	nl_request.nd.ndm_state = NUD_REACHABLE;
+	nl_request.nd.ndm_flags = NTF_MASTER|NTF_SELF;
+	nl_request.nlh.nlmsg_len = sizeof(nl_request_t);
+	nl_request.nlh.nlmsg_seq = 1;
+	nl_request.nlh.nlmsg_pid = 0;
+	nl_request.rtm.rtm_family = af_family;
+
+	msgsent_len = send(nl_sock, &nl_request, sizeof(nl_request), 0);
+
+	msg = {
+		.msg_name = &nladdr,
+		.msg_namelen = sizeof(nladdr),
+		.msg_iov = &iov,
+		.msg_iovlen = 1,
+	};
+
+	msglen = ipa_nl_route_recvmsg(nl_sock, &msg, &buf);
+
+	if(msglen <= 0)
+	{
+		IPACMERR("NL route recv error\n");
+	}
+
+	h = (struct nlmsghdr *)buf;
+	while (NLMSG_OK(h, msglen))
+	{
+		if (h->nlmsg_flags & NLM_F_DUMP_INTR)
+		{
+			IPACMERR("Dump was interrupted\n");
+			break;
+		}
+		if (h->nlmsg_flags & NLMSG_OVERRUN || !h->nlmsg_flags)
+		{
+			IPACMERR("Dump was overun\n");
+			break;
+		}
+		if(h->nlmsg_type == NLMSG_DONE)
+			break;
+		if (nladdr.nl_pid != 0)
+		{
+			h = NLMSG_NEXT(h, msglen);
+			continue;
+		}
+
+		if (h->nlmsg_type == NLMSG_ERROR)
+		{
+			IPACMERR("Netlink message error");
+			break;
+		}
+
+		if (ipa_nl_decode_nlmsg((const char*)h, msglen, msg_ptr)) {
+			IPACMERR("Failed to decode rtm link message\n");
+			h = NLMSG_NEXT(h, msglen);
+			continue;
+		}
+		h = NLMSG_NEXT(h, msglen);
+	}
+	IPACMDBG("End\n");
+	close(nl_sock);
+	free(buf);
+	buf = NULL;
+	free(msg_ptr);
+	msg_ptr = NULL;
+	return 1;
+}
+
 /* find the newroute subnet mask */
 int find_mask(int ip_v4_last, int *mask_value)
 {

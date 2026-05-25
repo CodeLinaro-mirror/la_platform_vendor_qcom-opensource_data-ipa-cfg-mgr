@@ -758,6 +758,10 @@ int IPACM_Iface::query_iface_property(void)
 	{
 		IPACMDBG_H(" Has rx/tx properties registered for iface %s, add for NATTING \n", dev_name);
         IPACM_Iface::ipacmcfg->AddNatIfaces(dev_name);
+		if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+		{
+			IPACM_Iface::ipacmcfg->restore_vlan_nat_ifaces(dev_name);
+		}
 	}
 
 	close(fd);

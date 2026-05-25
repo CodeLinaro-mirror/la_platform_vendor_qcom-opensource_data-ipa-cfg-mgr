@@ -816,6 +816,8 @@ private:
 
 	uint16_t sta_vlan_id;
 
+	uint8_t sta_vlan_pcp;
+
 	bool is_default_gateway;
 
 	uint32_t ipv6_prefix[2];

@@ -365,6 +365,8 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	sta_ipv6_pdn_index = -1;
 	sta_ipv4_pdn_index = -1;
 	sta_vlan_id = 0;
+	sta_vlan_pcp = 0;
+
 #ifdef FEATURE_VLAN_MPDN
 	associated_VID = 0;
 #endif
@@ -11776,7 +11778,12 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 											sCopyHeader.hdr_len = 18;
 											/* VLAN ID is 12 bits. So update accordingly. */
 											pHeaderDescriptor->hdr[0].hdr[15] = (uint8_t)sta_vlan_id & 0xFF;
-											pHeaderDescriptor->hdr[0].hdr[14] = (uint8_t)(sta_vlan_id >> 8) & 0x0F;
+
+											if(IPACM_Iface::ipacmcfg->get_pppoe_vlan_pcp(&sta_vlan_id, &sta_vlan_pcp) != IPACM_SUCCESS)
+												IPACMDBG_H("Failed to fetch PPPoE VLAN PCP for vlan-id %d", sta_vlan_id);
+
+											pHeaderDescriptor->hdr[0].hdr[14] = ((uint8_t)(sta_vlan_id >> 8) & 0x0F) | ((sta_vlan_pcp & 0x07) << 5);
+
 											pHeaderDescriptor->hdr[0].hdr[13] = 0x00;
 											pHeaderDescriptor->hdr[0].hdr[12] = 0x81;
 											/* Update Ether Type to 0x800.*/
@@ -11939,7 +11946,11 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 						sCopyHeader.hdr_len = 18;
 						/* VLAN ID is 12 bits. So update accordingly. */
 						pHeaderDescriptor->hdr[0].hdr[15] = (uint8_t)sta_vlan_id & 0xFF;
-						pHeaderDescriptor->hdr[0].hdr[14] = (uint8_t)(sta_vlan_id >> 8) & 0x0F;
+						if(IPACM_Iface::ipacmcfg->get_pppoe_vlan_pcp(&sta_vlan_id, &sta_vlan_pcp) != IPACM_SUCCESS)
+							IPACMDBG_H("Failed to fetch PPPoE VLAN PCP for vlan-id %d", sta_vlan_id);
+
+						pHeaderDescriptor->hdr[0].hdr[14] = ((uint8_t)(sta_vlan_id >> 8) & 0x0F) | ((sta_vlan_pcp & 0x07) << 5);
+
 						pHeaderDescriptor->hdr[0].hdr[13] = 0x00;
 						pHeaderDescriptor->hdr[0].hdr[12] = 0x81;
 						/* Update Ether Type to 0x86dd.*/

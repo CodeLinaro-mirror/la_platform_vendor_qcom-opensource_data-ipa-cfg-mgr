@@ -1128,6 +1128,7 @@ skip_fnr_alloc:
 	IPACMDBG_H(" depend MAP-7 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ETHERNET_PROD, IPA_RM_RESOURCE_USB_CONS);
 	IPACMDBG_H(" depend MAP-8 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_ETHERNET_CONS);
 
+
 fail:
 	if (cfg != NULL)
 	{
@@ -2023,7 +2024,8 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	{
 		if(it_vlan->vlan_interface_index == data->vlan_interface_index)
 		{
-			IPACMERR("The vlan iface was added before with id %d\n", it_vlan->vlan_id);
+			it_vlan->priority = data->priority;
+			IPACMERR("The vlan iface was added before with id %d and pcp %d\n", it_vlan->vlan_id, it_vlan->priority);
 			pthread_mutex_unlock(&vlan_l2tp_lock);
 			return;
 		}
@@ -2058,6 +2060,8 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	memset(&new_vlan_info, 0, sizeof(new_vlan_info));
 	strlcpy(new_vlan_info.vlan_iface_name, data->name, sizeof(new_vlan_info.vlan_iface_name));
 	new_vlan_info.vlan_id = data->vlan_id;
+
+	new_vlan_info.priority = data->priority;
 	new_vlan_info.vlan_interface_index = data->vlan_interface_index;
 	m_vlan_iface.push_front(new_vlan_info);
 	pthread_mutex_unlock(&vlan_l2tp_lock);
@@ -5435,6 +5439,33 @@ int IPACM_Config::get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id)
 	}
 
 	pthread_mutex_unlock(&pppoe_map_lock);
+
+	return ret;
+}
+
+int IPACM_Config::get_pppoe_vlan_pcp( uint16_t *vlan_id, uint8_t *pcp)
+{
+	list<vlan_iface_info>::iterator it_vlan;
+	int ret = IPACM_FAILURE;
+
+	if (pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+
+	for (it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if (it_vlan->vlan_id == *vlan_id)
+		{
+			*pcp = it_vlan->priority;
+			IPACMDBG_H("Found vlan iface %s vlan_id=%d pcp=%d\n",
+				it_vlan->vlan_iface_name, *vlan_id, *pcp);
+			ret = IPACM_SUCCESS;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&vlan_l2tp_lock);
 
 	return ret;
 }

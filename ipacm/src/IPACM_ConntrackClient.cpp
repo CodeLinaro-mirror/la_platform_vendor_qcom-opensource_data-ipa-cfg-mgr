@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
@@ -29,6 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -106,6 +106,8 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	uint16_t sport = 0;
 	uint16_t dport = 0;
 	IPACM_Config *config_instance = NULL;
+	int max_entries;
+	int max_ct_entries;
 	u_int8_t  protocol, tcp_state;
 	protocol = nfct_get_attr_u8(ct, ATTR_REPL_L4PROTO);
 	if((protocol == IPPROTO_TCP))
@@ -134,11 +136,38 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	}
 	IPACMDBG("iptype: %d\n", ip_type);
 
+	config_instance = IPACM_Config::GetInstance();
+	if(config_instance != NULL){
+		max_entries = config_instance->GetNatMaxEntries();
+		if (AF_INET6 == ip_type && (!config_instance->IsIpv6CTEnabled()
+#ifdef FEATURE_IPV6_NAT
+			&& !config_instance->ipv6_nat_enable
+#endif
+                  ))
+		{
+			IPACMDBG_H("IPv6 Connection tracking is disabled\n");
+			goto IGNORE;
+		}
+		max_ct_entries = config_instance->GetIpv6CTMaxEntries();
+	} else {
+		max_entries = 4000;
+		max_ct_entries = 4000;
+	}
+	IPACMDBG_H("DEBUG cur_nat_entries %d max_entries %d \n",cur_nat_entries,max_entries);
+	if ( AF_INET == ip_type && (type &  NFCT_T_NEW) && (cur_nat_entries == max_entries)) {
+		IPACMDBG_H(" Ignoring  NEW conntrack received \n");
+		goto IGNORE;
+	}
+	IPACMDBG_H("DEBUG cur_ct_entries %d max_ct_entries %d \n",cur_ct_entries,max_ct_entries);
+	if ( AF_INET6 == ip_type && (type &  NFCT_T_NEW) && (cur_ct_entries == max_ct_entries)) {
+		IPACMDBG_H(" Ignoring  NEW IPv6 CT conntrack received \n");
+		goto IGNORE;
+	}
+
 #ifndef CT_OPT
 	if(AF_INET6 == ip_type)
 	{
-		config_instance = IPACM_Config::GetInstance();
-		if (config_instance == NULL)
+		if(config_instance == NULL)
 		{
 			IPACMERR("Config instance creation failed");
 			goto IGNORE;

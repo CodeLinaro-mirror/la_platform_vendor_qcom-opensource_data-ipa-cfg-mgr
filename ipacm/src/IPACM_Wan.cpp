@@ -16747,12 +16747,12 @@ int IPACM_Wan::ipgre_add_rgip_rt_rule(
 		return IPACM_FAILURE;
 	}
 
-	IPACM_Wan::ipgre_route_data[iptype].proc_ctx_gre_add_hdl_rgip =
+	IPACM_Wan::ipgre_route_data[IPACM_Iface::ipacmcfg->ipgre_info.iptype].proc_ctx_gre_add_hdl_rgip =
 		procCtx->proc_ctx_hdl;
 
 	IPACMDBG_H(
 		"rgip proc ctx successfully installed, hdl 0x%x\n",
-		IPACM_Wan::ipgre_route_data[iptype].proc_ctx_gre_add_hdl_rgip);
+		IPACM_Wan::ipgre_route_data[IPACM_Iface::ipacmcfg->ipgre_info.iptype].proc_ctx_gre_add_hdl_rgip);
 
 	/* Now install the rgip src-based route rule */
 	static const int NUM_RT_RULE = 1;
@@ -16780,7 +16780,7 @@ int IPACM_Wan::ipgre_add_rgip_rt_rule(
 	rt_rule_entry->rule.attrib.u.v4.src_addr        = IPACM_Iface::ipacmcfg->rgip_ip;
 	rt_rule_entry->rule.attrib.u.v4.src_addr_mask   = 0xFFFFFFFF;
 	rt_rule_entry->rule.hdr_proc_ctx_hdl            =
-		IPACM_Wan::ipgre_route_data[iptype].proc_ctx_gre_add_hdl_rgip;
+		IPACM_Wan::ipgre_route_data[IPACM_Iface::ipacmcfg->ipgre_info.iptype].proc_ctx_gre_add_hdl_rgip;
 #ifdef FEATURE_IPA_V3
 	rt_rule_entry->rule.hashable                    = true;
 #endif
@@ -16795,13 +16795,13 @@ int IPACM_Wan::ipgre_add_rgip_rt_rule(
 		return IPACM_FAILURE;
 	}
 
-	IPACM_Wan::ipgre_route_data[iptype].rt_gre_add_hdl_rgip =
+	IPACM_Wan::ipgre_route_data[IPACM_Iface::ipacmcfg->ipgre_info.iptype].rt_gre_add_hdl_rgip =
 		rt_rule_entry->rt_rule_hdl;
 
 	IPACMDBG_H(
 		"rgip route rule successfully installed in %s, hdl 0x%x\n",
 		rt_table->rt_tbl_name,
-		IPACM_Wan::ipgre_route_data[iptype].rt_gre_add_hdl_rgip);
+		IPACM_Wan::ipgre_route_data[IPACM_Iface::ipacmcfg->ipgre_info.iptype].rt_gre_add_hdl_rgip);
 
 	return IPACM_SUCCESS;
 }

@@ -1222,7 +1222,9 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 	case IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT:
 		{
-			int eth_index;
+			int eth_index  = -1;
+			uint16_t vlan_id = 0;
+			uint8_t priority = 0;
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
 			int retval;
 #endif //IPA_HW_FNR_STATS
@@ -1344,9 +1346,22 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 
 				IPACMDBG_H("construct DL rt-rule for socksv5 MPDN clients\n");
 				handle_vlan_neighbor(data);
+#ifdef IPA_VLAN_PRIORITY
+				IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority);
+#else
+				IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id);
+#endif
 			}
 #endif
-			eth_index = get_eth_client_index(data->mac_addr);
+			if(!vlan_id)
+			{
+				eth_index = get_eth_client_index(data->mac_addr);
+			}
+			else
+			{
+				eth_index = get_eth_client_index(data->mac_addr, vlan_id);
+				IPACMDBG_H("Got eth index %d for lan %d\n", eth_index, vlan_id);
+			}
 			if (eth_index == IPACM_INVALID_INDEX)
 			{
 				IPACMERR("eth client not found/attached \n");
@@ -7538,10 +7553,32 @@ int IPACM_Lan::handle_eth_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_typ
 
 		if (get_client_memptr(eth_client, eth_index)->lan_stats_idx == -1)
 		{
-			IPACMDBG_H("Lan client index not attached. \n");
-			return IPACM_SUCCESS;
+			if(get_client_memptr(eth_client, eth_index)->vlan_id != 0)
+			{
+				if(get_lan_stats_index(get_client_memptr(eth_client, eth_index)->mac) != -1)
+				{
+					get_client_memptr(eth_client, eth_index)->lan_stats_idx =
+					get_lan_stats_index(get_client_memptr(eth_client, eth_index)->mac);
+					get_client_memptr(eth_client, eth_index)->dl_cnt_idx = dl_cnt_idx;
+					get_client_memptr(eth_client, eth_index)->index_populated = true;
+					IPACMDBG_H("Seems vlan %d also having same mac_addr %02x:%02x:%02x:%02x:%02x:%02x so added same lan stats index %d \n",
+						get_client_memptr(eth_client, eth_index)->vlan_id,
+						mac_addr[0], mac_addr[1], mac_addr[2],
+						mac_addr[3], mac_addr[4], mac_addr[5],
+						get_client_memptr(eth_client, eth_index)->lan_stats_idx);
+				}
+				else
+				{
+					//continue to check all eth clients if any other vlans have same mac.
+					continue;
+				}
+			}
+			else
+			{
+				IPACMDBG_H("Lan client index not attached. \n");
+				return IPACM_SUCCESS;
+			}
 		}
-
 		if (iptype==IPA_IP_v4) {
 			IPACMDBG_H("eth client index: %d, ip-type: %d, ipv4_set:%d, ipv4_rule_set:%d \n", eth_index, iptype,
 						get_client_memptr(eth_client, eth_index)->ipv4_set,

@@ -3995,7 +3995,6 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 				{
 					if (IPACM_Wan::is_xlat_by_vid(Ids[i]))
 						vlan_data.is_xlat = true;
-					vlan_data.mux_id = 0;
 				}
 				IPACMDBG_H("Push ipv4 handle_vlan_pdn_up mux:%d, VlanID:%d is_xlat: %d\n",
 					vlan_data.mux_id, vlan_data.VlanID, vlan_data.is_xlat);
@@ -4054,10 +4053,6 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 				if (IPACM_Wan::is_xlat_by_vid(Ids[i]))
 					vlan_data.is_xlat = true;
 
-				if(IPACM_Wan::backhaul_is_sta_mode == false)
-				{
-					vlan_data.mux_id = 0;
-				}
 				IPACMDBG_H("Push ipv6 handle_vlan_pdn_up mux:%d, VlanID:%d is_xlat: %d\n",
 					vlan_data.mux_id, vlan_data.VlanID, vlan_data.is_xlat);
 

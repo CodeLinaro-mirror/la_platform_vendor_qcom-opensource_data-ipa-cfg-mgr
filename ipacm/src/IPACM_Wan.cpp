@@ -12598,12 +12598,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					else
 #endif
 					{
-						if (IPACM_Iface::ipacmcfg->mape_enable
-							&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)) {
-							rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
-							IPACMDBG_H("mape v6 rt_rule_entry->rule.hdr_proc_ctx_hdl %x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
-						}
-						else if(get_client_memptr(wan_client, wan_index)->sta_hdr_proc_ctx_set == true)
+						if(get_client_memptr(wan_client, wan_index)->sta_hdr_proc_ctx_set == true)
 						{
 							rt_rule_entry->rule.hdr_proc_ctx_hdl =
 								get_client_memptr(wan_client, wan_index)->sta_hdr_proc_hdl_v6;
@@ -12618,7 +12613,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 					rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
-					if(active_v6)
+					if(active_v6 && m_ipv6_addr[0])
 					{
 						rt_rule_entry->rule.attrib.u.v6.src_addr[0] = m_ipv6_addr[0];
 						rt_rule_entry->rule.attrib.u.v6.src_addr[1] = m_ipv6_addr[1];
@@ -12632,6 +12627,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					else
 					{
 						IPACMERR("v6 STA WAN s not up yet!!!(%d)\n", active_v6);
+						IPACMERR(" m_ipv6_addr 0x%x 0x%x \n",m_ipv6_addr[0],m_ipv6_addr[1]);
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}

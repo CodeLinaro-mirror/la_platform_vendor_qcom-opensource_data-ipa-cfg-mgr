@@ -191,9 +191,9 @@ public:
 	bool is_svap_iface();
 	void set_svap_iface(bool enable);
 
-	int add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl,uint16_t outer_vlan_id=0);
+	int add_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl,uint16_t outer_vlan_id=0, uint32_t hdr_hdl=0);
 	int del_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint32_t* hpc_hdl, uint16_t outer_vlan_id);
-	uint32_t is_entry_present_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint16_t outer_vlan_id=0);
+	uint32_t is_entry_present_wlan_svap_hpc_hdl(uint16_t vlan_id, ipa_hdr_l2_type peer_l2_type, uint16_t outer_vlan_id=0, uint32_t *hdr_hdl = NULL);
 
 	bool is_ap_iface_vlan_enabled();
 	bool is_spcl_iface();

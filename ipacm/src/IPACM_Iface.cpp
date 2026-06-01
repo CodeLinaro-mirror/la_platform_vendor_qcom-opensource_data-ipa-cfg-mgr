@@ -77,6 +77,10 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index)
 	tx_prop = NULL;
 	rx_prop = NULL;
 
+	/* Need to start the prio value with 1, As it is uint8
+	 * Can be memsetted with value 1 to reflect at all indexes.
+	 */
+	memset(prio, 1, sizeof(prio));
 	if((iface_name != NULL) && (strstr(iface_name, "mld") || strstr(iface_name, "wlan")))
 	{
 		strlcpy(dev_name, iface_name, IF_NAME_LEN);
@@ -656,7 +660,8 @@ int IPACM_Iface::query_iface_property(void)
 	{
 		PERROR("ioctl IPA_IOC_QUERY_INTF failed\n");
 		/* iface_query memory will free when iface-down*/
-		res = IPACM_FAILURE;
+		close(fd);
+		return IPACM_FAILURE;
 	}
 
 	if(iface_query->num_tx_props > 0)
@@ -678,8 +683,10 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			PERROR("ioctl IPA_IOC_QUERY_INTF_TX_PROPS failed\n");
 			/* tx_prop memory will free when iface-down*/
+			close(fd);
 			free(iface_query);
-			res = IPACM_FAILURE;
+			free(tx_prop);
+			return IPACM_FAILURE;
 		}
 
 		if (res != IPACM_FAILURE)
@@ -728,9 +735,11 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			PERROR("ioctl IPA_IOC_QUERY_INTF_RX_PROPS failed\n");
 			/* rx_prop memory will free when iface-down*/
+			close(fd);
 			free(iface_query);
 			free(tx_prop);
-			res = IPACM_FAILURE;
+			free(rx_prop);
+			return IPACM_FAILURE;
 		}
 
 		if (res != IPACM_FAILURE)

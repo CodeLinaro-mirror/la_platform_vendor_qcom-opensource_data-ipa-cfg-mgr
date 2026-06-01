@@ -26,8 +26,9 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -93,8 +94,17 @@ extern "C"
 #define IPA_MAX_ACTIVE_WLAN_IFACE 64 // 64 wlan (4x16 band support)
 #define MAX_SUPPORTED_WLAN_PIPES 6 // 4 non vlan wlan pipes + 2 vlan pipes
 
-#define IPA_MAX_IFACE_ENTRIES (57 + IPA_MAX_ACTIVE_WLAN_IFACE) /* current: 15 rmnet + 64 wlan + bridge+ eth +
-                                                                * rndis + ecm + 15 rmnet for RDKB + 16mld */
+#define IPA_MAX_IFACE_ENTRIES (64 + IPA_MAX_ACTIVE_WLAN_IFACE) /* increased to accommodate total 128 interfaces in XML */
+/* Calculation breakdown:
+* Total interfaces in XML: 128.
+* This macro accommodates:
+*    - 35 non-WLAN fixed interfaces (15 rmnet_data + 15 qmapmuxX + 1 rndis0 + 1 ecm0 + 2 eth + 1 br-lan)
+*    - Up to 64 WLAN/ATH interfaces (IPA_MAX_ACTIVE_WLAN_IFACE = 64). This includes all wlan, ath, and mld interfaces.
+* The '64' in '(64 + IPA_MAX_ACTIVE_WLAN_IFACE)' is the sum of:
+*    - 35 non-WLAN fixed interfaces
+*    - 29 for additional WLAN/ATH/MLD interfaces (buffer for dynamic assignment)
+* Total expected = 64 (from fixed interfaces + buffer) + 64 (IPA_MAX_ACTIVE_WLAN_IFACE) = 128 */
+
 #define IPA_MAX_ALG_ENTRIES 20
 #define IPA_MAX_RM_ENTRY 9
 
@@ -363,6 +373,8 @@ typedef enum
 #ifdef FEATURE_EoGRE
 	IPA_HANDLE_EoGRE_UP,                      /* ipa_ipgre_info */
 	IPA_HANDLE_EoGRE_DOWN,                    /* ipa_ipgre_info */
+	IPA_WAN_HANDLE_EoGRE_UP,
+	IPA_WAN_HANDLE_EoGRE_DOWN,
 #endif
 	IPA_DSCP_PCP_CONFIG_CHANGE_EVENT,         /* ipacm_event_change_dscp_pcp */
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
@@ -778,6 +790,7 @@ typedef struct _svap_vlan_hpc_hdl
 	ipa_hdr_l2_type peer_l2_type;
 	uint32_t hpc_hdr_hdl;
 	uint16_t outer_vlan_id;
+	uint32_t template_hdr_hdl;
 }svap_vlan_hpc_hdl;
 
 struct ext_router_prefix_info

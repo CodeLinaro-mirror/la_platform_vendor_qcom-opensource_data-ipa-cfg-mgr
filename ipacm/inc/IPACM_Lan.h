@@ -602,7 +602,7 @@ public:
 	int install_ipv4_icmp_flt_rule();
 
 	/* add header processing context and return handle to lan2lan controller */
-	int eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl, uint16_t vlan_id, uint16_t outer_vlan_id=0);
+	int eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uint32_t *hdl, uint16_t vlan_id, uint16_t outer_vlan_id=0, uint32_t *hdr_hdl = NULL);
 
 	/* add routing rule and return handle to lan2lan controller */
 	int eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t hdr_proc_ctx_hdl,
@@ -622,7 +622,7 @@ public:
 	int eth_bridge_del_rt_rule(uint32_t rt_rule_hdl, ipa_ip_type iptype);
 
 	/* delete header processing context */
-	int eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl);
+	int eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl, uint32_t hdr_hdl = 0);
 
 #ifdef FEATURE_L2TP
 	/* add l2tp rt rule for l2tp client */
@@ -1504,7 +1504,7 @@ private:
 		return IPACM_INVALID_INDEX;
 	}
 
-	inline int get_eth_client_ip4_addr(uint8_t *mac_addr, uint32_t &ip_addr, uint8_t vlan_id = 0)
+	inline int get_eth_client_ip4_addr(uint8_t *mac_addr, uint32_t &ip_addr, uint16_t vlan_id = 0)
 	{
 		int clnt_indx;
 

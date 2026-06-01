@@ -179,6 +179,36 @@
 			   <WlanMode>full</WlanMode>
 			</Iface>
 			<Iface>
+			   <Name>wlan20</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>wlan21</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>wlan50</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>wlan51</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>wlan60</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
+			   <Name>wlan61</Name>
+			   <Category>UNKNOWN</Category>
+			   <WlanMode>full</WlanMode>
+			</Iface>
+			<Iface>
 			   <Name>ath0</Name>
 			   <Category>UNKNOWN</Category>
 			   <WlanMode>full</WlanMode>

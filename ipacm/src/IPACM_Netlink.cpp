@@ -1734,6 +1734,12 @@ static int ipa_nl_decode_nlmsg
 					return IPACM_FAILURE;
 				}
 				memset(data_addr, 0, sizeof(ipacm_event_data_addr));
+				/* raw_host_addr preserves the full host address before prefix masking.
+				 * data_addr->ipv4_addr is masked to the network address for general
+				 * ADDR_ADD consumers; RGIP logic must use raw_host_addr so that host-
+				 * address comparisons (e.g. against neigh events) remain correct when
+				 * the interface is assigned a /24 prefix instead of /32. */
+				uint32_t raw_host_addr = 0;
 				if(AF_INET6 == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
 				{
 					data_addr->iptype = IPA_IP_v6;
@@ -1751,6 +1757,7 @@ static int ipa_nl_decode_nlmsg
 					IPACM_NL_REPORT_ADDR( "IFA_ADDRESS:", msg_ptr->nl_addr_info.attr_info.prefix_addr );
 					IPACM_EVENT_COPY_ADDR_v4( data_addr->ipv4_addr, msg_ptr->nl_addr_info.attr_info.prefix_addr);
 					data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
+					raw_host_addr = data_addr->ipv4_addr;
 					prefix_len = ((prefix_len >> (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen)) << (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen));
 					data_addr->ipv4_addr = (data_addr->ipv4_addr & prefix_len);
 					data_addr->ipv4_addr_mask = prefix_len;
@@ -1789,11 +1796,11 @@ static int ipa_nl_decode_nlmsg
 						}
 						else {
 							IPACMDBG_H("RGIP iface %s addr add, post IPA_HANDLE_RGIP_UP\n", dev_name);
-							if(data_addr->ipv4_addr >> 24 == DUMMY_RGIP_ADDRESS)
+							if(raw_host_addr >> 24 == DUMMY_RGIP_ADDRESS)
 							{
 								IPACMDBG_H("RGIP iface %s got dummy IP 0x%x (169.x.x.x), "
 										"skip IPA_HANDLE_RGIP_UP and rgip_ip update\n",
-										dev_name, data_addr->ipv4_addr);
+										dev_name, raw_host_addr);
 
 								IPACMDBG_H("RGIP iface %s link up, post IPA_HANDLE_RGIP_UP with stored ip 0x%x\n",
 									dev_name, IPACM_Iface::ipacmcfg->rgip_ip_ippt);
@@ -1824,12 +1831,12 @@ static int ipa_nl_decode_nlmsg
 								}
 								else
 								{
-									memcpy(rgip_v4,&data_addr->ipv4_addr,sizeof(rgip_v4));
+									memcpy(rgip_v4,&raw_host_addr,sizeof(rgip_v4));
 									memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
 									rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
 									rgip_evt_data.evt_data = rgip_v4;
 									IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
-									IPACM_Iface::ipacmcfg->rgip_ip = data_addr->ipv4_addr;
+									IPACM_Iface::ipacmcfg->rgip_ip = raw_host_addr;
 								}
 							}
 						}
@@ -1839,11 +1846,11 @@ static int ipa_nl_decode_nlmsg
 					 * Identify it as the new RGIP interface and re-trigger RGIP UP. */
 					else if ((data_addr->iptype == IPA_IP_v4) &&
 					         (IPACM_Iface::ipacmcfg->rgip_ip != 0) &&
-					         (data_addr->ipv4_addr == IPACM_Iface::ipacmcfg->rgip_ip))
+					         (raw_host_addr == IPACM_Iface::ipacmcfg->rgip_ip))
 					{
 						IPACMDBG_H("New iface %s has IP 0x%x matching stored rgip_ip — "
 						           "treating as new RGIP iface (old name: %s)\n",
-						           dev_name, data_addr->ipv4_addr,
+						           dev_name, raw_host_addr,
 						           IPACM_Iface::ipacmcfg->rgip_iface_name);
 						/* Update rgip_iface_name to the new interface name */
 						strlcpy(IPACM_Iface::ipacmcfg->rgip_iface_name, dev_name,
@@ -1856,13 +1863,13 @@ static int ipa_nl_decode_nlmsg
 						}
 						else
 						{
-							memcpy(rgip_v4,&data_addr->ipv4_addr,sizeof(uint32_t));
+							*rgip_v4 = raw_host_addr;
 							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
 							rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
 							rgip_evt_data.evt_data = rgip_v4;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
 							/* Refresh rgip_ip with the confirmed address */
-							IPACM_Iface::ipacmcfg->rgip_ip = data_addr->ipv4_addr;
+							IPACM_Iface::ipacmcfg->rgip_ip = raw_host_addr;
 						}
 					}
 #endif

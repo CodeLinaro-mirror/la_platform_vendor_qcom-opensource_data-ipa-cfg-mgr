@@ -315,6 +315,7 @@ void* ipa_driver_msg_notifier(void *param)
 	struct ipa_get_apn_data_stats_resp_msg_v01 event_network_stats;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	struct ipa_lan_client_msg event_lan_client;
+	struct ipa_lan_client_msg_vlan event_lan_client_vlan;
 #endif
 
 	ipacm_cmd_q_data evt_data;
@@ -904,17 +905,38 @@ void* ipa_driver_msg_notifier(void *param)
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		case IPA_PER_CLIENT_STATS_CONNECT_EVENT:
 			IPACMDBG_H("Received IPA_PER_CLIENT_STATS_CONNECT_EVENT\n");
-			memcpy(&event_lan_client, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_lan_client_msg));
-			data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
-			if(data == NULL)
+#ifdef IPA_HW_FNR_STATS
+			if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
 			{
-				IPACMERR("unable to allocate memory for event data\n");
-				goto done;
+				/* Mode 1: payload is ipa_lan_client_msg_vlan (has vlan_id) */
+				memcpy(&event_lan_client_vlan, buffer + sizeof(struct ipa_msg_meta),
+					sizeof(struct ipa_lan_client_msg_vlan));
+				data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
+				if (data == NULL)
+				{
+					IPACMERR("unable to allocate memory for event data\n");
+					goto done;
+				}
+				memset(data, 0, sizeof(ipacm_event_data_mac));
+				memcpy(data->mac_addr, event_lan_client_vlan.mac, sizeof(event_lan_client_vlan.mac));
+				data->vlan_id = event_lan_client_vlan.vlan_id;
+				ipa_get_if_index(event_lan_client_vlan.lanIface, &(data->if_index));
 			}
-			memcpy(data->mac_addr,
-						 event_lan_client.mac,
-						 sizeof(event_lan_client.mac));
-			ipa_get_if_index(event_lan_client.lanIface, &(data->if_index));
+			else
+#endif
+			{
+				memcpy(&event_lan_client, buffer + sizeof(struct ipa_msg_meta),
+					sizeof(struct ipa_lan_client_msg));
+				data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
+				if (data == NULL)
+				{
+					IPACMERR("unable to allocate memory for event data\n");
+					goto done;
+				}
+				memset(data, 0, sizeof(ipacm_event_data_mac));
+				memcpy(data->mac_addr, event_lan_client.mac, sizeof(event_lan_client.mac));
+				ipa_get_if_index(event_lan_client.lanIface, &(data->if_index));
+			}
 			IPACM_Iface::ipacmcfg->stats_client_info(data->mac_addr, true);
 			evt_data.event = IPA_LAN_CLIENT_CONNECT_EVENT;
 			evt_data.evt_data = data;
@@ -922,17 +944,37 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case IPA_PER_CLIENT_STATS_DISCONNECT_EVENT:
 			IPACMDBG_H("Received IPA_PER_CLIENT_STATS_DISCONNECT_EVENT\n");
-			memcpy(&event_lan_client, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_lan_client_msg));
-			data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
-			if(data == NULL)
+#ifdef IPA_HW_FNR_STATS
+			if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
 			{
-				IPACMERR("unable to allocate memory for event data\n");
-				goto done;
+				memcpy(&event_lan_client_vlan, buffer + sizeof(struct ipa_msg_meta),
+					sizeof(struct ipa_lan_client_msg_vlan));
+				data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
+				if (data == NULL)
+				{
+					IPACMERR("unable to allocate memory for event data\n");
+					goto done;
+				}
+				memset(data, 0, sizeof(ipacm_event_data_mac));
+				memcpy(data->mac_addr, event_lan_client_vlan.mac, sizeof(event_lan_client_vlan.mac));
+				data->vlan_id = event_lan_client_vlan.vlan_id;
+				ipa_get_if_index(event_lan_client_vlan.lanIface, &(data->if_index));
 			}
-			memcpy(data->mac_addr,
-						 event_lan_client.mac,
-						 sizeof(event_lan_client.mac));
-			ipa_get_if_index(event_lan_client.lanIface, &(data->if_index));
+			else
+#endif
+			{
+				memcpy(&event_lan_client, buffer + sizeof(struct ipa_msg_meta),
+					sizeof(struct ipa_lan_client_msg));
+				data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
+				if (data == NULL)
+				{
+					IPACMERR("unable to allocate memory for event data\n");
+					goto done;
+				}
+				memset(data, 0, sizeof(ipacm_event_data_mac));
+				memcpy(data->mac_addr, event_lan_client.mac, sizeof(event_lan_client.mac));
+				ipa_get_if_index(event_lan_client.lanIface, &(data->if_index));
+			}
 			IPACM_Iface::ipacmcfg->stats_client_info(data->mac_addr, false);
 			evt_data.event = IPA_LAN_CLIENT_DISCONNECT_EVENT;
 			evt_data.evt_data = data;

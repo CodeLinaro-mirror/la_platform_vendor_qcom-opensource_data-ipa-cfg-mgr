@@ -3477,7 +3477,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		 }
 
 		 /* Suppressing NAT entry for Q6 WAN connections when IP Pass not enabled. */
-		 if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v5_5)
+		 if ((!ip_pass_enable) && (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v5_5))
 			  goto IGNORE;
 
 		 IPACMDBG_H("For embedded connections add dummy nat rule\n");

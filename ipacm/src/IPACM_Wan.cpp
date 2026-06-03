@@ -13871,9 +13871,10 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 					IPACMERR("QOS param PCP no action from IPA in UL \n");
 				}
 
-				if (qos_param->dscp_mark_val)
+				if (qos_param->dscp_mark_val || qos_param->pcp_mark_val)
 				{
-					IPACMDBG_H("qos ul dscp val is %d \n", qos_param->dscp_mark_val);
+					IPACMDBG_H("qos ul dscp_mark_val is %d pcp_mark_val is %d\n",
+						qos_param->dscp_mark_val, qos_param->pcp_mark_val);
 					int size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
 					hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
 					if (hdr_proc_ctx_table == NULL) {
@@ -13885,17 +13886,26 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 					hdr_proc_ctx_table->commit = 1;
 					hdr_proc_ctx_table->num_proc_ctxs = 1;
 					hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
-					hdr_proc_ctx->type = IPA_HDR_PROC_MARK_DSCP;
+					hdr_proc_ctx->type = IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ?
+					IPA_HDR_PROC_PPPOE_HEADER_ADD : IPA_HDR_PROC_MARK_DSCP;
 
-					hdr_proc_ctx->pdn_dscp_params.valid = 1;
-					hdr_proc_ctx->pdn_dscp_params.dscp_val = qos_param->dscp_mark_val;
+					if (qos_param->dscp_mark_val)
+					{
+						hdr_proc_ctx->pdn_dscp_params.valid = 1;
+						hdr_proc_ctx->pdn_dscp_params.dscp_val = qos_param->dscp_mark_val;
+					}
+					if (qos_param->pcp_mark_val)
+					{
+						hdr_proc_ctx->pdn_dscp_params.pcp_valid = 1;
+						hdr_proc_ctx->pdn_dscp_params.pcp_val = qos_param->pcp_mark_val;
+					}
 
 					hdr_proc_ctx->hdr_hdl = hdr_hdl_sta_v4;
 					IPACMDBG_H("hdr_proc_ctx->hdr_hdl v4 0x%x\n", hdr_proc_ctx->hdr_hdl);
 
 					if (m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false ||
 						hdr_proc_ctx_table->proc_ctx[0].status != 0) {
-						IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp marking failed: %d\n",
+						IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp/pcp marking failed: %d\n",
 							hdr_proc_ctx_table->proc_ctx[0].status);
 						free(hdr_proc_ctx_table);
 						free(rt_rule);
@@ -14024,7 +14034,7 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 					IPACMERR("QOS param PCP no v6 route rule action from IPA in UL\n");
 				}
 
-				if (qos_param->dscp_mark_val)
+				if (qos_param->dscp_mark_val || qos_param->pcp_mark_val)
 				{
 					int size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
 					hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
@@ -14037,17 +14047,26 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 					hdr_proc_ctx_table->commit = 1;
 					hdr_proc_ctx_table->num_proc_ctxs = 1;
 					hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
-					hdr_proc_ctx->type = IPA_HDR_PROC_MARK_DSCP;
+					hdr_proc_ctx->type = IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ?
+					IPA_HDR_PROC_PPPOE_HEADER_ADD : IPA_HDR_PROC_MARK_DSCP;
 
-					hdr_proc_ctx->pdn_dscp_params.valid = 1;
-					hdr_proc_ctx->pdn_dscp_params.dscp_val = qos_param->dscp_mark_val;
+					if (qos_param->dscp_mark_val)
+					{
+						hdr_proc_ctx->pdn_dscp_params.valid = 1;
+						hdr_proc_ctx->pdn_dscp_params.dscp_val = qos_param->dscp_mark_val;
+					}
+					if (qos_param->pcp_mark_val)
+					{
+						hdr_proc_ctx->pdn_dscp_params.pcp_valid = 1;
+						hdr_proc_ctx->pdn_dscp_params.pcp_val = qos_param->pcp_mark_val;
+					}
 
 					hdr_proc_ctx->hdr_hdl = hdr_hdl_sta_v6;
 					IPACMDBG_H("hdr_proc_ctx->hdr_hdl v6 0x%x\n", hdr_proc_ctx->hdr_hdl);
 
 					if (m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false ||
 						hdr_proc_ctx_table->proc_ctx[0].status != 0) {
-						IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for v6 dscp marking failed: %d\n",
+						IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for v6 dscp/pcp marking failed: %d\n",
 							hdr_proc_ctx_table->proc_ctx[0].status);
 						free(hdr_proc_ctx_table);
 						free(rt_rule);

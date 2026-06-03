@@ -242,6 +242,7 @@ if (!(a)) {                                                 \
 #define IPACMLOG_TAG                         "IPACMLog"
 #define IPACMFILEVAR_TAG                     "IPACMfilevar"
 #define IPACMDEBUG_TAG                       "IPACMDebug"
+#define IPACMBOOTFILESIZE_TAG                "IPACMBootFileSize"
 #define IPACM_LOG_LEVEL_TAG                  "IPACMLogLevel"
 
 #define Static_Policy_TAG                    "PolicyBasedRouting"
@@ -405,6 +406,7 @@ typedef struct  _IPACM_conf_t
 	bool lan_stats_enable;
 #endif
 	int max_file_size;
+	int max_boot_file_size;
 	uint8_t ipacm_log_level;
 	bool ipv6_nat_enable;
 	int ipacm_l2tp_enable;

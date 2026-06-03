@@ -367,6 +367,7 @@ class IPACM_Config
 public:
 
 	uint64_t max_file_size;
+	int max_boot_file_size;
 	uint8_t ipacm_log_level;
 
 	/* IPACM ipa_client map to rm_resource*/

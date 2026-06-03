@@ -570,10 +570,18 @@ reread:
     max_file_size = cfg->max_file_size;
 	IPACM_LOG(IPACM_LOG_DEBUG, "max_file_size %lld\n", max_file_size);
 
+	/*When boot file size increases dynamically, logs continue to get collected till new size*/
+	if (cfg->max_boot_file_size > max_boot_file_size) {
+		boot_log_full = 0;
+	}
+
+	max_boot_file_size = cfg->max_boot_file_size;
+	IPACM_LOG(IPACM_LOG_DEBUG, "max_boot_file_size %d\n", max_boot_file_size);
+
 	if (cfg->ipacm_log_level == 0 || cfg->ipacm_log_level == 4 || cfg->ipacm_log_level == 6
 		|| cfg->ipacm_log_level == 7 || cfg->ipacm_log_level == 8)
 	{
-		IPACM_LOG(IPACM_LOG_INFO, "ipacm log level Set to %d\n", cfg->ipacm_log_level);
+		IPACM_LOG(IPACM_LOG_INFO, "ipacm log level Set to %u\n", cfg->ipacm_log_level);
 		ipacm_log_level = cfg->ipacm_log_level;
 	}
 	else

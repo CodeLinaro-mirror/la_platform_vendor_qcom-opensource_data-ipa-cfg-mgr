@@ -70,6 +70,14 @@ int dynamic_logs_enable = 0;
 int log_init_done = 0;
 pthread_mutex_t file_lock;
 
+//boot log globals
+int boot_log_fd = -1;
+void* boot_mmap_addr = NULL;
+void* boot_write_addr = NULL;
+int boot_max_filesize  = 0;
+int boot_log_init_done = 0;
+int boot_log_full = 0;
+pthread_mutex_t boot_file_lock;
 
 uint8_t ipacm_global_log_level    = IPACM_DEF_LOG_LEVEL;
 
@@ -233,11 +241,11 @@ char *get_time_string(char *buffer, int len)
 int log_init(int file_size) {
         int ret = 0;
         int trunc_ret = -1;
-        dump_file = IPACM_LOG_COLLECTION_FILE;
-		IPACM_Config* config;
-		config = IPACM_Config::GetInstance();
+	dump_file = IPACM_LOG_COLLECTION_FILE;
+	IPACM_Config* config;
+	config = IPACM_Config::GetInstance();
 
-        if(config->ipacm_log_level >= IPACM_LOG_DISABLED && config->ipacm_log_level < IPACM_LOG_LVL_MAX)
+	if(config->ipacm_log_level >= IPACM_LOG_DISABLED && config->ipacm_log_level < IPACM_LOG_LVL_MAX)
 	{
 		ipacm_global_log_level = config->ipacm_log_level;
 	}
@@ -245,7 +253,6 @@ int log_init(int file_size) {
 	{
 		printf("Logging level invalid\n");
 	}
-
 
         if(max_filesize != file_size)
         {
@@ -270,7 +277,29 @@ int log_init(int file_size) {
         }
         else
         {
-            /* no change */
+            //if boot log size changes
+	    if (boot_log_init_done && config->max_boot_file_size > boot_max_filesize)
+		{
+		size_t write_offset = (char*)boot_write_addr - (char*)boot_mmap_addr;
+		munmap(boot_mmap_addr, boot_max_filesize);
+
+		if (ftruncate(boot_log_fd, config->max_boot_file_size) < 0)
+		{
+			perror("Boot ftruncate resize failed\n");
+			return -errno;
+		}
+
+		boot_mmap_addr = mmap(NULL, config->max_boot_file_size, PROT_READ | PROT_WRITE, MAP_SHARED, boot_log_fd, 0);
+		if ((void*)-1 == boot_mmap_addr || NULL == boot_mmap_addr)
+		{
+			perror("Boot mmap resize failed\n");
+			return -errno;
+		}
+		memset((char*)boot_mmap_addr + boot_max_filesize, ' ',config->max_boot_file_size - boot_max_filesize);
+		boot_write_addr = (char*)boot_mmap_addr + write_offset;
+		boot_max_filesize = config->max_boot_file_size;
+		boot_log_full = 0;
+		}
             return 0;
         }
 
@@ -306,8 +335,43 @@ int log_init(int file_size) {
 
 	/* Now log init is complete */
 	log_init_done = 1;
-        g_ipacm_logs_enabled = 1;
-        return 0;
+    g_ipacm_logs_enabled = 1;
+
+	/* Boot log init */
+	if (config->max_boot_file_size > 0 && !boot_log_init_done)
+	{
+		boot_log_fd = open(IPACM_LOG_COLLECTION_BOOTFILE, O_RDWR | O_CREAT | O_TRUNC, 0644);
+		if (boot_log_fd < 0)
+		{
+			perror("Boot logger file open failed\n");
+			return -errno;
+		}
+
+		if (ftruncate(boot_log_fd, config->max_boot_file_size) < 0)
+		{
+			perror("Boot ftruncate failed\n");
+			return -errno;
+		}
+
+		if (pthread_mutex_init(&boot_file_lock, NULL) != 0)
+		{
+			perror("Boot mutex init failed\n");
+			return -errno;
+		}
+
+		boot_mmap_addr = mmap(NULL, config->max_boot_file_size, PROT_READ | PROT_WRITE, MAP_SHARED, boot_log_fd, 0);
+		if ((void*)-1 == boot_mmap_addr || NULL == boot_mmap_addr)
+		{
+			perror("Boot mmap failed\n");
+			return -errno;
+		}
+
+		boot_write_addr    = boot_mmap_addr;
+		memset(boot_mmap_addr, ' ', config->max_boot_file_size);
+		boot_max_filesize  = config->max_boot_file_size;
+		boot_log_init_done = 1;
+	}
+    return 0;
 
 }
 
@@ -327,6 +391,27 @@ void ipacm_send_log_to_file(char* ipacm_log_data)
 		write_addr = mmap_addr;
 	}
 	snprintf((char*)write_addr, input_len, "%s", ipacm_log_data);
-	write_addr = (char*)write_addr + (input_len - 1); //start of line
+	write_addr = (char*)write_addr + (input_len - 1); 
 	FILE_UNLOCK();
+}
+
+void ipacm_send_log_to_boot_file(char* ipacm_log_data)
+{
+    if (!boot_log_init_done|| boot_log_full)
+        return;
+
+    int input_len = strlen(ipacm_log_data) + 1;
+
+    pthread_mutex_lock(&boot_file_lock);
+    if (((char*)boot_write_addr + input_len) <=
+        ((char*)boot_mmap_addr + boot_max_filesize - 1))
+    {
+        snprintf((char*)boot_write_addr, input_len, "%s", ipacm_log_data);
+        boot_write_addr = (char*)boot_write_addr + (input_len - 1);
+    }
+    else
+    {
+	boot_log_full = 1; 
+    }
+    pthread_mutex_unlock(&boot_file_lock);
 }

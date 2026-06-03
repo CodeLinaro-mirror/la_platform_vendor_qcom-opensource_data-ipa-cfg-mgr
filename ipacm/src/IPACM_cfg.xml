@@ -17,8 +17,10 @@
 			<!-- 0 = disable file logging. 20971520 = enable file (size: 20MB) logging. -->
 			<IPACMLogLevel>8</IPACMLogLevel>
 			<!-- logging levels 4 = ERR, 6 = ERR+WARN, 7 = ERR+WARN+INFO, 8 = ERR+WARN+INFO+DEBUG, 0 = disabled -->
+			<IPACMBootFileSize>65536</IPACMBootFileSize>
+			<!-- 0 = disable boot file logging. 65536 = boot log stops writing and does not roll over. -->
 		</IPACMLog>
-                <IPACMIface>
+		<IPACMIface>
 			<Iface>
 			   <Name>rndis0</Name>
 			   <Category>LAN</Category>

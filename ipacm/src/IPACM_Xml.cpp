@@ -737,18 +737,29 @@ static int ipacm_cfg_xml_parse_tree
 						dynamic_logs_enable = atoi(content_buf);
 						IPACM_LOG(IPACM_LOG_DEBUG,"dynamic_logs_enable: %d\n", dynamic_logs_enable);
 					}
+				}else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMBOOTFILESIZE_TAG))
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "inside ipacm_boot_logging \n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						config->max_boot_file_size = atoi(content_buf);
+						IPACM_LOG(IPACM_LOG_DEBUG, "max_boot_file_size %d \n", config->max_boot_file_size);
+					}
 				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACM_LOG_LEVEL_TAG))
 				{
 					IPACM_LOG(IPACM_LOG_DEBUG, "inside ipacm logging level tag\n");
 					content = IPACM_read_content_element(xml_node);
 					config->ipacm_log_level = 0;
-
 					if (content!= NULL)
 					{
 						if(atoi(content)!=0)
 						{
-							config->ipacm_log_level= atoi(content);
+							config->ipacm_log_level = atoi(content);
 						}
 						IPACM_LOG(IPACM_LOG_DEBUG, "IPACMLogLevel %u \n",config->ipacm_log_level);
 					}

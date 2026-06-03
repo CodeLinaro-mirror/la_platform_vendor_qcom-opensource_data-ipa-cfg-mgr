@@ -100,6 +100,7 @@ enum ipacm_log_level_t {
 };
 
 extern uint8_t ipacm_global_log_level;
+extern int boot_log_full;
 
 bool is_kernel_version_newer_than(
 			char *version,
@@ -109,6 +110,7 @@ void get_kernel_version(char* kernel_ver);
 char* get_time_string(char* buffer, int TimeStamp_len);
 void ipacm_send_log_to_qxdm(void* user_data);
 void ipacm_send_log_to_file(char ipacm_log_data[]);
+void ipacm_send_log_to_boot_file(char* ipacm_log_data);
 int  log_init(int);
 extern int g_ipacm_logs_enabled;
 void ipacm_set_log_enabled(int enable);
@@ -118,14 +120,15 @@ do { \
 		char __ipacm_log_buffer_send[IPACM_LOG_MAX_BUF_LEN]; \
 		char __ipacm_log_core_buf[IPACM_LOG_MAX_CORE_BUF_LEN]; \
 		char __ipacm_log_timestamp_buf[IPACM_LOG_TIMESTAMP_BUF_LEN]; \
-        if (incoming_log_level > ipacm_global_log_level) break; \
+		get_time_string(__ipacm_log_timestamp_buf, IPACM_LOG_TIMESTAMP_BUF_LEN); \
 		snprintf(__ipacm_log_core_buf, IPACM_LOG_MAX_CORE_BUF_LEN, "%s:%d %s() " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN, "%s %s", __ipacm_log_timestamp_buf, __ipacm_log_core_buf); \
+		if (!boot_log_full && (g_ipacm_logs_enabled || dynamic_logs_enable)) ipacm_send_log_to_boot_file(__ipacm_log_buffer_send); \
 		if (incoming_log_level <= ipacm_global_log_level) \
 		{\
 			ipacm_send_log_to_qxdm(__ipacm_log_core_buf); \
 			if (g_ipacm_logs_enabled || dynamic_logs_enable) \
 			{\
-				snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN, "%s %s", get_time_string(__ipacm_log_timestamp_buf, IPACM_LOG_TIMESTAMP_BUF_LEN), __ipacm_log_core_buf); \
 				printf("%s\n", __ipacm_log_buffer_send); \
 				ipacm_send_log_to_file(__ipacm_log_buffer_send); \
 			}\

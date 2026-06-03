@@ -83,15 +83,15 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 	switch(event)
 	{
 		case IPA_CFG_CHANGE_EVENT:
-				IPACMDBG_H(" RESET IPACM_cfg \n");
+				IPACM_LOG(IPACM_LOG_WARN, " RESET IPACM_cfg \n");
 				IPACM_Iface::ipacmcfg->Init();
 			break;
 		case IPA_BRIDGE_LINK_UP_EVENT:
-			IPACMDBG_H(" Save the bridge mac info in IPACM_cfg \n");
+			IPACM_LOG(IPACM_LOG_DEBUG, " Save the bridge mac info in IPACM_cfg \n");
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(data_all->if_index);
 			/* check for failure return */
 			if(IPACM_FAILURE == ipa_interface_index) {
-				IPACMDBG_H("IPA_BRIDGE_LINK_UP_EVENT: not supported iface id: %d\n", data_all->if_index);
+				IPACM_LOG(IPACM_LOG_ERR, "IPA_BRIDGE_LINK_UP_EVENT: not supported iface id: %d\n", data_all->if_index);
 				break;
 			}
 			/* check if iface is bridge interface*/
@@ -101,28 +101,28 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				memcpy(IPACM_Iface::ipacmcfg->bridge_mac,
 								data_all->mac_addr,
 								sizeof(IPACM_Iface::ipacmcfg->bridge_mac));
-				IPACMDBG_H("cached bridge0 MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+				IPACM_LOG(IPACM_LOG_INFO, "cached bridge0 MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 IPACM_Iface::ipacmcfg->bridge_mac[0], IPACM_Iface::ipacmcfg->bridge_mac[1], IPACM_Iface::ipacmcfg->bridge_mac[2],
 						 IPACM_Iface::ipacmcfg->bridge_mac[3], IPACM_Iface::ipacmcfg->bridge_mac[4], IPACM_Iface::ipacmcfg->bridge_mac[5]);
 			}
 			break;
 		case IPA_LINK_UP_EVENT:
-			IPACMDBG_H("Recieved IPA_LINK_UP_EVENT event: link up %d: \n", evt_data->if_index);
+			IPACM_LOG(IPACM_LOG_INFO, "Recieved IPA_LINK_UP_EVENT event: link up %d: \n", evt_data->if_index);
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
-				IPACMDBG_H("IPA_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
+				IPACM_LOG(IPACM_LOG_ERR, "IPA_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
 				break;
 			}
 			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, IPA_IFACE_NAME_LEN);
 			/* LTE-backhaul */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == EMBMS_IF)
 			{
-				IPACMDBG("WAN-EMBMS (%s) link already up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
+				IPACM_LOG(IPACM_LOG_WARN, "WAN-EMBMS (%s) link already up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
 			}
 			else if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF)
 			{
-				IPACMDBG_H("WAN-LTE (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
+				IPACM_LOG(IPACM_LOG_INFO, "WAN-LTE (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
 				ifmgr_data.if_index = evt_data->if_index;
 				ifmgr_data.if_type = Q6_WAN;
 				create_iface_instance(&ifmgr_data);
@@ -130,11 +130,11 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			break;
 
 		case IPA_USB_LINK_UP_EVENT:
-			IPACMDBG_H("Recieved IPA_USB_LINK_UP_EVENT event: link up %d: \n", evt_data->if_index);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Recieved IPA_USB_LINK_UP_EVENT event: index %d \n", evt_data->if_index);
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
-				IPACMDBG_H("IPA_USB_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
+				IPACM_LOG(IPACM_LOG_ERR, "IPA_USB_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
 				break;
 			}
 			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, IPA_IFACE_NAME_LEN);
@@ -142,7 +142,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF)
 			{
 				/* usb-backhaul using sta_mode ECM_WAN*/
-				IPACMDBG_H("WAN-usb (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, evt_data->if_index);
+				IPACM_LOG(IPACM_LOG_INFO, "WAN-usb (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, evt_data->if_index);
 				ifmgr_data.if_index = evt_data->if_index;
 				ifmgr_data.if_type = ECM_WAN;
 				create_iface_instance(&ifmgr_data);
@@ -159,7 +159,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
-				IPACMDBG_H("IPA_WLAN_AP_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
+				IPACM_LOG(IPACM_LOG_ERR, "IPA_WLAN_AP_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
 				break;
 			}
 			/* change iface category from unknown to WLAN_IF */
@@ -167,7 +167,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			{
 				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat = WLAN_IF;
 				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_wlan_if_vlan = false;
-				IPACMDBG_H("WLAN AP (%s) link up, iface: %d: ipa_if: %d\n",
+				IPACM_LOG(IPACM_LOG_INFO,"WLAN AP (%s) link up, iface: %d: ipa_if: %d\n",
 				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index, ipa_interface_index);
 				ifmgr_data.if_index = evt_data->if_index;
 				ifmgr_data.if_type = Q6_WAN;
@@ -179,7 +179,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			}
 			else if(evt_data->mlo_enabled && IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WLAN_IF)
 			{
-				IPACMDBG_H("WLAN AP (%s) link up, iface: %d: ipa_if: %d\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "WLAN AP (%s) link up, iface: %d: ipa_if: %d\n",
 					evt_data->iface_name,evt_data->if_index,ipa_interface_index);
 				ifmgr_data.if_index = evt_data->if_index;
 				ifmgr_data.if_type = Q6_WAN;
@@ -191,7 +191,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			}
 			else
 			{
-				IPACMDBG_H("iface %s already up and act as %d mode: \n",IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat);
+				IPACM_LOG(IPACM_LOG_WARN, "iface %s already up and act as %d mode: \n",IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat);
 			}
 			break;
 
@@ -199,7 +199,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(StaData->if_index);
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
-				IPACMDBG_H("IPA_WLAN_STA_LINK_UP_EVENT: not supported iface id: %d\n", StaData->if_index);
+				IPACM_LOG(IPACM_LOG_ERR, "IPA_WLAN_STA_LINK_UP_EVENT: not supported iface id: %d\n", StaData->if_index);
 				break;
 			}
 			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, IPA_IFACE_NAME_LEN);
@@ -218,7 +218,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			{
 				/* wlan-backhaul using sta_mode WLAN_WAN */
 				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat = WAN_IF;
-				IPACMDBG_H("WLAN STA (%s) link up, iface: %d: \n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "WLAN STA (%s) link up, iface: %d: \n",
 				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, StaData->if_index);
 
 				ifmgr_data.if_index = StaData->if_index;
@@ -228,7 +228,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			}
 			else
 			{
-				IPACMDBG_H("iface %s already up and act as %d mode: \n",
+				IPACM_LOG(IPACM_LOG_WARN, "iface %s already up and act as %d mode: \n",
 				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
 						IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat);
 			}
@@ -239,7 +239,7 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
-				IPACMDBG_H("IPA_WAN_EMBMS_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
+				IPACM_LOG(IPACM_LOG_ERR, "IPA_WAN_EMBMS_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
 				break;
 			}
 			strlcpy(ifmgr_data.iface_name, evt_data->iface_name, IPA_IFACE_NAME_LEN);
@@ -247,18 +247,18 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			/* change iface category from unknown to EMBMS_IF */
 			if ((IPACM_Iface::ipacmcfg->ipacm_odu_enable == true) && (IPACM_Iface::ipacmcfg->ipacm_odu_embms_enable == true))
 			{
-				IPACMDBG(" ODU-mode enable or not (%d) \n",IPACM_Iface::ipacmcfg->ipacm_odu_enable);
+				IPACM_LOG(IPACM_LOG_INFO, " ODU-mode enable or not (%d) \n",IPACM_Iface::ipacmcfg->ipacm_odu_enable);
 				if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF)
 				{
 					IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat=EMBMS_IF;
-					IPACMDBG("WAN eMBMS (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
+					IPACM_LOG(IPACM_LOG_INFO, "WAN eMBMS (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
 					ifmgr_data.if_index = StaData->if_index;
 					ifmgr_data.if_type = Q6_WAN;
 					create_iface_instance(&ifmgr_data);
 				}
 				else
 				{
-					IPACMDBG("iface %s already up and act as %d mode: \n",IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat);
+					IPACM_LOG(IPACM_LOG_WARN, "iface %s already up and act as %d mode: \n",IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat);
 				}
 			}
 			break;
@@ -285,14 +285,14 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 
 	if(ipa_interface_index == INVALID_IFACE)
 	{
-			IPACMDBG_H("Unhandled interface received, fid: %d\n",if_index);
+			IPACM_LOG(IPACM_LOG_WARN, "Unhandled interface received, fid: %d\n",if_index);
 			return IPACM_SUCCESS;
 	}
 
 	/* check if in ETH-pdu mode then disable all instance creation */
 	if (IPACM_Iface::ipacmcfg->eth_pdu_enabled)
 	{
-		IPACMDBG_H("ETH PDU enabled, don't need to  construct iface\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "ETH PDU enabled, don't need to  construct iface\n");
 		return IPACM_SUCCESS;
 	}
 
@@ -306,7 +306,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 
 		case LAN_IF:
 			{
-				IPACMDBG_H("Creating Lan interface\n");
+				IPACM_LOG(IPACM_LOG_DEBUG,"Creating Lan interface\n");
 				IPACM_Lan *lan = new IPACM_Lan(param->iface_name, ipa_interface_index);
 				if (lan->rx_prop == NULL && lan->tx_prop == NULL)
 				{
@@ -371,7 +371,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #endif
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, lan);
-				IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", lan->dev_name, lan->ipa_if_num);
+				IPACM_LOG(IPACM_LOG_INFO,"ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", lan->dev_name, lan->ipa_if_num);
 				registr(param->iface_name, ipa_interface_index, lan);
 				/* solve the new_addr comes earlier issue */
 				IPACM_Iface::iface_addr_query(if_index);
@@ -380,7 +380,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 
 		case ETH_IF:
 			{
-				IPACMDBG_H("Creating ETH interface in router mode\n");
+				IPACM_LOG(IPACM_LOG_INFO,"Creating ETH interface in router mode\n");
 				IPACM_Lan *ETH = new IPACM_Lan(param->iface_name, ipa_interface_index);
 				if (ETH->rx_prop == NULL && ETH->tx_prop == NULL)
 				{
@@ -429,7 +429,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #endif
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, ETH);
-				IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", ETH->dev_name, ETH->ipa_if_num);
+				IPACM_LOG(IPACM_LOG_INFO, "ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", ETH->dev_name, ETH->ipa_if_num);
 				registr(param->iface_name, ipa_interface_index, ETH);
 				/* solve the new_addr comes earlier issue */
 				IPACM_Iface::iface_addr_query(if_index);
@@ -440,7 +440,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 			{
 				if(IPACM_Iface::ipacmcfg->ipacm_odu_router_mode == true)
 				{
-					IPACMDBG_H("Creating ODU interface in router mode\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "Creating ODU interface in router mode\n");
 					IPACM_Lan *odu = new IPACM_Lan(param->iface_name, ipa_interface_index);
 					if (odu->rx_prop == NULL && odu->tx_prop == NULL)
 					{
@@ -510,14 +510,14 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_QOS_RULE_FLUSH_EVENT, odu);
 					/* IPA_LAN_DELETE_SELF should be always last */
 					IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, odu);
-					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
+					IPACM_LOG(IPACM_LOG_INFO,"ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
 					registr(param->iface_name, ipa_interface_index, odu);
 					/* solve the new_addr comes earlier issue */
 					IPACM_Iface::iface_addr_query(if_index);
 				}
 				else
 				{
-					IPACMDBG_H("Creating ODU interface in bridge mode\n");
+					IPACM_LOG(IPACM_LOG_DEBUG,"Creating ODU interface in bridge mode\n");
 					IPACM_Lan *odu = new IPACM_Lan(param->iface_name, ipa_interface_index);
 					if (odu->rx_prop == NULL && odu->tx_prop == NULL)
 					{
@@ -536,7 +536,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_IPACM_DISABLE, odu);
 					/* IPA_LAN_DELETE_SELF should be always last */
 					IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, odu);
-					IPACMDBG_H("ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
+					IPACM_LOG(IPACM_LOG_INFO,"ipa_LAN (%s):ipa_index (%d) instance open/registr ok\n", odu->dev_name, odu->ipa_if_num);
 					registr(param->iface_name, ipa_interface_index, odu);
 					/* solve the new_addr comes earlier issue */
 					IPACM_Iface::iface_addr_query(if_index);
@@ -546,7 +546,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 
 		case WLAN_IF:
 			{
-				IPACMDBG_H("Creating WLan interface\n");
+				IPACM_LOG(IPACM_LOG_DEBUG,"Creating WLan interface\n");
 				IPACM_Wlan *wl = new IPACM_Wlan(param->iface_name, ipa_interface_index, ast_update);
 				if (wl->rx_prop == NULL && wl->tx_prop == NULL)
 				{
@@ -624,7 +624,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_QOS_RULE_FLUSH_EVENT, wl);
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, wl);
-				IPACMDBG_H("ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);
+				IPACM_LOG(IPACM_LOG_INFO,"ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);
 				registr(param->iface_name, ipa_interface_index, wl);
 				/* solve the new_addr comes earlier issue */
 	            IPACM_Iface::iface_addr_query(if_index);
@@ -635,7 +635,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 			{
 				if((IPACM_Iface::ipacmcfg->ipacm_odu_enable == false) || (IPACM_Iface::ipacmcfg->ipacm_odu_router_mode == true))
 				{
-					IPACMDBG_H("Creating Wan interface\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "Creating Wan interface\n");
 					IPACM_Wan *w;
 					if(is_sta_mode == WLAN_WAN)
 					{
@@ -746,7 +746,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, w);
 					}
 
-					IPACMDBG_H("ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", w->dev_name, w->ipa_if_num);
+					IPACM_LOG(IPACM_LOG_INFO,"ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", w->dev_name, w->ipa_if_num);
 					registr(param->iface_name, ipa_interface_index, w);
 					/* solve the new_addr comes earlier issue */
 					IPACM_Iface::iface_addr_query(if_index);
@@ -757,7 +757,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 	    /* WAN-eMBMS instance */
 		case EMBMS_IF:
 			{
-				IPACMDBG("Creating Wan-eMBSM interface\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "Creating Wan-eMBSM interface\n");
 				IPACM_Wan *embms = new IPACM_Wan(ipa_interface_index, is_sta_mode, NULL);
 				if (embms->rx_prop == NULL && embms->tx_prop == NULL)
 				{
@@ -766,13 +766,13 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					return IPACM_FAILURE;
 				}
 				IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, embms);
-				IPACMDBG("ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", embms->dev_name, embms->ipa_if_num);
+				IPACM_LOG(IPACM_LOG_INFO,"ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", embms->dev_name, embms->ipa_if_num);
 				registr(param->iface_name, ipa_interface_index, embms);
 			}
 			break;
 		case VIRTUAL_IF:
 			{
-					IPACMDBG("Creating br-lan interface bridge instance\n");
+					IPACM_LOG(IPACM_LOG_INFO,"Creating br-lan interface bridge instance\n");
 					IPACM_Bridge *br_lan = new IPACM_Bridge();
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, br_lan);
 					IPACM_EvtDispatcher::registr(IPA_ADDR_DEL_EVENT, br_lan);
@@ -783,7 +783,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 			break;
 
 		default:
-			IPACMDBG_H("Unhandled interface category received iface name: %s, category: %d\n",
+			IPACM_LOG(IPACM_LOG_ERR, "Unhandled interface category received iface name: %s, category: %d\n",
 			            IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
 						       IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat);
 			return IPACM_SUCCESS;
@@ -870,8 +870,8 @@ int IPACM_IfaceManager::SearchInstance(ipacm_ifacemgr_data *param)
 	{
 		if((param->ipa_interface_index == tmp->ipa_if_index) && (!strncmp(tmp->iface_name, param->iface_name, IPA_IFACE_NAME_LEN)))
 		{
-			IPACMDBG_H("Find existed iface-instance name: %s\n",
-								IPACM_Iface::ipacmcfg->iface_table[param->ipa_interface_index].iface_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Find existed iface-instance name: %s\n",
+					IPACM_Iface::ipacmcfg->iface_table[param->ipa_interface_index].iface_name);
 			return IPA_INSTANCE_FOUND;
 		}
 		tmp = tmp->next;
@@ -879,10 +879,10 @@ int IPACM_IfaceManager::SearchInstance(ipacm_ifacemgr_data *param)
 
 	if(tmp == NULL)
 	{
-		IPACMERR("Empty head\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Empty head\n");
 		return IPA_INSTANCE_NOT_FOUND;
 	}
-	IPACMDBG_H("No existed iface-instance name: %s,\n",
+	IPACM_LOG(IPACM_LOG_DEBUG,"No existed iface-instance name: %s,\n",
 					 IPACM_Iface::ipacmcfg->iface_table[tmp->ipa_if_index].iface_name);
 
 	return IPA_INSTANCE_NOT_FOUND;

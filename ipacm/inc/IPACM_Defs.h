@@ -238,13 +238,13 @@ extern "C"
  * an address.  No assumptions are made about endianess.
  */
 #define IPACM_LOG_V4_ADDR(prefix, ip_addr)								\
-	IPACMDBG_H("%s IPV4 Address %d.%d.%d.%d\n",							\
+	IPACM_LOG(IPACM_LOG_DEBUG, "%s IPV4 Address %d.%d.%d.%d\n",							\
 			   (prefix) ? prefix : "",									\
 			   ((uint8_t*) ip_addr)[0],  ((uint8_t*) ip_addr)[1],		\
 			   ((uint8_t*) ip_addr)[2],  ((uint8_t*) ip_addr)[3]);
 
 #define IPACM_LOG_V6_ADDR(prefix, ip_addr)								\
-	IPACMDBG_H("%s IPV6 Address %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n", \
+	IPACM_LOG(IPACM_LOG_DEBUG, "%s IPV6 Address %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n", \
 			   (prefix) ? prefix : "",									\
 			   ((uint8_t*) ip_addr)[0],  ((uint8_t*) ip_addr)[1],		\
 			   ((uint8_t*) ip_addr)[2],  ((uint8_t*) ip_addr)[3],		\

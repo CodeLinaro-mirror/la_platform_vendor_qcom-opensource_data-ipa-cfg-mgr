@@ -333,14 +333,14 @@ private:
 		int cnt;
 		int num_wifi_client_tmp = num_wifi_client;
 
-		IPACMDBG_H("Passed MAC %02x:%02x:%02x:%02x:%02x:%02x, left client: %d\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "Passed MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
 						 mac_addr[3], mac_addr[4], mac_addr[5],
 						 num_wifi_client);
 
 		for(cnt = 0; cnt < num_wifi_client_tmp; cnt++)
 		{
-			IPACMDBG_H("stored MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "stored MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 get_client_memptr(wlan_client, cnt)->mac[0],
 							 get_client_memptr(wlan_client, cnt)->mac[1],
 							 get_client_memptr(wlan_client, cnt)->mac[2],
@@ -355,18 +355,18 @@ private:
 #ifdef FEATURE_VLAN_MPDN
 				if(vlan_id)
 				{
-					IPACMDBG("VLAN IF MAC match, looking for vlan ID %d, current %d\n", vlan_id,
+					IPACM_LOG(IPACM_LOG_DEBUG, "VLAN IF MAC match, looking for vlan ID %d, current %d\n", vlan_id,
 						get_client_memptr(wlan_client, cnt)->vlan_id);
 					if(get_client_memptr(wlan_client, cnt)->vlan_id == vlan_id)
 					{
-						IPACMDBG_H("Matched client index: %d for vid %d\n", cnt, vlan_id);
+						IPACM_LOG(IPACM_LOG_DEBUG,"Matched client index: %d for vid %d\n", cnt, vlan_id);
 						return cnt;
 					}
 				}
 				else
 #endif
 				{
-					IPACMDBG_H("Matched client index: %d\n", cnt);
+					IPACM_LOG(IPACM_LOG_DEBUG,"Matched client index: %d\n", cnt);
 					return cnt;
 				}
 			}
@@ -382,19 +382,19 @@ private:
 		clnt_indx = get_wlan_client_index(mac_addr, vlan_id);
 		if(clnt_indx == IPACM_INVALID_INDEX)
 		{
-			IPACMERR("eth client not found/attached \n");
+			IPACM_LOG(IPACM_LOG_ERR, "eth client not found/attached \n");
 			return IPACM_FAILURE;
 		}
 
 		if (get_client_memptr(wlan_client, clnt_indx)->ipv4_set)
 		{
 			ip_addr = get_client_memptr(wlan_client, clnt_indx)->v4_addr;
-			IPACMDBG_H("ip addr is 0x%X\n", ip_addr);
+			IPACM_LOG(IPACM_LOG_DEBUG, "ip addr is 0x%X\n", ip_addr);
 			return IPACM_SUCCESS;
 		}
 		else
 		{
-			IPACMDBG_H("ipv4 address not set\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "ipv4 address not set\n");
 			return IPACM_FAILURE;
 		}
 	}
@@ -408,11 +408,11 @@ private:
 		{
 			if(if_index == get_client_memptr(wlan_client, cnt)->if_index)
 			{
-				IPACMDBG_H("if_index %d is used by client %d\n", if_index, cnt);
+				IPACM_LOG(IPACM_LOG_DEBUG, "if_index %d is used by client %d\n", if_index, cnt);
 				return cnt;
 			}
 		}
-		IPACMERR("could not find client with if_index %d\n", if_index);
+		IPACM_LOG(IPACM_LOG_ERR, "could not find client with if_index %d\n", if_index);
 		return IPACM_INVALID_INDEX;
 	}
 
@@ -427,14 +427,14 @@ private:
 		int cnt;
 		int num_wifi_client_tmp = num_wifi_primary_client;
 
-		IPACMDBG_H("Passed MAC %02x:%02x:%02x:%02x:%02x:%02x, left client: %d\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "Passed MAC %02x:%02x:%02x:%02x:%02x:%02x, left client: %d\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
 						 mac_addr[3], mac_addr[4], mac_addr[5],
 						 num_wifi_primary_client);
 
 		for(cnt = 0; cnt < num_wifi_client_tmp; cnt++)
 		{
-			IPACMDBG_H("stored MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "stored MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 get_primary_client_memptr(wlan_primary_client, cnt)->mac[0],
 							 get_primary_client_memptr(wlan_primary_client, cnt)->mac[1],
 							 get_primary_client_memptr(wlan_primary_client, cnt)->mac[2],
@@ -446,7 +446,7 @@ private:
 								mac_addr,
 								sizeof(get_primary_client_memptr(wlan_primary_client, cnt)->mac)) == 0)
 			{
-				IPACMDBG_H("Matched client index: %d\n", cnt);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Matched client index: %d\n", cnt);
 				return cnt;
 			}
 		}
@@ -467,7 +467,7 @@ private:
 		    {
 		        if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */
 			{
-				IPACMDBG_H("Delete client index %d ipv4 Qos rules for tx:%d \n",clt_indx,tx_index);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Delete client index %d ipv4 Qos rules for tx:%d \n",clt_indx,tx_index);
 				rt_hdl = get_client_memptr(wlan_client, clt_indx)->wifi_rt_hdl[tx_index].wifi_rt_rule_hdl_v4;
 
 				if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
@@ -486,7 +486,7 @@ private:
 
 		if(iptype == IPA_IP_v6)
 		{
-			IPACMDBG_H("Current %d client has %d ipv6 route_set %d,ipa_num_clients_ipv6:%d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Current %d client has %d ipv6 route_set %d,ipa_num_clients_ipv6:%d\n",
 				clt_indx, get_client_memptr(wlan_client, clt_indx)->ipv6_set,
 				get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6,
 					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
@@ -497,14 +497,14 @@ private:
 					num_v6++;
 					if(it->second.route_rule_set_v6 == true)
 					{
-						IPACMDBG_H("v6 addr : 0x%08x:%08x:%08x:%08x\n",
+						IPACM_LOG(IPACM_LOG_DEBUG, "v6 addr : 0x%08x:%08x:%08x:%08x\n",
 							it->first[0], it->first[1], it->first[2], it->first[3]);
 
 						for(tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 						{
 							if(tx_prop->tx[tx_index].ip == IPA_IP_v6) /* for ipv6 */
 							{
-								IPACMDBG_H("Delete client index %d ipv6 Qos rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
+								IPACM_LOG(IPACM_LOG_DEBUG, "Delete client index %d ipv6 Qos rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
 								rt_hdl = it->second.hdl_v6[tx_index].rt_rule_hdl_v6;
 								if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
 								{
@@ -522,7 +522,7 @@ private:
 					} /* end of route_rule_set_v6 */
 				} /* end of for loop */
 			}
-			IPACMDBG_H("Current clnt-index:%d ipv6_set= %d, route_rule_set_v6= %d, update ipa_num_clients_ipv6:%d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Current clnt-index:%d ipv6_set= %d, route_rule_set_v6= %d, update ipa_num_clients_ipv6:%d\n",
 				clt_indx, get_client_memptr(wlan_client, clt_indx)->ipv6_set,
 				get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6,
 				IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6);
@@ -538,12 +538,12 @@ private:
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx == -1) {
-					IPACMDBG_H("Available free index :%d\n", cnt);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Available free index :%d\n", cnt);
 					return true;
 				}
 			}
 
-			IPACMDBG_H("No free index available\n");
+			IPACM_LOG(IPACM_LOG_WARN, "No free index available\n");
 			return false;
 		}
 
@@ -553,18 +553,18 @@ private:
 
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
-				IPACMDBG_H("LAN stats functionality is not enabled.\n");
+				IPACM_LOG(IPACM_LOG_WARN, "LAN stats functionality is not enabled.\n");
 				return -1;
 			}
 
-			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
 
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx == -1) {
-					IPACMDBG_H("Got active lan stats index :%d, reserve it\n", cnt);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Got active lan stats index :%d, reserve it\n", cnt);
 					IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx = cnt;
 					memcpy(IPACM_Wlan::active_lan_client_index[cnt].mac,
 							mac_addr,
@@ -574,7 +574,7 @@ private:
 				}
 			}
 
-			IPACMDBG_H("index not available\n");
+			IPACM_LOG(IPACM_LOG_WARN, "index not available\n");
 			return -1;
 		}
 
@@ -584,18 +584,18 @@ private:
 
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
-				IPACMDBG_H("LAN stats functionality is not enabled.\n");
+				IPACM_LOG(IPACM_LOG_WARN, "LAN stats functionality is not enabled.\n");
 				return -1;
 			}
 
-			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
 
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (IPACM_Wlan::inactive_lan_client_index[cnt].lan_stats_idx == -1) {
-					IPACMDBG_H("Got inactive lan stats index :%d, reserve it\n", cnt);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Got inactive lan stats index :%d, reserve it\n", cnt);
 					IPACM_Wlan::inactive_lan_client_index[cnt].lan_stats_idx = cnt;
 					memcpy(IPACM_Wlan::inactive_lan_client_index[cnt].mac,
 							mac_addr,
@@ -605,7 +605,7 @@ private:
 				}
 			}
 
-			IPACMDBG_H("index not available\n");
+			IPACM_LOG(IPACM_LOG_WARN, "index not available\n");
 			return -1;
 		}
 
@@ -615,11 +615,11 @@ private:
 
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
-				IPACMDBG_H("LAN stats functionality is not enabled.\n");
+				IPACM_LOG(IPACM_LOG_WARN, "LAN stats functionality is not enabled.\n");
 				return -1;
 			}
 
-			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
 
@@ -630,7 +630,7 @@ private:
 						IPA_MAC_ADDR_SIZE) == 0) &&
 						(IPACM_Wlan::active_lan_client_index[cnt].ipa_if_num
 						== ipa_if_num)) {
-					IPACMDBG_H("Got lan stats index :%d, return\n", cnt);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Got lan stats index :%d, return\n", cnt);
 					IPACM_Wlan::active_lan_client_index[cnt].lan_stats_idx = cnt;
 					memcpy(IPACM_Wlan::active_lan_client_index[cnt].mac,
 							mac_addr,
@@ -639,7 +639,7 @@ private:
 				}
 			}
 
-			IPACMDBG_H("index not available\n");
+			IPACM_LOG(IPACM_LOG_WARN, "index not available\n");
 			return -1;
 		}
 
@@ -649,25 +649,25 @@ private:
 
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
-				IPACMDBG_H("LAN stats functionality is not enabled.\n");
+				IPACM_LOG(IPACM_LOG_WARN, "LAN stats functionality is not enabled.\n");
 				return IPACM_FAILURE;
 			}
 
-			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
 
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (IPACM_Wlan::inactive_lan_client_index[cnt].lan_stats_idx != -1) {
-					IPACMDBG_H("Got inactive lan stats index :%d, return the mac\n", cnt);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Got inactive lan stats index :%d, return the mac\n", cnt);
 					memcpy(mac_addr, IPACM_Wlan::inactive_lan_client_index[cnt].mac, IPA_MAC_ADDR_SIZE);
 					*ipa_if_num = IPACM_Wlan::inactive_lan_client_index[cnt].ipa_if_num;
 					return IPACM_SUCCESS;
 				}
 			}
 
-			IPACMDBG_H("No inactive client\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "No inactive client\n");
 			return IPACM_FAILURE;
 		}
 
@@ -675,11 +675,11 @@ private:
 		{
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
-				IPACMDBG_H("LAN stats functionality is not enabled.\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "LAN stats functionality is not enabled.\n");
 				return IPACM_FAILURE;
 			}
 
-			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
 
@@ -688,7 +688,7 @@ private:
 								mac_addr,
 								IPA_MAC_ADDR_SIZE))
 			{
-				IPACMDBG_H("Index :%d invalid\n", idx);
+				IPACM_LOG(IPACM_LOG_WARN, "Index :%d invalid\n", idx);
 				return IPACM_FAILURE;
 			}
 			memset(&IPACM_Wlan::active_lan_client_index[idx], -1, sizeof(ipa_lan_client_idx));
@@ -701,11 +701,11 @@ private:
 
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
-				IPACMDBG_H("LAN stats functionality is not enabled.\n");
+				IPACM_LOG(IPACM_LOG_WARN, "LAN stats functionality is not enabled.\n");
 				return IPACM_FAILURE;
 			}
 
-			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					mac_addr[0], mac_addr[1], mac_addr[2],
 					mac_addr[3], mac_addr[4], mac_addr[5]);
 
@@ -728,7 +728,7 @@ private:
 
 			if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 			{
-				IPACMDBG_H("LAN stats functionality is not enabled.\n");
+				IPACM_LOG(IPACM_LOG_WARN, "LAN stats functionality is not enabled.\n");
 				return;
 			}
 

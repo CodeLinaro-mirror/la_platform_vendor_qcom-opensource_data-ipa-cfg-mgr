@@ -287,7 +287,7 @@ IPACM_Config::IPACM_Config()
 	pthread_mutex_init(&nat_iface_lock, NULL);
 	pthread_mutex_init(&qos_param_list_lock, NULL);
 	pthread_mutex_init(&qos_param_list_lock, NULL);
-	IPACMDBG_H(" create IPACM_Config constructor\n");
+	IPACM_LOG(IPACM_LOG_DEBUG," create IPACM_Config constructor\n");
 	pthread_mutex_init(&mac_flt_info_lock, NULL);
 #ifdef FEATURE_EoGRE
 	memset(&eogre_info, 0, sizeof(eogre_info));
@@ -307,14 +307,14 @@ IPACM_Config::IPACM_Config()
 			sizeof(IPACM_dscp_pcp_conf_t));
 
 	strlcpy(IPACM_config_ext_file, IPACM_CONFIG_EXT_FILE, sizeof(IPACM_config_ext_file));
-	IPACMDBG_H("\n IPACM CFG EXT XML file is %s \n", IPACM_config_ext_file);
+	IPACM_LOG(IPACM_LOG_DEBUG, "\n IPACM CFG EXT XML file is %s \n", IPACM_config_ext_file);
 	if (IPACM_SUCCESS == IPACM_read_cfg_ext_xml(IPACM_config_ext_file, &dscp_pcp_config))
 	{
-		IPACMDBG_H("\n IPACM XML EXT read OK \n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "\n IPACM XML EXT read OK \n");
 	}
 	else
 	{
-		IPACMERR("Config EXT (DSCP-PCP) XML read failed\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Config EXT (DSCP-PCP) XML read failed\n");
 	}
 
 	return;
@@ -324,7 +324,7 @@ IPACM_Config::IPACM_Config()
 static int ipacm_fnr_v2_ioctl(const int fd, unsigned int request, void *arg)
 {
 	if (!fd) {
-		IPACMERR("Invalid fd!\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid fd!\n");
 		return -EFAULT;
 	}
 	return ioctl(fd, request, arg);
@@ -334,12 +334,12 @@ static void dump_fnr_counters(const struct ipa_ioc_flt_rt_counter_alloc *fnr)
 {
 	if (!fnr)
 		return;
-	IPACMERR("hw hdl = %d\n"
+	IPACM_LOG(IPACM_LOG_ERR,"hw hdl = %d\n"
 		"hw_num_counters = %hhu\n"
 		"hw_start_id = %hhu\n, hw_allow_less = %hhu\n",
 		fnr->hdl, fnr->hw_counter.num_counters, fnr->hw_counter.allow_less,
 		fnr->hw_counter.start_id);
-	IPACMERR("sw hdl = %d\n"
+	IPACM_LOG(IPACM_LOG_ERR,"sw hdl = %d\n"
 		"sw_num_counters = %hhu\n"
 		"sw_start_id = %hhu\n, sw_allow_less = %hhu\n",
 		fnr->hdl, fnr->sw_counter.num_counters, fnr->sw_counter.allow_less,
@@ -355,11 +355,11 @@ int IPACM_Config::get_free_cnt_idx(void)
 			cnt_idx[i].in_use = true;
 			/* reset the counter index and counter index + 1 before sending it to client */
 			ipacm_reset_hw_fnr_counters(cnt_idx[i].counter_index, cnt_idx[i].counter_index + 1);
-			IPACMDBG_H("Returned free index = %d\n", cnt_idx[i].counter_index);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Returned free index = %d\n", cnt_idx[i].counter_index);
 			return cnt_idx[i].counter_index;
 		}
 	}
-	IPACMERR("No free/unused index found.\n");
+	IPACM_LOG(IPACM_LOG_ERR, "No free/unused index found.\n");
 	return IPACM_FAILURE;
 }
 
@@ -372,13 +372,13 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 	int fd = open(DEVICE_NAME, O_RDWR);
 
 	if (fd < 0) {
-		IPACMERR("fnr: Failed to open /dev/ipa\n");
+		IPACM_LOG(IPACM_LOG_ERR, "fnr: Failed to open /dev/ipa\n");
 		return IPACM_FAILURE;
 	}
 	query = (struct ipa_ioc_flt_rt_query *)malloc(sizeof(struct ipa_ioc_flt_rt_query));
 	if (!query)
 	{
-		IPACMERR("Failed to allocate memory for fnr query\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to allocate memory for fnr query\n");
 		ret = -ENOMEM;
 		goto fail;
 	}
@@ -392,7 +392,7 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 
 	query->stats = (uint64_t)calloc(num_counters, query->stats_size);
 	if (!query->stats) {
-		IPACMERR("fnr : Failed to allocate memory for query stats\n");
+		IPACM_LOG(IPACM_LOG_ERR, "fnr : Failed to allocate memory for query stats\n");
 		free(query);
 		ret = IPACM_FAILURE;
 		goto fail;
@@ -402,7 +402,7 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 	{
 		ret = ipacm_fnr_v2_ioctl(fd, IPA_IOC_FNR_COUNTER_QUERY, query);
 		if (ret < 0)
-			IPACMERR("IOCTL %lu failed\n", IPA_IOC_FNR_COUNTER_QUERY);
+			IPACM_LOG(IPACM_LOG_ERR,"IOCTL %lu failed\n", IPA_IOC_FNR_COUNTER_QUERY);
 	}
 
 	free((void *)query->stats);
@@ -447,42 +447,42 @@ int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *
 	int counter_idx;
 
 	if (nfd < 0) {
-		IPACMERR("fnr: error opening device file\n");
+		IPACM_LOG(IPACM_LOG_ERR, "fnr: error opening device file\n");
 		return IPACM_FAILURE;
 	}
 
 	fnr_counters->hw_counter.num_counters = IPA_MAX_FLT_RT_CLIENTS * 2;
 	fnr_counters->hw_counter.allow_less = false;
 
-	IPACMDBG_H("Allocating %d counters, with start id %d\n", fnr_counters->hw_counter.num_counters,
+	IPACM_LOG(IPACM_LOG_DEBUG, "Allocating %d counters, with start id %d\n", fnr_counters->hw_counter.num_counters,
 		fnr_counters->hw_counter.start_id);
 	/* reset all the counters after allocation */
 	ret = ipacm_fnr_v2_ioctl(nfd, IPA_IOC_FNR_COUNTER_ALLOC, fnr_counters);
 	if (ret < 0)
 	{
-		IPACMERR("Failed to execute ioctl %lu\n", IPA_IOC_FNR_COUNTER_ALLOC);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to execute ioctl %lu\n", IPA_IOC_FNR_COUNTER_ALLOC);
 		goto bail;
 	}
 
-	IPACMDBG_H("Reset counters after allocation, start %u %u\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "Reset counters after allocation, start %u %u\n",
 			fnr_counters->hw_counter.start_id, fnr_counters->hw_counter.start_id + fnr_counters->hw_counter.num_counters - 1);
 	if (ipacm_reset_hw_fnr_counters(fnr_counters->hw_counter.start_id, fnr_counters->hw_counter.start_id + fnr_counters->hw_counter.num_counters - 1))
 	{
-		IPACMERR("Failed to reset hw counters, should return fail here\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to reset hw counters, should return fail here\n");
 	} else
-		IPACMDBG_H("counter reset done\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "counter reset done\n");
 
-	IPACMDBG_H("Fnr counters allocated. Ret = %d, start id = %u\n", ret, fnr_counters->hw_counter.start_id);
+	IPACM_LOG(IPACM_LOG_INFO, "Fnr counters allocated. Ret = %d, start id = %u\n", ret, fnr_counters->hw_counter.start_id);
 	counter_idx = fnr_counters->hw_counter.start_id;
 	memset(cnt_idx, 0xff, sizeof(cnt_idx));
 	if (counter_idx == 0) {
-			IPACMERR("Invalid counter id %u\n", counter_idx);
+			IPACM_LOG(IPACM_LOG_ERR, "Invalid counter id %u\n", counter_idx);
 			ret = IPACM_FAILURE;
 			goto bail;
 	}
 	for (i = 0; i < IPA_MAX_FLT_RT_CLIENTS; i++) {
 		if (counter_idx > (fnr_counters->hw_counter.start_id + fnr_counters->hw_counter.num_counters)) {
-			IPACMERR("Counter index not in range. Invalid start id %u, requested counters = %u\n",
+			IPACM_LOG(IPACM_LOG_ERR, "Counter index not in range. Invalid start id %u, requested counters = %u\n",
 				fnr_counters->hw_counter.start_id, fnr_counters->hw_counter.num_counters);
 			memset(cnt_idx, 0xff, sizeof(cnt_idx));
 			ret = IPACM_FAILURE;
@@ -511,7 +511,7 @@ int IPACM_Config::Init(void)
 	cfg = (IPACM_conf_t *)malloc(sizeof(IPACM_conf_t));
 	if(cfg == NULL)
 	{
-		IPACMERR("Unable to allocate cfg memory.\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate cfg memory.\n");
 		return IPACM_FAILURE;
 	}
 	uint32_t subnet_addr;
@@ -521,7 +521,7 @@ int IPACM_Config::Init(void)
 	m_fd = open(DEVICE_NAME, O_RDWR);
 	if (0 > m_fd)
 	{
-		IPACMERR("Failed opening %s.\n", DEVICE_NAME);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed opening %s.\n", DEVICE_NAME);
 	}
 
 	ver = GetIPAVer(true);
@@ -540,37 +540,49 @@ int IPACM_Config::Init(void)
 	snprintf(cmd, 200,"cat " IPACM_CONFIG_FACTORY_FILE ">" IPACM_CONFIG_FILE);
 	strlcpy(IPACM_config_file, IPACM_CONFIG_FILE, sizeof(IPACM_config_file));
 
-	IPACMDBG_H("\n IPACM XML file is %s \n", IPACM_config_file);
+	IPACM_LOG(IPACM_LOG_INFO, "\n IPACM XML file is %s \n", IPACM_config_file);
 
 reread:
 	system ("fsync -d " IPACM_CONFIG_FILE);
 	if (IPACM_SUCCESS == ipacm_read_cfg_xml(IPACM_config_file, cfg))
 	{
-		IPACMDBG_H("\n IPACM XML read OK \n");
+		IPACM_LOG(IPACM_LOG_INFO, "\n IPACM XML read OK \n");
 	}
 	else
 	{
 		if(loop_count < MAX_RETRIES) {
 			if (loop_count > 10) {
-				IPACMERR(
+				IPACM_LOG(IPACM_LOG_ERR,
 					"\nIPACM XML read failed,Updating the xml file\n");
 				system(cmd);
 			} else {
-				IPACMERR("\nIPACM XML read failed,retrying\n");
+				IPACM_LOG(IPACM_LOG_ERR, "\nIPACM XML read failed,retrying\n");
 			}
 			loop_count++;
 			goto reread;
 		}
 		else {
-			IPACMERR("Reached max count exiting\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Reached max count exiting\n");
 			ret = IPACM_FAILURE;
 			goto fail;
 		}
 	}
+    max_file_size = cfg->max_file_size;
+	IPACM_LOG(IPACM_LOG_DEBUG, "max_file_size %lld\n", max_file_size);
 
-        max_file_size = cfg->max_file_size;
+	if (cfg->ipacm_log_level == 0 || cfg->ipacm_log_level == 4 || cfg->ipacm_log_level == 6
+		|| cfg->ipacm_log_level == 7 || cfg->ipacm_log_level == 8)
+	{
+		IPACM_LOG(IPACM_LOG_INFO, "ipacm log level Set to %d\n", cfg->ipacm_log_level);
+		ipacm_log_level = cfg->ipacm_log_level;
+	}
+	else
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid log level provided:%d, Setting default log level\n", cfg->ipacm_log_level);
+		ipacm_log_level = IPACM_DEF_LOG_LEVEL;
+	}
 
-        log_init(max_file_size);
+	log_init(max_file_size);
 
 	/* Construct IPACM Iface table */
 	ipa_num_ipa_interfaces = cfg->iface_config.num_iface_entries;
@@ -578,13 +590,13 @@ reread:
 	{
 		free(iface_table);
 		iface_table = NULL;
-		IPACMDBG_H("RESET IPACM_Config::iface_table\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "RESET IPACM_Config::iface_table\n");
 	}
 	iface_table = (ipa_ifi_dev_name_t *)calloc(ipa_num_ipa_interfaces,
 					sizeof(ipa_ifi_dev_name_t));
 	if(iface_table == NULL)
 	{
-		IPACMERR("Unable to allocate iface_table memory.\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate iface_table memory.\n");
 		ret = IPACM_FAILURE;
 		goto fail;
 	}
@@ -598,7 +610,7 @@ reread:
 		iface_table[i].if_cat = cfg->iface_config.iface_entries[i].if_cat;
 		iface_table[i].if_mode = cfg->iface_config.iface_entries[i].if_mode;
 		iface_table[i].wlan_mode = cfg->iface_config.iface_entries[i].wlan_mode;
-		IPACMDBG_H("IPACM_Config::iface_table[%d] = %s, phy= %s, cat=%d, mode=%d wlan-mode=%d \n",
+		IPACM_LOG(IPACM_LOG_DEBUG,"IPACM_Config::iface_table[%d] = %s, phy= %s, cat=%d, mode=%d wlan-mode=%d \n",
 			i, iface_table[i].iface_name, iface_table[i].phy_dev_name,
 			iface_table[i].if_cat, iface_table[i].if_mode, iface_table[i].wlan_mode);
 		/* copy bridge interface name to ipacmcfg */
@@ -608,7 +620,7 @@ reread:
 			strlcpy(iface_table[i].iface_name, DEFAULT_BRIDGE_IFACE_NAME, sizeof(iface_table[i].iface_name));
 #endif
 			strlcpy(ipa_virtual_iface_name, iface_table[i].iface_name, sizeof(ipa_virtual_iface_name));
-			IPACMDBG_H("ipa_virtual_iface_name(%s) \n", ipa_virtual_iface_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "ipa_virtual_iface_name(%s) \n", ipa_virtual_iface_name);
 		}
 	}
 
@@ -619,13 +631,13 @@ reread:
 	{
 		free(alg_table);
 		alg_table = NULL;
-		IPACMDBG_H("RESET IPACM_Config::alg_table \n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "RESET IPACM_Config::alg_table \n");
 	}
 	alg_table = (ipacm_alg *)calloc(ipa_num_alg_ports,
 				sizeof(ipacm_alg));
 	if(alg_table == NULL)
 	{
-		IPACMERR("Unable to allocate alg_table memory.\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate alg_table memory.\n");
 		ret = IPACM_FAILURE;
 		free(iface_table);
 		goto fail;;
@@ -634,26 +646,26 @@ reread:
 	{
 		alg_table[i].protocol = cfg->alg_config.alg_entries[i].protocol;
 		alg_table[i].port = cfg->alg_config.alg_entries[i].port;
-		IPACMDBG_H("IPACM_Config::ipacm_alg[%d] = %d, port=%d\n", i, alg_table[i].protocol, alg_table[i].port);
+		IPACM_LOG(IPACM_LOG_DEBUG, "IPACM_Config::ipacm_alg[%d] = %d, port=%d\n", i, alg_table[i].protocol, alg_table[i].port);
 	}
 
 	ipa_nat_max_entries = cfg->nat_max_entries;
-	IPACMDBG_H("Nat Maximum Entries %d\n", ipa_nat_max_entries);
+	IPACM_LOG(IPACM_LOG_INFO, "Nat Maximum Entries %d\n", ipa_nat_max_entries);
 
 	ipa_nat_memtype =
 		(cfg->nat_table_memtype) ?
 		cfg->nat_table_memtype   : DEFAULT_NAT_MEMTYPE;
-	IPACMDBG_H("Nat Mem Type %s\n", ipa_nat_memtype);
+	IPACM_LOG(IPACM_LOG_INFO, "Nat Mem Type %s\n", ipa_nat_memtype);
 
 	if (cfg->ipv6ct_enable > 0)
 	{
 		ipa_ipv6ct_max_entries = (cfg->ipv6ct_max_entries > 0) ? cfg->ipv6ct_max_entries : DEFAULT_IPV6CT_MAX_ENTRIES;
-		IPACMDBG_H("IPv6CT Maximum Entries %d\n", ipa_ipv6ct_max_entries);
+		IPACM_LOG(IPACM_LOG_INFO,"IPv6CT Maximum Entries %d\n", ipa_ipv6ct_max_entries);
 
 		ipa_ct_memtype =
 			(cfg->ct_table_memtype) ?
 			cfg->ct_table_memtype   : DEFAULT_CT_MEMTYPE;
-		IPACMDBG_H("Ct Mem Type %s\n", ipa_ct_memtype);
+		IPACM_LOG(IPACM_LOG_INFO, "Ct Mem Type %s\n", ipa_ct_memtype);
 	}
 	else
 	{
@@ -661,13 +673,13 @@ reread:
 		if(cfg->ipv6_nat_enable)
 		{
 			ipa_ipv6ct_max_entries = (cfg->ipv6ct_max_entries > 0) ? cfg->ipv6ct_max_entries : DEFAULT_IPV6CT_MAX_ENTRIES;
-			IPACMDBG_H("IPv6CT enabled due to ipv6nat\n");
+			IPACM_LOG(IPACM_LOG_INFO, "IPv6CT enabled due to ipv6nat\n");
 		}
 		else
 #endif
 		{
 			ipa_ipv6ct_max_entries = 0;
-			IPACMDBG_H("IPv6CT is disabled\n");
+			IPACM_LOG(IPACM_LOG_INFO, "IPv6CT is disabled\n");
 		}
 	}
 
@@ -675,17 +687,17 @@ reread:
 	ipacm_odu_enable = cfg->odu_enable;
 	ipacm_odu_router_mode = cfg->router_mode_enable;
 	ipacm_odu_embms_enable = cfg->odu_embms_enable;
-	IPACMDBG_H("ipacm_odu_enable %d\n", ipacm_odu_enable);
-	IPACMDBG_H("ipacm_odu_mode %d\n", ipacm_odu_router_mode);
-	IPACMDBG_H("ipacm_odu_embms_enable %d\n", ipacm_odu_embms_enable);
+	IPACM_LOG(IPACM_LOG_INFO, "ipacm_odu_enable %d\n", ipacm_odu_enable);
+	IPACM_LOG(IPACM_LOG_INFO, "ipacm_odu_mode %d\n", ipacm_odu_router_mode);
+	IPACM_LOG(IPACM_LOG_INFO, "ipacm_odu_embms_enable %d\n", ipacm_odu_embms_enable);
 
 	/* Get the Public IP suppport config info from XML */
 	is_public_ip_support_enabled = cfg->public_ip_support_enable;
-	IPACMDBG_H("Public IP support config %d\n", is_public_ip_support_enabled);
+	IPACM_LOG(IPACM_LOG_INFO,"Public IP support config %d\n", is_public_ip_support_enabled);
 
 	/* Get the VLAN MPDN suppport config info from XML */
 	wlan_vlan_mpdn_enabled = cfg->wlan_vlan_mpdn_enable;
-	IPACMDBG_H("VLAN MPDN support config %d\n", wlan_vlan_mpdn_enabled);
+	IPACM_LOG(IPACM_LOG_INFO,"VLAN MPDN support config %d\n", wlan_vlan_mpdn_enabled);
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (!ipacm_lan_stats_enable_set)
@@ -693,7 +705,7 @@ reread:
 		/* Read the configuration only once. */
 		ipacm_lan_stats_enable = cfg->lan_stats_enable;
 		ipacm_lan_stats_enable_set = true;
-		IPACMDBG_H("ipacm_lan_stats_enable %d. \n", ipacm_lan_stats_enable);
+		IPACM_LOG(IPACM_LOG_INFO, "ipacm_lan_stats_enable %d. \n", ipacm_lan_stats_enable);
 	}
 #endif
 	ipv6_nat_enable = cfg->ipv6_nat_enable;
@@ -713,7 +725,7 @@ reread:
 	mgmnt_vlan_id = cfg->mgmnt_vlan_id;
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
-		IPACMERR("Not support both VLAN_MPDN and L2TP are enable \n");
+		IPACM_LOG(IPACM_LOG_ERR, "Not support both VLAN_MPDN and L2TP are enable \n");
 		close(m_fd);
 		exit(0);
 	}
@@ -721,11 +733,11 @@ reread:
 	/* Construct IPACM GRE info */
 	ipacm_gre_enable = cfg->gre_conf.gre_enable;
 	ipacm_gre_autolearn = cfg->gre_conf.gre_autolearn;
-	IPACMDBG_H("ipacm_gre_enable %d. \n", ipacm_gre_enable);
-	IPACMDBG_H("ipacm_gre_autolearn %d. \n", ipacm_gre_autolearn);
-	IPACMDBG_H("device mode %d\n", cfg->device_mode);
-	IPACMDBG_H("device vlan mode %d\n", cfg->device_vlan_mode);
-	IPACMDBG_H("mgmnt vlan id %d\n", cfg->mgmnt_vlan_id);
+	IPACM_LOG(IPACM_LOG_DEBUG, "ipacm_gre_enable %d. \n", ipacm_gre_enable);
+	IPACM_LOG(IPACM_LOG_DEBUG, "ipacm_gre_autolearn %d. \n", ipacm_gre_autolearn);
+	IPACM_LOG(IPACM_LOG_DEBUG, "device mode %d\n", cfg->device_mode);
+	IPACM_LOG(IPACM_LOG_DEBUG, "device vlan mode %d\n", cfg->device_vlan_mode);
+	IPACM_LOG(IPACM_LOG_DEBUG, "mgmnt vlan id %d\n", cfg->mgmnt_vlan_id);
 	memset(&ipacm_gre_server_ipv4, 0, sizeof(ipacm_gre_server_ipv4));
 
 	memcpy(&ipacm_gre_server_ipv4,
@@ -735,30 +747,30 @@ reread:
 
 	subnet_addr = htonl(ipacm_gre_server_ipv4);
 	memcpy(&in_addr_print,&subnet_addr,sizeof(in_addr_print));
-	IPACMDBG_H("GRE_SERVER_IPv4= %s \n ",
+	IPACM_LOG(IPACM_LOG_DEBUG, "GRE_SERVER_IPv4= %s \n ",
 						 inet_ntoa(in_addr_print));
 
 	ipa_num_wlan_guest_ap = cfg->num_wlan_guest_ap;
-	IPACMDBG_H("ipa_num_wlan_guest_ap %d\n",ipa_num_wlan_guest_ap);
+	IPACM_LOG(IPACM_LOG_INFO, "ipa_num_wlan_guest_ap %d\n",ipa_num_wlan_guest_ap);
 
 #ifdef FEATURE_DUAL_BACKHAUL
 	/* Fetch second backhaul details */
 	second_backhaul_info.enable = cfg->dual_backhaul_conf.dualbackhaul_enable;
-	IPACMDBG_H("Second backhaul details enabled: %d, netdev: %s, gwipv4: %x\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "Second backhaul details enabled: %d, netdev: %s, gwipv4: %x\n",
 		second_backhaul_info.enable, second_backhaul_info.net_dev,
 		second_backhaul_info.gateway_ipv4);
 #endif
 #ifdef FEATURE_EoGRE
 	/* Fetch v6options enable details */
 	v6options_enabled = cfg->v6options_enable;
-	IPACMDBG_H("v6options enabled is %d\n", v6options_enabled);
+	IPACM_LOG(IPACM_LOG_DEBUG, "v6options enabled is %d\n", v6options_enabled);
 #endif
 
 	/* Allocate more non-nat entries if the monitored iface dun have Tx/Rx properties */
 
 	if(pthread_mutex_lock(&nat_iface_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		goto fail;
 	}
 
@@ -766,13 +778,13 @@ reread:
 	{
 		free(pNatIfaces);
 		pNatIfaces = NULL;
-		IPACMDBG_H("RESET IPACM_Config::pNatIfaces \n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "RESET IPACM_Config::pNatIfaces \n");
 	}
 	ipa_nat_iface_entries = 0;
 	pNatIfaces = (NatIfaces *)calloc(IPA_MAX_NAT_IFACE, sizeof(NatIfaces));
 	if (pNatIfaces == NULL)
 	{
-		IPACMERR("unable to allocate nat ifaces\n");
+		IPACM_LOG(IPACM_LOG_ERR, "unable to allocate nat ifaces\n");
 		pthread_mutex_unlock(&nat_iface_lock);
 		ret = IPACM_FAILURE;
 		free(iface_table);
@@ -877,15 +889,15 @@ reread:
 	ipa_rm_tbl[8].consumer_rm2 = IPA_RM_RESOURCE_WLAN_CONS;
 	ipa_max_valid_rm_entry = 9; /* max is IPA_MAX_RM_ENTRY (9)*/
 
-	IPACMDBG_H(" depend MAP-0 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_Q6_CONS);
-	IPACMDBG_H(" depend MAP-1 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_USB_PROD, IPA_RM_RESOURCE_Q6_CONS);
-	IPACMDBG_H(" depend MAP-2 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_USB_CONS);
-	IPACMDBG_H(" depend MAP-3 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ODU_ADAPT_PROD, IPA_RM_RESOURCE_Q6_CONS);
-	IPACMDBG_H(" depend MAP-4 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_ODU_ADAPT_CONS);
-	IPACMDBG_H(" depend MAP-5 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ODU_ADAPT_PROD, IPA_RM_RESOURCE_USB_CONS);
-	IPACMDBG_H(" depend MAP-6 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ETHERNET_PROD, IPA_RM_RESOURCE_Q6_CONS);
-	IPACMDBG_H(" depend MAP-7 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ETHERNET_PROD, IPA_RM_RESOURCE_USB_CONS);
-	IPACMDBG_H(" depend MAP-8 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_ETHERNET_CONS);
+	IPACM_LOG(IPACM_LOG_DEBUG, " depend MAP-0 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_Q6_CONS);
+	IPACM_LOG(IPACM_LOG_DEBUG, " depend MAP-1 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_USB_PROD, IPA_RM_RESOURCE_Q6_CONS);
+	IPACM_LOG(IPACM_LOG_DEBUG, " depend MAP-2 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_USB_CONS);
+	IPACM_LOG(IPACM_LOG_DEBUG, " depend MAP-3 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ODU_ADAPT_PROD, IPA_RM_RESOURCE_Q6_CONS);
+	IPACM_LOG(IPACM_LOG_DEBUG, " depend MAP-4 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_ODU_ADAPT_CONS);
+	IPACM_LOG(IPACM_LOG_DEBUG, " depend MAP-5 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ODU_ADAPT_PROD, IPA_RM_RESOURCE_USB_CONS);
+	IPACM_LOG(IPACM_LOG_DEBUG, " depend MAP-6 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ETHERNET_PROD, IPA_RM_RESOURCE_Q6_CONS);
+	IPACM_LOG(IPACM_LOG_DEBUG, " depend MAP-7 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ETHERNET_PROD, IPA_RM_RESOURCE_USB_CONS);
+	IPACM_LOG(IPACM_LOG_DEBUG, " depend MAP-8 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_ETHERNET_CONS);
 
 fail:
 	if (cfg != NULL)
@@ -909,7 +921,7 @@ IPACM_Config* IPACM_Config::GetInstance()
 		if (res != IPACM_SUCCESS)
 		{
 			delete pInstance;
-			IPACMERR("unable to initialize config instance\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to initialize config instance\n");
 			return NULL;
 		}
 	}
@@ -921,7 +933,7 @@ int IPACM_Config::GetAlgPorts(int nPorts, ipacm_alg *pAlgPorts)
 {
 	if (nPorts <= 0 || pAlgPorts == NULL)
 	{
-		IPACMERR("Invalid input\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid input\n");
 		return -1;
 	}
 
@@ -939,13 +951,13 @@ int IPACM_Config::GetNatIfaces(int nIfaces, NatIfaces *pIfaces)
 
 	if (nIfaces <= 0 || pIfaces == NULL)
 	{
-		IPACMERR("Invalid input\n");
+		IPACM_LOG(IPACM_LOG_INFO, "Invalid input\n");
 		return -1;
 	}
 
 	if(pthread_mutex_lock(&nat_iface_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_INFO, "Unable to lock the mutex\n");
 		return -1;
 	}
 
@@ -966,17 +978,17 @@ void IPACM_Config::update_repeater_iface(char *str) {
 	char *first, *second;
 	first = strstr(str,"sta");
 	if (first == NULL) {
-		IPACMDBG("Non wds-ext non-vlan interface\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Non wds-ext non-vlan interface\n");
 		return;
 	}
 	second = strstr(first, ".");
 	if(second == NULL) {
-		IPACMDBG("wds-ext non-vlan interface\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "wds-ext non-vlan interface\n");
 		first = first-1;
 		*first = '\0';
 		return;
 	}
-	IPACMDBG("wds-ext vlan interface\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "wds-ext vlan interface\n");
 	strlcpy((first-1), second, sizeof(second));
 	return;
 }
@@ -987,7 +999,7 @@ int IPACM_Config::AddNatIfaces(char *dev_name)
 
 	if(pthread_mutex_lock(&nat_iface_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return 0;
 	}
 
@@ -998,23 +1010,23 @@ int IPACM_Config::AddNatIfaces(char *dev_name)
 							 pNatIfaces[i].iface_name,
 							 sizeof(pNatIfaces[i].iface_name)) == 0)
 		{
-			IPACMDBG("Interface (%s) is add to nat iface already\n", dev_name);
+			IPACM_LOG(IPACM_LOG_DEBUG,"Interface (%s) is add to nat iface already\n", dev_name);
 			pthread_mutex_unlock(&nat_iface_lock);
 			return 0;
 		}
 	}
 
-	IPACMDBG_H("Add iface %s to NAT-ifaces, origin it has %d nat ifaces\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "Add iface %s to NAT-ifaces, origin it has %d nat ifaces\n",
 					          dev_name, ipa_nat_iface_entries);
 
 	if (ipa_nat_iface_entries < IPA_MAX_NAT_IFACE)
 	{
 		strlcpy(pNatIfaces[ipa_nat_iface_entries].iface_name,dev_name,
 				IPA_IFACE_NAME_LEN);
-		IPACMDBG_H("Added Nat Iface: %s\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "Added Nat Iface: %s\n",
 			pNatIfaces[ipa_nat_iface_entries].iface_name);
 		ipa_nat_iface_entries++;
-		IPACMDBG_H("Update nat-ifaces number: %d\n",
+		IPACM_LOG(IPACM_LOG_INFO,"Update nat-ifaces number: %d\n",
 			ipa_nat_iface_entries);
 	}
 
@@ -1028,17 +1040,17 @@ int IPACM_Config::DelNatIfaces(char *dev_name)
 
 	if(pthread_mutex_lock(&nat_iface_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return 0;
 	}
-	IPACMDBG_H("Del iface %s from NAT-ifaces, origin it has %d nat ifaces\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "Del iface %s from NAT-ifaces, origin it has %d nat ifaces\n",
 					 dev_name, ipa_nat_iface_entries);
 
 	for (i = 0; i < ipa_nat_iface_entries; i++)
 	{
 		if (strcmp(dev_name, pNatIfaces[i].iface_name) == 0)
 		{
-			IPACMDBG_H("Find Nat IfaceName: %s ,previous nat-ifaces number: %d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found Nat IfaceName: %s ,previous nat-ifaces number: %d\n",
 							 pNatIfaces[i].iface_name, ipa_nat_iface_entries);
 
 			/* Reset the matched entry */
@@ -1053,13 +1065,13 @@ int IPACM_Config::DelNatIfaces(char *dev_name)
 				memset(pNatIfaces[i + 1].iface_name, 0, IPA_IFACE_NAME_LEN);
 			}
 			ipa_nat_iface_entries--;
-			IPACMDBG_H("Update nat-ifaces number: %d\n", ipa_nat_iface_entries);
+			IPACM_LOG(IPACM_LOG_INFO,"Update nat-ifaces number: %d\n", ipa_nat_iface_entries);
 			pthread_mutex_unlock(&nat_iface_lock);
 			return 0;
 		}
 	}
 
-	IPACMDBG_H("Can't find Nat IfaceName: %s with total nat-ifaces number: %d\n",
+	IPACM_LOG(IPACM_LOG_WARN, "Can't find Nat IfaceName: %s with total nat-ifaces number: %d\n",
 					    dev_name, ipa_nat_iface_entries);
 	pthread_mutex_unlock(&nat_iface_lock);
 	return 0;
@@ -1073,12 +1085,12 @@ void IPACM_Config::AddRmDepend(ipa_rm_resource_name rm1,bool rx_bypass_ipa)
 	int retval = 0;
 	struct ipa_ioc_rm_dependency dep;
 
-	IPACMDBG_H(" Got rm add-depend index : %d \n", rm1);
+	IPACM_LOG(IPACM_LOG_DEBUG, " Got rm add-depend index : %d \n", rm1);
 	/* ipa_rm_a2_check: IPA_RM_RESOURCE_Q6_CONS*/
 	if(rm1 == IPA_RM_RESOURCE_Q6_CONS)
 	{
 		ipa_rm_a2_check+=1;
-		IPACMDBG_H("got %d times default RT routing from A2 \n", ipa_rm_a2_check);
+		IPACM_LOG(IPACM_LOG_DEBUG, "got %d times default RT routing from A2 \n", ipa_rm_a2_check);
 	}
 
 	for(int i=0;i<ipa_max_valid_rm_entry;i++)
@@ -1088,15 +1100,15 @@ void IPACM_Config::AddRmDepend(ipa_rm_resource_name rm1,bool rx_bypass_ipa)
 			ipa_rm_tbl[i].producer1_up = true;
 			/* entry1's producer actually dun have registered Rx-property */
 			ipa_rm_tbl[i].rx_bypass_ipa = rx_bypass_ipa;
-			IPACMDBG_H("Matched RM_table entry: %d's producer_rm1 with non_rx_prop: %d \n", i,ipa_rm_tbl[i].rx_bypass_ipa);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Matched RM_table entry: %d's producer_rm1 with non_rx_prop: %d \n", i,ipa_rm_tbl[i].rx_bypass_ipa);
 
 			if(ipa_rm_tbl[i].consumer1_up == true && ipa_rm_tbl[i].rm_set == false)
 			{
-				IPACMDBG_H("SETUP RM_table entry %d's bi-direction dependency  \n", i);
+				IPACM_LOG(IPACM_LOG_DEBUG, "SETUP RM_table entry %d's bi-direction dependency  \n", i);
 				/* add bi-directional dependency*/
 				if(ipa_rm_tbl[i].rx_bypass_ipa)
 				{
-					IPACMDBG_H("Skip ADD entry %d's dependency between WLAN-Pro: %d, Con: %d \n", i, ipa_rm_tbl[i].producer_rm1,ipa_rm_tbl[i].consumer_rm1);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Skip ADD entry %d's dependency between WLAN-Pro: %d, Con: %d \n", i, ipa_rm_tbl[i].producer_rm1,ipa_rm_tbl[i].consumer_rm1);
 				}
 				else
 				{
@@ -1104,41 +1116,41 @@ void IPACM_Config::AddRmDepend(ipa_rm_resource_name rm1,bool rx_bypass_ipa)
 					dep.resource_name = ipa_rm_tbl[i].producer_rm1;
 					dep.depends_on_name = ipa_rm_tbl[i].consumer_rm1;
 					retval = ioctl(m_fd, IPA_IOC_RM_ADD_DEPENDENCY, &dep);
-					IPACMDBG_H("ADD entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
+					IPACM_LOG(IPACM_LOG_DEBUG, "ADD entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
 					if (retval)
 					{
-						IPACMERR("Failed adding dependecny for RM_table entry %d's bi-direction dependency (error:%d) \n", i,retval);
+						IPACM_LOG(IPACM_LOG_ERR, "Failed adding dependecny for RM_table entry %d's bi-direction dependency (error:%d) \n", i,retval);
 					}
 				}
 				memset(&dep, 0, sizeof(dep));
 				dep.resource_name = ipa_rm_tbl[i].producer_rm2;
 				dep.depends_on_name = ipa_rm_tbl[i].consumer_rm2;
 				retval = ioctl(m_fd, IPA_IOC_RM_ADD_DEPENDENCY, &dep);
-				IPACMDBG_H("ADD entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
+				IPACM_LOG(IPACM_LOG_DEBUG, "ADD entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
 				if (retval)
 				{
-					IPACMERR("Failed adding dependecny for RM_table entry %d's bi-direction dependency (error:%d)  \n", i,retval);
+					IPACM_LOG(IPACM_LOG_ERR, "Failed adding dependecny for RM_table entry %d's bi-direction dependency (error:%d)  \n", i,retval);
 				}
 				ipa_rm_tbl[i].rm_set = true;
 			}
 			else
 			{
-				IPACMDBG_H("Not SETUP RM_table entry %d: prod_up:%d, cons_up:%d, rm_set: %d \n", i,ipa_rm_tbl[i].producer1_up, ipa_rm_tbl[i].consumer1_up, ipa_rm_tbl[i].rm_set);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Not SETUP RM_table entry %d: prod_up:%d, cons_up:%d, rm_set: %d \n", i,ipa_rm_tbl[i].producer1_up, ipa_rm_tbl[i].consumer1_up, ipa_rm_tbl[i].rm_set);
 			}
 		}
 
 		if(rm1 == ipa_rm_tbl[i].consumer_rm1)
 		{
 			ipa_rm_tbl[i].consumer1_up = true;
-			IPACMDBG_H("Matched RM_table entry: %d's consumer_rm1 \n", i);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Matched RM_table entry: %d's consumer_rm1 \n", i);
 
 			if(ipa_rm_tbl[i].producer1_up == true && ipa_rm_tbl[i].rm_set == false)
 			{
-				IPACMDBG_H("SETUP RM_table entry %d's bi-direction dependency  \n", i);
+				IPACM_LOG(IPACM_LOG_DEBUG, "SETUP RM_table entry %d's bi-direction dependency  \n", i);
 				/* add bi-directional dependency*/
 				if(ipa_rm_tbl[i].rx_bypass_ipa)
 				{
-					IPACMDBG_H("Skip ADD entry %d's dependency between WLAN-Pro: %d, Con: %d \n", i, ipa_rm_tbl[i].producer_rm1,ipa_rm_tbl[i].consumer_rm1);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Skip ADD entry %d's dependency between WLAN-Pro: %d, Con: %d \n", i, ipa_rm_tbl[i].producer_rm1,ipa_rm_tbl[i].consumer_rm1);
 				}
 				else
 				{
@@ -1146,10 +1158,10 @@ void IPACM_Config::AddRmDepend(ipa_rm_resource_name rm1,bool rx_bypass_ipa)
 					dep.resource_name = ipa_rm_tbl[i].producer_rm1;
 					dep.depends_on_name = ipa_rm_tbl[i].consumer_rm1;
 					retval = ioctl(m_fd, IPA_IOC_RM_ADD_DEPENDENCY, &dep);
-					IPACMDBG_H("ADD entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
+					IPACM_LOG(IPACM_LOG_DEBUG, "ADD entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
 					if (retval)
 					{
-						IPACMERR("Failed adding dependecny for RM_table entry %d's bi-direction dependency (error:%d)  \n", i,retval);
+						IPACM_LOG(IPACM_LOG_ERR, "Failed adding dependecny for RM_table entry %d's bi-direction dependency (error:%d)  \n", i,retval);
 					}
 				}
 
@@ -1157,16 +1169,16 @@ void IPACM_Config::AddRmDepend(ipa_rm_resource_name rm1,bool rx_bypass_ipa)
 				dep.resource_name = ipa_rm_tbl[i].producer_rm2;
 				dep.depends_on_name = ipa_rm_tbl[i].consumer_rm2;
 				retval = ioctl(m_fd, IPA_IOC_RM_ADD_DEPENDENCY, &dep);
-				IPACMDBG_H("ADD entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
+				IPACM_LOG(IPACM_LOG_DEBUG, "ADD entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
 				if (retval)
 				{
-					IPACMERR("Failed adding dependecny for RM_table entry %d's bi-direction dependency (error:%d)  \n", i,retval);
+					IPACM_LOG(IPACM_LOG_ERR, "Failed adding dependecny for RM_table entry %d's bi-direction dependency (error:%d)  \n", i,retval);
 				}
 				ipa_rm_tbl[i].rm_set = true;
 			}
 			else
 			{
-				IPACMDBG_H("Not SETUP RM_table entry %d: prod_up:%d, cons_up:%d, rm_set: %d \n", i,ipa_rm_tbl[i].producer1_up, ipa_rm_tbl[i].consumer1_up, ipa_rm_tbl[i].rm_set);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Not SETUP RM_table entry %d: prod_up:%d, cons_up:%d, rm_set: %d \n", i,ipa_rm_tbl[i].producer1_up, ipa_rm_tbl[i].consumer1_up, ipa_rm_tbl[i].rm_set);
 			}
 	   }
    }
@@ -1181,12 +1193,12 @@ void IPACM_Config::DelRmDepend(ipa_rm_resource_name rm1)
 	int retval = 0;
 	struct ipa_ioc_rm_dependency dep;
 
-	IPACMDBG_H(" Got rm del-depend index : %d \n", rm1);
+	IPACM_LOG(IPACM_LOG_DEBUG, " Got rm del-depend index : %d \n", rm1);
 	/* ipa_rm_a2_check: IPA_RM_RESOURCE_Q6_CONS*/
 	if(rm1 == IPA_RM_RESOURCE_Q6_CONS)
 	{
 		ipa_rm_a2_check-=1;
-		IPACMDBG_H("Left %d times default RT routing from A2 \n", ipa_rm_a2_check);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Left %d times default RT routing from A2 \n", ipa_rm_a2_check);
 	}
 
 	for(int i=0;i<ipa_max_valid_rm_entry;i++)
@@ -1196,13 +1208,13 @@ void IPACM_Config::DelRmDepend(ipa_rm_resource_name rm1)
 		{
 			if(ipa_rm_tbl[i].rm_set == true)
 			{
-				IPACMDBG_H("Matched RM_table entry: %d's producer_rm1 and dependency is up \n", i);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Matched RM_table entry: %d's producer_rm1 and dependency is up \n", i);
 				ipa_rm_tbl[i].rm_set = false;
 
 				/* delete bi-directional dependency*/
 				if(ipa_rm_tbl[i].rx_bypass_ipa)
 				{
-					IPACMDBG_H("Skip DEL entry %d's dependency between WLAN-Pro: %d, Con: %d \n", i, ipa_rm_tbl[i].producer_rm1,ipa_rm_tbl[i].consumer_rm1);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Skip DEL entry %d's dependency between WLAN-Pro: %d, Con: %d \n", i, ipa_rm_tbl[i].producer_rm1,ipa_rm_tbl[i].consumer_rm1);
 				}
 				else
 				{
@@ -1210,20 +1222,20 @@ void IPACM_Config::DelRmDepend(ipa_rm_resource_name rm1)
 					dep.resource_name = ipa_rm_tbl[i].producer_rm1;
 					dep.depends_on_name = ipa_rm_tbl[i].consumer_rm1;
 					retval = ioctl(m_fd, IPA_IOC_RM_DEL_DEPENDENCY, &dep);
-					IPACMDBG_H("Delete entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Delete entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
 					if (retval)
 					{
-						IPACMERR("Failed deleting dependecny for RM_table entry %d's bi-direction dependency (error:%d) \n", i,retval);
+						IPACM_LOG(IPACM_LOG_ERR, "Failed deleting dependecny for RM_table entry %d's bi-direction dependency (error:%d) \n", i,retval);
 					}
 				}
 				memset(&dep, 0, sizeof(dep));
 				dep.resource_name = ipa_rm_tbl[i].producer_rm2;
 				dep.depends_on_name = ipa_rm_tbl[i].consumer_rm2;
 				retval = ioctl(m_fd, IPA_IOC_RM_DEL_DEPENDENCY, &dep);
-				IPACMDBG_H("Delete entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Delete entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
 				if (retval)
 				{
-					IPACMERR("Failed deleting dependecny for RM_table entry %d's bi-direction dependency (error:%d) \n", i,retval);
+					IPACM_LOG(IPACM_LOG_ERR, "Failed deleting dependecny for RM_table entry %d's bi-direction dependency (error:%d) \n", i,retval);
 				}
 			}
 			ipa_rm_tbl[i].producer1_up = false;
@@ -1234,18 +1246,18 @@ void IPACM_Config::DelRmDepend(ipa_rm_resource_name rm1)
 			/* ipa_rm_a2_check: IPA_RM_RESOURCE_!6_CONS*/
 			if(ipa_rm_tbl[i].consumer_rm1 == IPA_RM_RESOURCE_Q6_CONS && ipa_rm_a2_check == 1)
 			{
-				IPACMDBG_H(" still have %d default RT routing from A2 \n", ipa_rm_a2_check);
+				IPACM_LOG(IPACM_LOG_DEBUG, " still have %d default RT routing from A2 \n", ipa_rm_a2_check);
 				continue;
 			}
 
 			if(ipa_rm_tbl[i].rm_set == true)
 			{
-				IPACMDBG_H("Matched RM_table entry: %d's consumer_rm1 and dependency is up \n", i);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Matched RM_table entry: %d's consumer_rm1 and dependency is up \n", i);
 				ipa_rm_tbl[i].rm_set = false;
 				/* delete bi-directional dependency*/
 				if(ipa_rm_tbl[i].rx_bypass_ipa)
 				{
-					IPACMDBG_H("Skip DEL entry %d's dependency between WLAN-Pro: %d, Con: %d \n", i, ipa_rm_tbl[i].producer_rm1,ipa_rm_tbl[i].consumer_rm1);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Skip DEL entry %d's dependency between WLAN-Pro: %d, Con: %d \n", i, ipa_rm_tbl[i].producer_rm1,ipa_rm_tbl[i].consumer_rm1);
 				}
 				else
 				{
@@ -1253,10 +1265,10 @@ void IPACM_Config::DelRmDepend(ipa_rm_resource_name rm1)
 					dep.resource_name = ipa_rm_tbl[i].producer_rm1;
 					dep.depends_on_name = ipa_rm_tbl[i].consumer_rm1;
 					retval = ioctl(m_fd, IPA_IOC_RM_DEL_DEPENDENCY, &dep);
-					IPACMDBG_H("Delete entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Delete entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
 					if (retval)
 					{
-						IPACMERR("Failed deleting dependecny for RM_table entry %d's bi-direction dependency (error:%d) \n", i,retval);
+						IPACM_LOG(IPACM_LOG_ERR, "Failed deleting dependecny for RM_table entry %d's bi-direction dependency (error:%d) \n", i,retval);
 					}
 				}
 
@@ -1264,10 +1276,10 @@ void IPACM_Config::DelRmDepend(ipa_rm_resource_name rm1)
 				dep.resource_name = ipa_rm_tbl[i].producer_rm2;
 				dep.depends_on_name = ipa_rm_tbl[i].consumer_rm2;
 				retval = ioctl(m_fd, IPA_IOC_RM_DEL_DEPENDENCY, &dep);
-				IPACMDBG_H("Delete entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Delete entry %d's dependency between Pro: %d, Con: %d \n", i,dep.resource_name,dep.depends_on_name);
 				if (retval)
 				{
-					IPACMERR("Failed deleting dependecny for RM_table entry %d's bi-direction dependency (error:%d) \n", i,retval);
+					IPACM_LOG(IPACM_LOG_ERR, "Failed deleting dependecny for RM_table entry %d's bi-direction dependency (error:%d) \n", i,retval);
 				}
 			}
 			ipa_rm_tbl[i].consumer1_up = false;
@@ -1282,7 +1294,7 @@ int IPACM_Config::SetExtProp(ipa_ioc_query_intf_ext_props *prop)
 
 	if(prop == NULL || prop->num_ext_props <= 0)
 	{
-		IPACMERR("There is no extended property!\n");
+		IPACM_LOG(IPACM_LOG_ERR, "There is no extended property!\n");
 		return IPACM_FAILURE;
 	}
 
@@ -1294,7 +1306,7 @@ int IPACM_Config::SetExtProp(ipa_ioc_query_intf_ext_props *prop)
 		{
 			if(ext_prop_v4.num_ext_props >= MAX_NUM_EXT_PROPS)
 			{
-				IPACMERR("IPv4 extended property table is full!\n");
+				IPACM_LOG(IPACM_LOG_ERR, "IPv4 extended property table is full!\n");
 				continue;
 			}
 			memcpy(&ext_prop_v4.prop[ext_prop_v4.num_ext_props], &prop->ext[i], sizeof(struct ipa_ioc_ext_intf_prop));
@@ -1306,7 +1318,7 @@ int IPACM_Config::SetExtProp(ipa_ioc_query_intf_ext_props *prop)
 		{
 			if(ext_prop_v6.num_ext_props >= MAX_NUM_EXT_PROPS)
 			{
-				IPACMERR("IPv6 extended property table is full!\n");
+				IPACM_LOG(IPACM_LOG_ERR, "IPv6 extended property table is full!\n");
 				continue;
 			}
 			memcpy(&ext_prop_v6.prop[ext_prop_v6.num_ext_props], &prop->ext[i], sizeof(struct ipa_ioc_ext_intf_prop));
@@ -1314,12 +1326,12 @@ int IPACM_Config::SetExtProp(ipa_ioc_query_intf_ext_props *prop)
 		}
 		else
 		{
-			IPACMERR("The IP type is not expected!\n");
+			IPACM_LOG(IPACM_LOG_ERR, "The IP type is not expected!\n");
 			return IPACM_FAILURE;
 		}
 	}
 
-	IPACMDBG_H("Set extended property succeeded.\n");
+	IPACM_LOG(IPACM_LOG_INFO, "Set extended property succeeded.\n");
 
 	return IPACM_SUCCESS;
 }
@@ -1332,7 +1344,7 @@ ipacm_ext_prop* IPACM_Config::GetExtProp(ipa_ip_type ip_type)
 		return &ext_prop_v6;
 	else
 	{
-		IPACMERR("Failed to get extended property: the IP version is neither IPv4 nor IPv6!\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to get extended property: the IP version is neither IPv4 nor IPv6!\n");
 		return NULL;
 	}
 }
@@ -1356,7 +1368,7 @@ const char* IPACM_Config::getEventName(ipa_cm_event_id event_id)
 {
 	if(event_id >= sizeof(ipacm_event_name)/sizeof(ipacm_event_name[0]))
 	{
-		IPACMERR("Event name array is not consistent with event array!\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Event name array is not consistent with event array!\n");
 		return NULL;
 	}
 
@@ -1373,11 +1385,11 @@ enum ipa_hw_type IPACM_Config::GetIPAVer(bool get)
 	ret = ioctl(m_fd, IPA_IOC_GET_HW_VERSION, &ver);
 	if(ret != 0)
 	{
-		IPACMERR("Failed to get IPA version with error %d.\n", ret);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to get IPA version with error %d.\n", ret);
 		ver = IPA_HW_None;
 		return IPA_HW_None;
 	}
-	IPACMDBG_H("IPA version is %d.\n", ver);
+	IPACM_LOG(IPACM_LOG_INFO, "IPA version is %d.\n", ver);
 	return ver;
 }
 
@@ -1391,7 +1403,7 @@ int IPACM_Config::ResetClkVote(void)
 
 		if ( ret )
 		{
-			IPACMERR("APP_CLOCK_VOTE ioctl failure %d on IPA fd %d\n",
+			IPACM_LOG(IPACM_LOG_ERR, "APP_CLOCK_VOTE ioctl failure %d on IPA fd %d\n",
 					 ret, m_fd);
 		}
 	}
@@ -1409,37 +1421,37 @@ void IPACM_Config::parse_outer_tag(char *iface_name, uint16_t *inner_tag, uint16
 	char iface[IPA_IFACE_NAME_LEN] = {'\0'};
 	strlcpy(iface, iface_name, IPA_IFACE_NAME_LEN);
 
-	IPACMDBG("in parse outer tag\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "in parse outer tag\n");
 	token = strchr(iface, '.');
 	if (token != NULL) {
 		token++;
-		IPACMDBG("Outer tag %d\n", atoi(token));
+		IPACM_LOG(IPACM_LOG_DEBUG, "Outer tag %d\n", atoi(token));
 		if(strstr(token,"sta"))
 		{
-			IPACMDBG("Mld sta interface doesnt have outer tag\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Mld sta interface doesnt have outer tag\n");
 			return;
 		}
 		else if((atoi(token) > 0) && (atoi(token) <=MAX_VLAN_ID))
 		{
-			IPACMDBG("Outer token %d\n", atoi(token));
+			IPACM_LOG(IPACM_LOG_DEBUG, "Outer token %d\n", atoi(token));
 			vlan1 =(uint16_t) atoi(token);
 			token = strchr(token, '.');
 			if(token == 0)
 			{
-				IPACMDBG("Not a double tagged iface\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "Not a double tagged iface\n");
 				return;
 			}
 			token++;
-			IPACMDBG("Inner token %d\n", atoi(token));
+			IPACM_LOG(IPACM_LOG_DEBUG, "Inner token %d\n", atoi(token));
 			if((atoi(token) > 0) && (atoi(token) <=MAX_VLAN_ID))
 			{
-				IPACMDBG("Iface is double tagged %d \n", atoi(token));
+				IPACM_LOG(IPACM_LOG_DEBUG, "Iface is double tagged %d \n", atoi(token));
 				*outer_tag = vlan1;
 			}
 		}
 		else
 		{
-			IPACMERR("no token found\n");
+			IPACM_LOG(IPACM_LOG_ERR, "no token found\n");
 			return;
 		}
 	}
@@ -1454,15 +1466,15 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
-	IPACMDBG_H("Trying to add bridge vlan mapping status:%d\n", data->status);
+	IPACM_LOG(IPACM_LOG_DEBUG,"Trying to add bridge vlan mapping status:%d\n", data->status);
 
 	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
 	{
-		IPACMDBG("data->status: %d it_mapping->status: %d "
+		IPACM_LOG(IPACM_LOG_DEBUG, "data->status: %d it_mapping->status: %d "
 							"it_mapping->bridge_if_index: %d data->master_if_index: %d"
 							"it_mapping->bridge_associated_VID: %d data->vlan_id: %d\n"
 							"it_mapping->outer_vlan_id %d\n",
@@ -1472,7 +1484,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 							data->vlan_id, it_mapping->outer_vlan_id);
 		if(it_mapping->bridge_if_index == data->master_if_index)
 		{
-			IPACMDBG("it_mapping->status:%d\n", it_mapping->status);
+			IPACM_LOG(IPACM_LOG_DEBUG, "it_mapping->status:%d\n", it_mapping->status);
 			if((data->status == 1) && (it_mapping->status != 1))
 			{
 				strlcpy(it_mapping->bridge_iface_name, data->bridge_name,
@@ -1480,13 +1492,13 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 				it_mapping->bridge_ipv4 = data->bridge_ipv4;
 				it_mapping->subnet_mask = data->subnet_mask;
 
-				IPACMDBG("Bridge %s entry updated with vlan id %d IP: 0x%x subnet: 0x%x\n", it_mapping->bridge_iface_name, it_mapping->bridge_associated_VID, it_mapping->bridge_ipv4, it_mapping->subnet_mask);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Bridge %s entry updated with vlan id %d IP: 0x%x subnet: 0x%x\n", it_mapping->bridge_iface_name, it_mapping->bridge_associated_VID, it_mapping->bridge_ipv4, it_mapping->subnet_mask);
 
 
 				bridge = get_vlan_bridge(data->bridge_name);
 				if(bridge)
 				{
-					IPACMDBG_H("bridge %s already added, update data\n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "bridge %s already added, update data\n",
 						data->bridge_name);
 					bridge->bridge_ipv4_addr = data->bridge_ipv4;
 					bridge->bridge_netmask = data->subnet_mask;
@@ -1496,9 +1508,9 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 							if(bridge->associate_VID[j] == it_mapping->bridge_associated_VID
 											&& bridge->associate_VID[j] != 0)
 							{
-									IPACMDBG("Found at index:%d\n", j);
+									IPACM_LOG(IPACM_LOG_DEBUG, "Found at index:%d\n", j);
 									it_mapping->status = 1;
-									IPACMDBG("Bridge %s entry updated with vlan id %d IP: 0x%x subnet: 0x%x and status: %d\n",
+									IPACM_LOG(IPACM_LOG_DEBUG, "Bridge %s entry updated with vlan id %d IP: 0x%x subnet: 0x%x and status: %d\n",
 													it_mapping->bridge_iface_name, it_mapping->bridge_associated_VID, it_mapping->bridge_ipv4,
 													it_mapping->subnet_mask, it_mapping->status);
 									break;
@@ -1511,7 +1523,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 			/* As part of apbridge only we have single bridge for different vlan ids.*/
 			if((data->status == 0) && (IPACM_Iface::ipacmcfg->device_mode != DEVMODE_APBRIDGE))
 			{
-				IPACMDBG_H("The bridge %s was added before with vlan id: %d\n", data->bridge_name,
+				IPACM_LOG(IPACM_LOG_DEBUG, "The bridge %s was added before with vlan id: %d\n", data->bridge_name,
 								it_mapping->bridge_associated_VID);
 				goto bail;
 			}
@@ -1520,7 +1532,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 
 	if (data->status == 1)
 	{
-		IPACMDBG_H("No partial entry with vlan got added, Discarding the bridge data update, bailing out...\n");
+		IPACM_LOG(IPACM_LOG_ERR,"No partial entry with vlan got added, Discarding the bridge data update, bailing out...\n");
 		goto bail;
 	}
 
@@ -1540,10 +1552,10 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 				sizeof(new_mapping.bridge_iface_name));
 		}
 
-		IPACMDBG(" iface %s vid1 %d vid2 %d master index %d\n", iface_name, new_mapping.bridge_associated_VID, new_mapping.outer_vlan_id, new_mapping.bridge_if_index);
+		IPACM_LOG(IPACM_LOG_DEBUG, " iface %s vid1 %d vid2 %d master index %d\n", iface_name, new_mapping.bridge_associated_VID, new_mapping.outer_vlan_id, new_mapping.bridge_if_index);
 		fd = socket(AF_INET, SOCK_DGRAM, 0);
 		if (fd < 0) {
-			IPACMERR("get interface name socket create failed\n");
+			IPACM_LOG(IPACM_LOG_ERR, "get interface name socket create failed\n");
 			goto bail;
 		}
 		memset(&ifr, 0, sizeof(struct ifreq));
@@ -1551,14 +1563,14 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 		strlcpy(ifr.ifr_name, iface_name, sizeof(ifr.ifr_name));
 		if(ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
 		{
-			IPACMERR("unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
+			IPACM_LOG(IPACM_LOG_ERR, "unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
 			close(fd);
 			goto bail;
 		}
 		memcpy(new_mapping.bridge_mac,
 			ifr.ifr_hwaddr.sa_data,
 			sizeof(new_mapping.bridge_mac));
-		IPACMDBG("got bridge MAC using IOCTL\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "got bridge MAC using IOCTL\n");
 		close(fd);
 
 		for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
@@ -1567,7 +1579,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 										sizeof(new_mapping.bridge_iface_name)) == 0 &&
 								(it_mapping->bridge_associated_VID == data->vlan_id))
 				{
-						IPACMDBG_H("Found the bridge mapping (%s->%d)\n",
+						IPACM_LOG(IPACM_LOG_DEBUG, "Found the bridge mapping (%s->%d)\n",
 										it_mapping->bridge_iface_name,
 										it_mapping->bridge_associated_VID);
 						goto bail;
@@ -1578,13 +1590,13 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 		bridge = get_vlan_bridge(data->bridge_name);
 		if(bridge)
 		{
-			IPACMDBG_H("bridge %s already added, update data\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "bridge %s already added, update data\n",
 					data->bridge_name);
 			for(int j = 0; j < IPA_MAX_VLAN_PER_BRIDGE; j++)
 			{
 					if(bridge->associate_VID[j] == data->vlan_id)
 					{
-							IPACMDBG("found vlan_id: %d at index:%d\n", data->vlan_id, j);
+							IPACM_LOG(IPACM_LOG_DEBUG, "found vlan_id: %d at index:%d\n", data->vlan_id, j);
 							goto bail;
 					}
 			}
@@ -1593,7 +1605,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 			{
 					if(bridge->associate_VID[j] == 0)
 					{
-							IPACMDBG("Updating vlan_id: %d at index:%d\n", data->vlan_id, j);
+							IPACM_LOG(IPACM_LOG_DEBUG, "Updating vlan_id: %d at index:%d\n", data->vlan_id, j);
 							bridge->associate_VID[j] = data->vlan_id;
 							break;
 					}
@@ -1602,7 +1614,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 
 	}
 
-	IPACMDBG_H("added partial Entry with master interface index %d, VID %d\n", data->master_if_index, data->vlan_id);
+	IPACM_LOG(IPACM_LOG_DEBUG, "added partial Entry with master interface index %d, VID %d\n", data->master_if_index, data->vlan_id);
 
 bail:
 	pthread_mutex_unlock(&vlan_l2tp_lock);
@@ -1616,17 +1628,17 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data)
 	int ret = IPACM_FAILURE;
 	char iface_name[IPA_IFACE_NAME_LEN] = {0};
 
-	IPACMDBG_H("Deleting bridge vlan mapping with interface index %d\n",*data);
+	IPACM_LOG(IPACM_LOG_INFO,"Deleting bridge vlan mapping with interface index %d\n",*data);
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
 	if(m_bridge_vlan_mapping.empty()) {
 
-		IPACMERR("Bridge vlan mapping list is empty\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Bridge vlan mapping list is empty\n");
                 pthread_mutex_unlock(&vlan_l2tp_lock);
 		return;
 	}
@@ -1635,7 +1647,7 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data)
 	{
 		if(*data == it_mapping->bridge_if_index)
 		{
-			IPACMDBG_H("Found the bridge mapping (%s->%d)\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found the bridge mapping (%s->%d)\n",
 				it_mapping->bridge_iface_name,
 				it_mapping->bridge_associated_VID);
 
@@ -1644,7 +1656,7 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data)
 			bridge = get_vlan_bridge(iface_name);
 			if(bridge)
 			{
-				IPACMDBG_H("bridge %s - remove vlan id\n",
+				IPACM_LOG(IPACM_LOG_INFO,"bridge %s - remove vlan id\n",
 					it_mapping->bridge_iface_name);
 				for(int j = 0; j < IPA_MAX_VLAN_PER_BRIDGE; j++)
 				{
@@ -1656,7 +1668,7 @@ void IPACM_Config::del_bridge_vlan_mapping(uint16_t *data)
 		}
 	}
 
-	IPACMDBG("Bridge-vlan mapping entry deleted\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Bridge-vlan mapping entry deleted\n");
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 	return;
 }
@@ -1669,7 +1681,7 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info_new *data
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return IPACM_FAILURE;
 	}
 
@@ -1677,7 +1689,7 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info_new *data
 	{
 		if(strncmp(data->bridge_name, it_mapping->bridge_iface_name, sizeof(data->bridge_name)) == 0)
 		{
-			IPACMDBG_H("Found the bridge mapping (%s->%d)\n",
+			IPACM_LOG(IPACM_LOG_INFO,"Found the bridge mapping (%s->%d)\n",
 				data->bridge_name,
 				it_mapping->bridge_associated_VID,i);
 
@@ -1701,7 +1713,7 @@ uint16_t IPACM_Config::get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet)
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return IPACM_FAILURE;
 	}
 
@@ -1709,7 +1721,7 @@ uint16_t IPACM_Config::get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet)
 	{
 		if(ipv4_subnet == (it_mapping->bridge_ipv4 & it_mapping->subnet_mask))
 		{
-			IPACMDBG_H("Found the bridge mapping for subnet 0x%X (vid = %d)\n",
+			IPACM_LOG(IPACM_LOG_INFO,"Found the bridge mapping for subnet 0x%X (vid = %d)\n",
 				ipv4_subnet,
 				it_mapping->bridge_associated_VID);
 			VlanID = it_mapping->bridge_associated_VID;
@@ -1719,7 +1731,7 @@ uint16_t IPACM_Config::get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet)
 	}
 
 	pthread_mutex_unlock(&vlan_l2tp_lock);
-	IPACMERR("Could not find subnet 0x%X\n", ipv4_subnet);
+	IPACM_LOG(IPACM_LOG_ERR, "ERROR: Could not find mapping for subnet 0x%X\n", ipv4_subnet);
 
 	return 0;
 }
@@ -1731,34 +1743,34 @@ int IPACM_Config::find_matching_vlan(uint16_t interface_index, struct vlan_iface
 {
 	list<vlan_iface_info>::iterator it_vlan;
 
-	IPACMDBG("Extract vlan-id for interface index %d\n", interface_index);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Extract vlan-id for interface index %d\n", interface_index);
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return IPACM_FAILURE;
 	}
 	if(m_vlan_iface.empty()) {
-			IPACMERR("No vlan entry added\n");
+			IPACM_LOG(IPACM_LOG_ERR, "No vlan entry added\n");
 			pthread_mutex_unlock(&vlan_l2tp_lock);
 			return IPACM_FAILURE;
 	}
 
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
-		IPACMDBG("Iface index %d\n", it_vlan->vlan_interface_index);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Iface index %d\n", it_vlan->vlan_interface_index);
 		if(it_vlan->vlan_interface_index == interface_index)
 		{
 			strlcpy(vlan_data->vlan_iface_name, it_vlan->vlan_iface_name, IPA_RESOURCE_NAME_MAX);
 			vlan_data->vlan_id = it_vlan->vlan_id;
 			vlan_data->outer_vlan_id = it_vlan->outer_vlan_id;
-			IPACMDBG("Found vlan-id: %d  %dfor interface index: %d\n", it_vlan->vlan_id, it_vlan->outer_vlan_id, interface_index);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found vlan-id: %d  %dfor interface index: %d\n", it_vlan->vlan_id, it_vlan->outer_vlan_id, interface_index);
 			pthread_mutex_unlock(&vlan_l2tp_lock);
 			return IPACM_SUCCESS;
 
 		}
 	}
-	IPACMDBG("No matching vlan interface found for interface index: %d\n", interface_index);
+	IPACM_LOG(IPACM_LOG_DEBUG, "No matching vlan interface found for interface index: %d\n", interface_index);
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 	return IPACM_FAILURE;
 }
@@ -1774,28 +1786,28 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
 	evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
 	if(evt_data_eth_bridge == NULL)
 	{
-		IPACMERR("Failed to allocate memory.\n");
+		IPACM_LOG(IPACM_LOG_ERR,"Failed to allocate memory.\n");
 		return;
 	}
 	memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
 	memcpy(evt_data_eth_bridge->iface_name, data->name,
 			sizeof(evt_data_eth_bridge->iface_name));
 
-	IPACMDBG_H("Vlan iface: %s vlan id: %d vlan if index %d\n", data->name, data->vlan_id, data->vlan_interface_index);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Vlan iface: %s vlan id: %d vlan if index %d\n", data->name, data->vlan_id, data->vlan_interface_index);
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
-		IPACMDBG("data %s it_vlan %s %d %d\n", data->name, it_vlan->vlan_iface_name, it_vlan->outer_vlan_id, it_vlan->vlan_id);
+		IPACM_LOG(IPACM_LOG_DEBUG, "data %s it_vlan %s %d %d\n", data->name, it_vlan->vlan_iface_name, it_vlan->outer_vlan_id, it_vlan->vlan_id);
 
 		if(it_vlan->vlan_interface_index == data->vlan_interface_index)
 		{
-			IPACMERR("The vlan iface was added before with id %d\n", it_vlan->vlan_id);
+			IPACM_LOG(IPACM_LOG_WARN, "The vlan iface was added before with id %d\n", it_vlan->vlan_id);
 			pthread_mutex_unlock(&vlan_l2tp_lock);
 			free(evt_data_eth_bridge);
 			return;
@@ -1810,7 +1822,7 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 		{
 			if(strncmp(data->name, it_mapping->vlan_iface_name, sizeof(data->name)) == 0)
 			{
-				IPACMDBG_H("Found a mapping: l2tp iface %s.\n", it_mapping->l2tp_iface_name);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Found a mapping: l2tp iface %s.\n", it_mapping->l2tp_iface_name);
 				it_mapping->vlan_id = data->vlan_id;
 			}
 		}
@@ -1820,13 +1832,13 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 	{
 		AddNatIfaces(data->name);
-		IPACMDBG_H("Add VLAN iface %s to nat ifaces.\n", data->name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Add VLAN iface %s to nat ifaces.\n", data->name);
 	}
 #endif
 
 	if (IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled == TRUE) {
 		SwitchAPVlanMode(data->name, true);
-		IPACMDBG_H("Switch AP %s to VLAN Mode\n", data->name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Switch AP %s to VLAN Mode\n", data->name);
 	}
 
 	memset(&new_vlan_info, 0, sizeof(new_vlan_info));
@@ -1834,7 +1846,7 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	new_vlan_info.vlan_id = data->vlan_id;
 	new_vlan_info.vlan_interface_index = data->vlan_interface_index;
 
-	IPACMDBG("Device mode %d\n", IPACM_Iface::ipacmcfg->device_mode);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Device mode %d\n", IPACM_Iface::ipacmcfg->device_mode);
 	if((IPACM_Iface::ipacmcfg->device_mode == DEVMODE_APBRIDGE) && iface_in_dbl_vlan_mode(data->name))
 	{
 		parse_outer_tag(data->name, &new_vlan_info.vlan_id, &new_vlan_info.outer_vlan_id);
@@ -1844,7 +1856,7 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 		}
 		else
 		{
-			IPACMDBG("avoiding insertion of single vlan id\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "avoiding insertion of single vlan id\n");
 			pthread_mutex_unlock(&vlan_l2tp_lock);
 			free(evt_data_eth_bridge);
 			return;
@@ -1852,6 +1864,7 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	}
 	m_vlan_iface.push_front(new_vlan_info);
 	pthread_mutex_unlock(&vlan_l2tp_lock);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Added VLAN iface %s success\n", data->name);
 #ifdef FEATURE_VLAN_MPDN
 	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 	{
@@ -1860,7 +1873,7 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 			eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
 			evt_data_eth_bridge->Outer_Vlanid = new_vlan_info.outer_vlan_id;
 			eth_bridge_evt.event = IPA_ETH_BRIDGE_ADD_VLAN_ID;
-			IPACMDBG_H("Posting event %s\n",
+			IPACM_LOG(IPACM_LOG_DEBUG,"Posting event %s\n",
 			IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
 			IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 	}
@@ -1871,16 +1884,16 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	 */
 	evt_data.event = IPA_NOTIFY_VLAN_UP;
 	evt_data.evt_data = NULL;
-	IPACMDBG_H("Posting %s\n", IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
+	IPACM_LOG(IPACM_LOG_INFO,"Posting %s\n", IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 #endif
 	/* Sending Getneigh to receive missing neighbor in case if missed early */
-	IPACMDBG_H("Query Getneigh for vlan ifaces\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Query Getneigh for vlan ifaces\n");
 	ipa_nl_query_newneigh(AF_BRIDGE);
-	IPACMDBG_H("Query Getneigh for v4\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Query Getneigh for v4\n");
 	ipa_nl_query_newneigh(AF_INET);
-	IPACMDBG_H("Query Getneigh for v6\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Query Getneigh for v6\n");
 	ipa_nl_query_newneigh(AF_INET6);
 	return;
 }
@@ -1891,24 +1904,24 @@ void IPACM_Config::restore_vlan_nat_ifaces(const char *phys_iface_name)
 
 	if(!phys_iface_name)
 	{
-		IPACMERR("got NULL iface_name\n");
+		IPACM_LOG(IPACM_LOG_ERR, "got NULL iface_name\n");
 		return;
 	}
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
-	IPACMDBG_H("searching iface %s vlan interfaces to add to NAT devices\n", phys_iface_name)
+	IPACM_LOG(IPACM_LOG_DEBUG, "searching iface %s vlan interfaces to add to NAT devices\n", phys_iface_name)
 
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
 		if(strstr(it_vlan->vlan_iface_name, phys_iface_name))
 		{
 			AddNatIfaces(it_vlan->vlan_iface_name);
-			IPACMDBG_H("restored VLAN iface %s to nat ifaces.\n", it_vlan->vlan_iface_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "restored VLAN iface %s to nat ifaces.\n", it_vlan->vlan_iface_name);
 		}
 	}
 
@@ -1922,16 +1935,16 @@ void IPACM_Config::del_vlan_iface(ipa_vlan_iface_info *data)
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
-	IPACMDBG_H("Vlan iface: %s vlan id: %d\n", data->name, data->vlan_id);
+	IPACM_LOG(IPACM_LOG_DEBUG,"Vlan iface: %s vlan id: %d\n", data->name, data->vlan_id);
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
 		if(it_vlan->vlan_interface_index == data->vlan_interface_index)
 		{
-			IPACMDBG_H("Found the vlan interface\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found the vlan interface\n");
 			m_vlan_iface.erase(it_vlan);
 			break;
 		}
@@ -1939,14 +1952,14 @@ void IPACM_Config::del_vlan_iface(ipa_vlan_iface_info *data)
 
 	if (IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled == TRUE) {
 		SwitchAPVlanMode(data->name, false);
-		IPACMDBG_H("Switch AP %s to Non-VLAN Mode\n", data->name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Switch AP %s to Non-VLAN Mode\n", data->name);
 	}
 
 #ifdef FEATURE_VLAN_MPDN
 	if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 	{
 		DelNatIfaces(data->name);
-		IPACMDBG_H("Del VLAN iface %s to nat ifaces.\n", data->name);
+		IPACM_LOG(IPACM_LOG_INFO, "Del VLAN iface %s to nat ifaces.\n", data->name);
 	}
 #endif
 #ifdef FEATURE_L2TP
@@ -1958,7 +1971,7 @@ void IPACM_Config::del_vlan_iface(ipa_vlan_iface_info *data)
 		{
 			if(strncmp(data->name, it_mapping->vlan_iface_name, sizeof(data->name)) == 0)
 			{
-				IPACMDBG_H("Delete mapping with l2tp iface %s\n", it_mapping->l2tp_iface_name);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Delete mapping with l2tp iface %s\n", it_mapping->l2tp_iface_name);
 				it_mapping = m_l2tp_vlan_mapping.erase(it_mapping);
 			}
 			else
@@ -1979,7 +1992,7 @@ void IPACM_Config::del_vlan_iface(ipa_vlan_iface_info *data)
 		evt_data_eth_bridge = (ipacm_event_eth_bridge*)malloc(sizeof(*evt_data_eth_bridge));
 		if(evt_data_eth_bridge == NULL)
 		{
-			IPACMERR("Failed to allocate memory.\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Failed to allocate memory.\n");
 			return;
 		}
 		memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
@@ -1993,7 +2006,7 @@ void IPACM_Config::del_vlan_iface(ipa_vlan_iface_info *data)
 		eth_bridge_evt.evt_data = (void*)evt_data_eth_bridge;
 		eth_bridge_evt.event = IPA_ETH_BRIDGE_DEL_VLAN_ID;
 
-		IPACMDBG_H("Posting event %s\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "Posting event %s\n",
 			IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event));
 		IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
 	}
@@ -2008,11 +2021,11 @@ void IPACM_Config::handle_vlan_iface_info(ipacm_event_data_addr *data)
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
-	IPACMDBG_H("Incoming vlan iface: %s IPv6 address: 0x%08x%08x%08x%08x\n", data->iface_name,
+	IPACM_LOG(IPACM_LOG_DEBUG, "Incoming vlan iface: %s IPv6 address: 0x%08x%08x%08x%08x\n", data->iface_name,
 		data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
 
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
@@ -2020,7 +2033,7 @@ void IPACM_Config::handle_vlan_iface_info(ipacm_event_data_addr *data)
 		if(it_vlan->vlan_interface_index == data->if_index)
 		{
 
-			IPACMDBG_H("Found vlan iface: %s\n", it_vlan->vlan_iface_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found vlan iface: %s\n", it_vlan->vlan_iface_name);
 			memcpy(it_vlan->vlan_iface_ipv6_addr, data->ipv6_addr,
 				sizeof(it_vlan->vlan_iface_ipv6_addr));
 
@@ -2034,7 +2047,7 @@ void IPACM_Config::handle_vlan_iface_info(ipacm_event_data_addr *data)
 					if(strncmp(it_mapping->vlan_iface_name, it_vlan->vlan_iface_name,
 						sizeof(it_mapping->vlan_iface_name)) == 0)
 					{
-						IPACMDBG_H("Found the l2tp-vlan mapping: l2tp %s\n", it_mapping->l2tp_iface_name);
+						IPACM_LOG(IPACM_LOG_INFO, "Found the l2tp-vlan mapping: l2tp %s\n", it_mapping->l2tp_iface_name);
 						memcpy(it_mapping->vlan_iface_ipv6_addr, data->ipv6_addr,
 							sizeof(it_mapping->vlan_iface_ipv6_addr));
 					}
@@ -2047,7 +2060,7 @@ void IPACM_Config::handle_vlan_iface_info(ipacm_event_data_addr *data)
 
 	if(it_vlan == m_vlan_iface.end())
 	{
-		IPACMDBG_H("Failed to find the vlan iface: %s\n", data->iface_name);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to find the vlan iface: %s\n", data->iface_name);
 	}
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 
@@ -2061,24 +2074,24 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
-	IPACMDBG_H("Incoming vlan client iface: %s IPv6 address: 0x%08x%08x%08x%08x\n", data->iface_name,
+	IPACM_LOG(IPACM_LOG_DEBUG, "Incoming vlan client iface: %s IPv6 address: 0x%08x%08x%08x%08x\n", data->iface_name,
 		data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]);
-	IPACMDBG_H("MAC address: 0x%02x::%02x::%02x::%02x::%02x::%02x\n", data->mac_addr[0], data->mac_addr[1],
+	IPACM_LOG(IPACM_LOG_DEBUG, "MAC address: 0x%02x::%02x::%02x::%02x::%02x::%02x\n", data->mac_addr[0], data->mac_addr[1],
 		data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
 
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
 		if(it_vlan->vlan_interface_index == data->if_index)
 		{
-			IPACMDBG_H("Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
 			if(it_vlan->vlan_client_ipv6_addr[0] > 0 || it_vlan->vlan_client_ipv6_addr[1] > 0 ||
 				it_vlan->vlan_client_ipv6_addr[2] > 0 || it_vlan->vlan_client_ipv6_addr[3] > 0)
 			{
-				IPACMDBG_H("Vlan client info has been populated before, return.\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "Vlan client info has been populated before, return.\n");
 				pthread_mutex_unlock(&vlan_l2tp_lock);
 				return;
 			}
@@ -2094,7 +2107,7 @@ void IPACM_Config::handle_vlan_client_info(ipacm_event_data_all *data)
 		{
 			if(strncmp(it_mapping->vlan_iface_name, data->iface_name, sizeof(it_mapping->vlan_iface_name)) == 0)
 			{
-				IPACMDBG_H("Found vlan iface in l2tp mapping list: %s, l2tp iface: %s\n", it_mapping->vlan_iface_name,
+				IPACM_LOG(IPACM_LOG_INFO, "Found vlan iface in l2tp mapping list: %s, l2tp iface: %s\n", it_mapping->vlan_iface_name,
 					it_mapping->l2tp_iface_name);
 				memcpy(it_mapping->vlan_client_mac, data->mac_addr, sizeof(it_mapping->vlan_client_mac));
 				memcpy(it_mapping->vlan_client_ipv6_addr, data->ipv6_addr, sizeof(it_mapping->vlan_client_ipv6_addr));
@@ -2121,21 +2134,21 @@ void IPACM_Config::get_vlan_mode_ifaces()
 		retval = ioctl(m_fd, IPA_IOC_GET_VLAN_MODE, &vlan_mode);
 		if(retval)
 		{
-			IPACMERR("failed reading vlan mode for %d, error %d\n", i ,retval);
+			IPACM_LOG(IPACM_LOG_ERR, "failed reading vlan mode for %d, error %d\n", i ,retval);
 			vlan_devices[i] = 0;
 		}
 		vlan_devices[i] = vlan_mode.is_vlan_mode;
 	}
 
 #if IPA_ETH_API_VER >= 2
-	IPACMDBG("modes are EMAC %d, ETH0 %d, ETH1 %d, RNDIS %d, ECM %d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG,"modes are EMAC %d, ETH0 %d, ETH1 %d, RNDIS %d, ECM %d\n",
 		vlan_devices[IPA_VLAN_IF_EMAC],
 		vlan_devices[IPA_VLAN_IF_ETH0],
 		vlan_devices[IPA_VLAN_IF_ETH1],
 		vlan_devices[IPA_VLAN_IF_RNDIS],
 		vlan_devices[IPA_VLAN_IF_ECM]);
 #else
-	IPACMDBG("modes are EMAC %d, RNDIS %d, ECM %d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG,"modes are EMAC %d, RNDIS %d, ECM %d\n",
 		vlan_devices[IPA_VLAN_IF_EMAC],
 		vlan_devices[IPA_VLAN_IF_RNDIS],
 		vlan_devices[IPA_VLAN_IF_ECM]);
@@ -2159,7 +2172,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 	{
 		if(strcmp(data_all->iface_name, IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name) == 0)
 		{
-			IPACMDBG_H("bridge %s already exist with MAC %02x:%02x:%02x:%02x:%02x:%02x, need to update MAC ADDR\n",
+			IPACM_LOG(IPACM_LOG_WARN, "bridge %s already exist with MAC %02x:%02x:%02x:%02x:%02x:%02x\n ignoring\n",
 				data_all->iface_name, IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[0],
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[1],
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[2],
@@ -2177,12 +2190,12 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 			{
 				if(default_bridge)
 				{
-					IPACMDBG_H("default bridge doesn't have vlan mapping\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "default bridge doesn't have vlan mapping\n");
 				}
 				else
 				{
 					/* mapping may arrive later and information will be updated then */
-					IPACMERR("no bridge vlan mapping found for bridge %s, not adding\n", data_all->iface_name);
+					IPACM_LOG(IPACM_LOG_ERR, "no bridge vlan mapping found for bridge %s, not adding\n", data_all->iface_name);
 					return;
 				}
 			}
@@ -2190,7 +2203,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 
 			fd = socket(AF_INET, SOCK_DGRAM, 0);
 			if (fd < 0) {
-					IPACMERR("get interface name socket create failed\n");
+					IPACM_LOG(IPACM_LOG_ERR, "get interface name socket create failed\n");
 					return;
 			}
 			memset(&ifr, 0, sizeof(struct ifreq));
@@ -2198,7 +2211,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 			strlcpy(ifr.ifr_name, data_all->iface_name, sizeof(ifr.ifr_name));
 			if(ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
 			{
-				IPACMERR("unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
+				IPACM_LOG(IPACM_LOG_ERR, "unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
 				vlan_bridges[i].bridge_netmask = 0;
 				vlan_bridges[i].bridge_ipv4_addr = 0;
 				for(int j = 0; j < IPA_MAX_VLAN_PER_BRIDGE; j++)
@@ -2211,7 +2224,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 			memcpy(vlan_bridges[i].bridge_mac,
 				ifr.ifr_hwaddr.sa_data,
 				sizeof(vlan_bridges[i].bridge_mac));
-			IPACMDBG("got bridge MAC using IOCTL\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "got bridge MAC using IOCTL\n");
 			found=0;
 			for(int k = 0; k < IPA_MAX_VLAN_PER_BRIDGE; k++)
 			{
@@ -2220,7 +2233,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 							if(vlan_bridges[i].associate_VID[j] == mapping_info.vlan_id[k]
 											&& mapping_info.vlan_id[k] != 0)
 							{
-									IPACMDBG("Found vlan_id: %d at index %d for vlan received at %d\n",
+									IPACM_LOG(IPACM_LOG_DEBUG, "Found vlan_id: %d at index %d for vlan received at %d\n",
 													vlan_bridges[i].associate_VID[j], j, k);
 									found = 1;
 									break;
@@ -2229,7 +2242,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 											mapping_info.vlan_id[k] != 0)
 							{
 									vlan_bridges[i].associate_VID[j] = mapping_info.vlan_id[k];
-									IPACMDBG("Updating vlan_id: %d at index %d for vlan"
+									IPACM_LOG(IPACM_LOG_DEBUG, "Updating vlan_id: %d at index %d for vlan"
 													"received at index: %d\n",
 													vlan_bridges[i].associate_VID[j], j, k);
 									found = 1;
@@ -2248,11 +2261,11 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 
 				IPACM_Iface::ipacmcfg->ipa_bridge_enable = true;
 
-				IPACMDBG("set default bridge flag dev %s\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "set default bridge flag dev %s\n",
 					data_all->iface_name);
 			}
 			close(fd);
-			IPACMDBG_H("update bridge %s with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "update bridge %s with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name,
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[0],
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[1],
@@ -2276,12 +2289,12 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 			{
 				if(default_bridge)
 				{
-					IPACMDBG_H("default bridge doesn't have vlan mapping\n");
+					IPACM_LOG(IPACM_LOG_WARN, "default bridge doesn't have vlan mapping\n");
 				}
 				else
 				{
 					/* mapping may arrive later and information will be updated then */
-					IPACMERR("no bridge vlan mapping found for bridge %s, not adding\n", data_all->iface_name);
+					IPACM_LOG(IPACM_LOG_ERR, "no bridge vlan mapping found for bridge %s, not adding\n", data_all->iface_name);
 					return;
 				}
 			}
@@ -2297,7 +2310,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 							if(vlan_bridges[i].associate_VID[j] == mapping_info.vlan_id[k] &&
 											mapping_info.vlan_id[k] != 0)
 							{
-									IPACMDBG("Found vlan_id: %d at index %d for vlan received at %d\n",
+									IPACM_LOG(IPACM_LOG_DEBUG, "Found vlan_id: %d at index %d for vlan received at %d\n",
 													vlan_bridges[i].associate_VID[j], j, k);
 									found = 1;
 									break;
@@ -2306,7 +2319,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 											mapping_info.vlan_id[k] != 0)
 							{
 									vlan_bridges[i].associate_VID[j] = mapping_info.vlan_id[k];
-									IPACMDBG("Updating vlan_id: %d at index %d for vlan"
+									IPACM_LOG(IPACM_LOG_DEBUG, "Updating vlan_id: %d at index %d for vlan"
 													"received at index: %d\n",
 													vlan_bridges[i].associate_VID[j], j, k);
 									found = 1;
@@ -2316,14 +2329,14 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 					}
 					found = 0;
 			}
-			IPACMDBG("bridge (%s) mask 0x%X, address 0x%X, VID %d\n", data_all->iface_name,
+			IPACM_LOG(IPACM_LOG_DEBUG,"bridge (%s) mask 0x%X, address 0x%X, VID %d\n", data_all->iface_name,
 				mapping_info.subnet_mask,
 				mapping_info.bridge_ipv4,
 				mapping_info.vlan_id);
 
 			fd = socket(AF_INET, SOCK_DGRAM, 0);
 			if (fd < 0) {
-					IPACMERR("get interface name socket create failed\n");
+					IPACM_LOG(IPACM_LOG_ERR, "get interface name socket create failed\n");
 					return;
 			}
 			memset(&ifr, 0, sizeof(struct ifreq));
@@ -2331,7 +2344,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 			strlcpy(ifr.ifr_name, data_all->iface_name, sizeof(ifr.ifr_name));
 			if(ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
 			{
-				IPACMERR("unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
+				IPACM_LOG(IPACM_LOG_ERR, "unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
 				vlan_bridges[i].bridge_netmask = 0;
 				vlan_bridges[i].bridge_ipv4_addr = 0;
 				for(int j = 0; j < IPA_MAX_VLAN_PER_BRIDGE; j++)
@@ -2344,7 +2357,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 			memcpy(vlan_bridges[i].bridge_mac,
 				ifr.ifr_hwaddr.sa_data,
 				sizeof(vlan_bridges[i].bridge_mac));
-			IPACMDBG("got bridge MAC using IOCTL\n");
+			IPACM_LOG(IPACM_LOG_DEBUG,"got bridge MAC using IOCTL\n");
 			if(default_bridge)
 			{
 				memcpy(IPACM_Iface::ipacmcfg->bridge_mac,
@@ -2353,11 +2366,11 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 
 				IPACM_Iface::ipacmcfg->ipa_bridge_enable = true;
 
-				IPACMDBG("set default bridge flag dev %s\n",
+				IPACM_LOG(IPACM_LOG_DEBUG,"set default bridge flag dev %s\n",
 					data_all->iface_name);
 			}
 			close(fd);
-			IPACMDBG_H("added bridge named %s, MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_INFO,"added bridge named %s, MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name,
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[0],
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[1],
@@ -2368,7 +2381,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 			return;
 		}
 	}
-	IPACMERR("couldn't find an empty cell for new bridge\n");
+	IPACM_LOG(IPACM_LOG_ERR, "couldn't find an empty cell for new bridge\n");
 }
 
 ipacm_bridge *IPACM_Config::get_vlan_bridge(char *name)
@@ -2377,7 +2390,7 @@ ipacm_bridge *IPACM_Config::get_vlan_bridge(char *name)
 	{
 		if(strcmp(name, IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name) == 0)
 		{
-			IPACMDBG_H("found bridge %s with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_INFO, "found bridge %s with MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name,
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[0],
 				IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_mac[1],
@@ -2390,7 +2403,7 @@ ipacm_bridge *IPACM_Config::get_vlan_bridge(char *name)
 		}
 	}
 
-	IPACMDBG_H("no bridge %s exists\n", name);
+	IPACM_LOG(IPACM_LOG_DEBUG, "no bridge %s exists\n", name);
 	return NULL;
 }
 
@@ -2403,7 +2416,7 @@ ipacm_bridge *IPACM_Config::get_vlan_bridge_from_vid(uint16_t vlan_id)
 			{
 					if(vlan_id == IPACM_Iface::ipacmcfg->vlan_bridges[i].associate_VID[j])
 					{
-							IPACMDBG_H("found bridge %s with associate_VID %d\n",
+							IPACM_LOG(IPACM_LOG_DEBUG, "found bridge %s with associate_VID %d\n",
 											IPACM_Iface::ipacmcfg->vlan_bridges[i].bridge_name,
 											IPACM_Iface::ipacmcfg->vlan_bridges[i].associate_VID[j]);
 
@@ -2412,7 +2425,7 @@ ipacm_bridge *IPACM_Config::get_vlan_bridge_from_vid(uint16_t vlan_id)
 			}
 	}
 
-	IPACMDBG_H("no bridge with vlan-id %d exists\n", vlan_id);
+	IPACM_LOG(IPACM_LOG_DEBUG, "no bridge with vlan-id %d exists\n", vlan_id);
 	return NULL;
 }
 
@@ -2423,10 +2436,10 @@ int IPACM_Config::get_bridge_vlan_mapping_from_double_vid(ipacm_bridge *data, ui
 
 	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
 	{
-		IPACMDBG("inner tag %d outer tag %d iface %s\n", it_mapping->bridge_associated_VID, it_mapping->outer_vlan_id, it_mapping->bridge_iface_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "inner tag %d outer tag %d iface %s\n", it_mapping->bridge_associated_VID, it_mapping->outer_vlan_id, it_mapping->bridge_iface_name);
 		if((inner_vlan_id == it_mapping->bridge_associated_VID) && (outer_vlan_id == it_mapping->outer_vlan_id))
 		{
-			IPACMDBG_H("Found the bridge mapping (%s->%d) \n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found the bridge mapping (%s->%d) \n",
 				it_mapping->bridge_iface_name,
 				it_mapping->bridge_associated_VID);
 			data->bridge_ipv4_addr = it_mapping->bridge_ipv4;
@@ -2438,7 +2451,7 @@ int IPACM_Config::get_bridge_vlan_mapping_from_double_vid(ipacm_bridge *data, ui
 		}
 	}
 
-	IPACMERR("Bridge mapping is not found\n");
+	IPACM_LOG(IPACM_LOG_ERR, "Bridge mapping is not found\n");
 
 	return ret;
 }
@@ -2451,7 +2464,7 @@ int IPACM_Config::get_bridge_vlan_mapping_from_vid(ipacm_bridge *data, uint16_t 
 	{
 		if(vlan_id == it_mapping->bridge_associated_VID)
 		{
-			IPACMDBG_H("Found the bridge mapping (%s->%d) \n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found the bridge mapping (%s->%d) \n",
 				it_mapping->bridge_iface_name,
 				it_mapping->bridge_associated_VID);
 			data->bridge_ipv4_addr = it_mapping->bridge_ipv4;
@@ -2463,7 +2476,7 @@ int IPACM_Config::get_bridge_vlan_mapping_from_vid(ipacm_bridge *data, uint16_t 
 		}
 	}
 
-	IPACMERR("Bridge mapping is not found\n");
+	IPACM_LOG(IPACM_LOG_ERR, "Bridge mapping is not found\n");
 
 	return ret;
 }
@@ -2476,13 +2489,13 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 
 	if (!iface_in_vlan_mode(iface_name))
 	{
-		IPACMDBG_H("Iface not in VLAN mode: %s\n", iface_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Iface not in VLAN mode: %s\n", iface_name);
 		return false;
 	}
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return false;
 	}
 
@@ -2490,7 +2503,7 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 	{
 		if(strncmp(it_vlan->vlan_iface_name, iface_name, sizeof(it_vlan->vlan_iface_name)) == 0)
 		{
-			IPACMDBG_H("Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
 			ret = true;
 			break;
 		}
@@ -2504,7 +2517,7 @@ bool IPACM_Config::is_added_vlan_iface(char *iface_name)
 
 uint8_t IPACM_Config::iface_in_dbl_vlan_mode(const char *interfaceName) {
 
-		IPACMDBG_H("iface %s is getting checked if it is vlan\n", interfaceName);
+		IPACM_LOG(IPACM_LOG_DEBUG, "iface %s is getting checked if it is vlan\n", interfaceName);
 		string nameToCheck = getNameForVlanQuery(interfaceName);
 #if IPA_ETH_API_VER >= 2
 		/**
@@ -2512,11 +2525,11 @@ uint8_t IPACM_Config::iface_in_dbl_vlan_mode(const char *interfaceName) {
 		 *  [eth0|eth1] and legacy while where name is always "eth0".
 		 */
 		if (strstr(nameToCheck.c_str(), "eth0")) {
-				IPACMDBG("eth0 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH0]);
+				IPACM_LOG(IPACM_LOG_DEBUG,"eth0 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH0]);
 				return (vlan_devices[IPA_VLAN_IF_ETH0]);
 		}
 		if (strstr(nameToCheck.c_str(), "eth1")) {
-				IPACMDBG("eth1 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH1]);
+				IPACM_LOG(IPACM_LOG_DEBUG,"eth1 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH1]);
 				return (vlan_devices[IPA_VLAN_IF_ETH1]);
 		}
 
@@ -2526,7 +2539,7 @@ uint8_t IPACM_Config::iface_in_dbl_vlan_mode(const char *interfaceName) {
 
 
 bool IPACM_Config::iface_in_vlan_mode(const char *interfaceName) {
-	IPACMDBG_H("iface %s is getting checked if it is vlan\n", interfaceName);
+	IPACM_LOG(IPACM_LOG_DEBUG, "iface %s is getting checked if it is vlan\n", interfaceName);
 	string nameToCheck = getNameForVlanQuery(interfaceName);
 #if IPA_ETH_API_VER >= 2
 	/**
@@ -2534,37 +2547,37 @@ bool IPACM_Config::iface_in_vlan_mode(const char *interfaceName) {
 	 *  [eth0|eth1] and legacy while where name is always "eth0".
 	 */
 	if (strstr(nameToCheck.c_str(), "eth0")) {
-		IPACMDBG("eth0 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH0]);
-		IPACMDBG("eth0 vlan spcl mode %d\n", IsSpclIface(nameToCheck.c_str()));
+		IPACM_LOG(IPACM_LOG_DEBUG,"eth0 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH0]);
+		IPACM_LOG(IPACM_LOG_DEBUG,"eth0 vlan spcl mode %d\n", IsSpclIface(nameToCheck.c_str()));
 		return vlan_devices[IPA_VLAN_IF_ETH0] || vlan_devices[IPA_VLAN_IF_EMAC] ||
 			(IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2 && IsSpclIface(nameToCheck.c_str()));
 	}
 	if (strstr(nameToCheck.c_str(), "eth1")) {
-		IPACMDBG("eth1 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH1]);
+		IPACM_LOG(IPACM_LOG_DEBUG,"eth1 vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ETH1]);
 		return vlan_devices[IPA_VLAN_IF_ETH1] || vlan_devices[IPA_VLAN_IF_EMAC];
 	}
 #endif
 	if (strstr(nameToCheck.c_str(), "eth") || strstr(nameToCheck.c_str(), "macsec")) {
-		IPACMDBG("eth vlan mode %d\n", vlan_devices[IPA_VLAN_IF_EMAC]);
+		IPACM_LOG(IPACM_LOG_DEBUG,"eth vlan mode %d\n", vlan_devices[IPA_VLAN_IF_EMAC]);
 		return vlan_devices[IPA_VLAN_IF_EMAC];
 	}
 	if (strstr(nameToCheck.c_str(), "rndis")) {
-		IPACMDBG("rndis vlan mode %d\n", vlan_devices[IPA_VLAN_IF_RNDIS]);
+		IPACM_LOG(IPACM_LOG_DEBUG,"rndis vlan mode %d\n", vlan_devices[IPA_VLAN_IF_RNDIS]);
 		return vlan_devices[IPA_VLAN_IF_RNDIS];
 	}
 	if (strstr(nameToCheck.c_str(), "ecm")) {
-		IPACMDBG("ecm vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ECM]);
+		IPACM_LOG(IPACM_LOG_DEBUG,"ecm vlan mode %d\n", vlan_devices[IPA_VLAN_IF_ECM]);
 		return vlan_devices[IPA_VLAN_IF_ECM];
 	}
 #ifdef IPA_VLAN_IF_WLAN
 	if (strstr(nameToCheck.c_str(), "ath")) {
-		IPACMDBG("ath vlan mode %d\n", vlan_devices[IPA_VLAN_IF_WLAN]);
+		IPACM_LOG(IPACM_LOG_DEBUG, "ath vlan mode %d\n", vlan_devices[IPA_VLAN_IF_WLAN]);
 		return (vlan_devices[IPA_VLAN_IF_WLAN] ||
 			((IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) &&
 			is_svap_related(nameToCheck.c_str())) || IsWlanIfVlan(nameToCheck.c_str()));
 	}
 	if (strstr(nameToCheck.c_str(), "wlan")) {
-		IPACMDBG("wlan vlan mode %d\n", vlan_devices[IPA_VLAN_IF_WLAN]);
+		IPACM_LOG(IPACM_LOG_DEBUG, "wlan vlan mode %d\n", vlan_devices[IPA_VLAN_IF_WLAN]);
 		return (vlan_devices[IPA_VLAN_IF_WLAN] ||
 			((IPACM_Iface::ipacmcfg->ipacm_emesh_enable &&
 			  IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) &&
@@ -2574,7 +2587,7 @@ bool IPACM_Config::iface_in_vlan_mode(const char *interfaceName) {
 	if(strstr(nameToCheck.c_str(), "mld"))
 	{
 
-		IPACMDBG("Wlan mlo\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Wlan mlo\n");
 			return (vlan_devices[IPA_VLAN_IF_WLAN] || (IPACM_Iface::ipacmcfg->ipacm_emesh_enable &&
 			  IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) &&
 			 is_svap_related(nameToCheck.c_str())) ||
@@ -2583,7 +2596,7 @@ bool IPACM_Config::iface_in_vlan_mode(const char *interfaceName) {
 	}
 #endif
 
-	IPACMDBG_H("iface %s did not match any known ifaces\n", nameToCheck.c_str());
+	IPACM_LOG(IPACM_LOG_DEBUG,"iface %s did not match any known ifaces\n", nameToCheck.c_str());
 	return false;
 }
 
@@ -2612,23 +2625,23 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids)
 
 	if(!Ids)
 	{
-		IPACMERR("got NULL Ids array\n");
+		IPACM_LOG(IPACM_LOG_ERR, "got NULL Ids array\n");
 		return IPACM_FAILURE;
 	}
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return IPACM_FAILURE;
 	}
 
 	extract_mlo_base_iface(input_iface);
-	IPACMDBG("Extracted iface name %s\n", input_iface);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Extracted iface name %s\n", input_iface);
 
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end() && cnt < IPA_MAX_NUM_OFFLOAD_VLANS; it_vlan++)
 	{
 		if(strstr(it_vlan->vlan_iface_name, input_iface))
 		{
-			IPACMDBG_H("Found vlan iface in vlan list: %s\n %d", it_vlan->vlan_iface_name, it_vlan->vlan_id);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
 			Ids[cnt] = it_vlan->vlan_id;
 			cnt++;
 		}
@@ -2636,7 +2649,7 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids)
 
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 
-	IPACMDBG_H("found %d vlan interfaces for dev %s\n", cnt, phys_iface_name);
+	IPACM_LOG(IPACM_LOG_DEBUG, "found %d vlan interfaces for dev %s\n", cnt, phys_iface_name);
 
 	while(cnt < IPA_MAX_NUM_OFFLOAD_VLANS)
 	{
@@ -2654,7 +2667,7 @@ int IPACM_Config::get_double_tagged_vlan_ids(char *iface_name, uint16_t *inner_i
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return IPACM_FAILURE;
 	}
 
@@ -2667,7 +2680,7 @@ int IPACM_Config::get_double_tagged_vlan_ids(char *iface_name, uint16_t *inner_i
 				(it_vlan->double_tag))
 		{
 
-			IPACMDBG_H("Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
 			*inner_id = it_vlan->vlan_id;
 			*outer_id = it_vlan->outer_vlan_id;
 			ret = IPACM_SUCCESS;
@@ -2675,7 +2688,7 @@ int IPACM_Config::get_double_tagged_vlan_ids(char *iface_name, uint16_t *inner_i
 			return ret;
 		}
 	}
-	IPACMERR("No matching entry found for %s\n", iface_name);
+	IPACM_LOG(IPACM_LOG_ERR, "No matching entry found for %s\n", iface_name);
 	pthread_mutex_unlock(&vlan_l2tp_lock);
 	return ret;
 }
@@ -2686,16 +2699,16 @@ int IPACM_Config::get_vlan_id(char *iface_name, uint16_t *vlan_id)
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return IPACM_FAILURE;
 	}
 
-	IPACMDBG("Iface name %s\n", iface_name);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Iface name %s\n", iface_name);
 	for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
 	{
 		if(strncmp(it_vlan->vlan_iface_name, iface_name, sizeof(it_vlan->vlan_iface_name)) == 0)
 		{
-			IPACMDBG_H("Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
+			IPACM_LOG(IPACM_LOG_DEBUG,"Found vlan iface in vlan list: %s\n", it_vlan->vlan_iface_name);
 			*vlan_id = it_vlan->vlan_id;
 			ret = IPACM_SUCCESS;
 			break;
@@ -2717,25 +2730,25 @@ void IPACM_Config::add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
-	IPACMDBG_H("L2tp iface: %s session id: %d vlan iface: %s \n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "L2tp iface: %s session id: %d vlan iface: %s \n",
 		data->l2tp_iface_name, data->l2tp_session_id, data->vlan_iface_name);
 	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
 	{
 		if(strncmp(data->l2tp_iface_name, it_mapping->l2tp_iface_name,
 			sizeof(data->l2tp_iface_name)) == 0)
 		{
-			IPACMERR("L2tp mapping was added before mapped to vlan %s.\n", it_mapping->vlan_iface_name);
+			IPACM_LOG(IPACM_LOG_WARN, "L2tp mapping was added before mapped to vlan %s.\n", it_mapping->vlan_iface_name);
 			pthread_mutex_unlock(&vlan_l2tp_lock);
 			return;
 		}
 	}
 
 	AddNatIfaces(data->l2tp_iface_name);
-	IPACMDBG_H("Add l2tp iface %s to nat ifaces.\n", data->l2tp_iface_name);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Add l2tp iface %s to nat ifaces.\n", data->l2tp_iface_name);
 
 	memset(&new_mapping, 0, sizeof(new_mapping));
 	strlcpy(new_mapping.l2tp_iface_name, data->l2tp_iface_name,
@@ -2744,7 +2757,7 @@ void IPACM_Config::add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 		sizeof(new_mapping.vlan_iface_name));
 	new_mapping.l2tp_session_id = data->l2tp_session_id;
 #ifdef IPA_L2TP_TUNNEL_UDP
-	IPACMDBG_H("L2tp tunnel type %d: Source Port: %d Dest Port: %d MTU: %d\n",
+	IPACM_LOG(IPACM_LOG_INFO, "L2tp tunnel type %d: Source Port: %d Dest Port: %d MTU: %d\n",
 	data->tunnel_type, data->src_port, data->dst_port, data->mtu);
 	new_mapping.tunnel_type = data->tunnel_type;
 	if (new_mapping.tunnel_type == IPA_L2TP_TUNNEL_UDP)
@@ -2758,7 +2771,7 @@ void IPACM_Config::add_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 	{
 		if(strncmp(it_vlan->vlan_iface_name, data->vlan_iface_name, sizeof(it_vlan->vlan_iface_name)) == 0)
 		{
-			IPACMDBG_H("Found vlan iface with id %d\n", it_vlan->vlan_id);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found vlan iface with id %d\n", it_vlan->vlan_id);
 			new_mapping.vlan_id = it_vlan->vlan_id;
 			memcpy(new_mapping.vlan_iface_ipv6_addr, it_vlan->vlan_iface_ipv6_addr,
 				sizeof(new_mapping.vlan_iface_ipv6_addr));
@@ -2781,28 +2794,28 @@ void IPACM_Config::del_l2tp_vlan_mapping(ipa_ioc_l2tp_vlan_mapping_info *data)
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
-	IPACMDBG_H("L2tp iface: %s session id: %d vlan iface: %s \n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "L2tp iface: %s session id: %d vlan iface: %s \n",
 		data->l2tp_iface_name, data->l2tp_session_id, data->vlan_iface_name);
 	for(it = m_l2tp_vlan_mapping.begin(); it != m_l2tp_vlan_mapping.end(); it++)
 	{
 		if(strncmp(data->l2tp_iface_name, it->l2tp_iface_name,
 			sizeof(data->l2tp_iface_name)) == 0)
 		{
-			IPACMDBG_H("Found l2tp iface mapped to vlan %s.\n", it->vlan_iface_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found l2tp iface mapped to vlan %s.\n", it->vlan_iface_name);
 			if(strncmp(data->vlan_iface_name, it->vlan_iface_name,
 				sizeof(data->vlan_iface_name)) == 0)
 			{
 				m_l2tp_vlan_mapping.erase(it);
 				DelNatIfaces(data->l2tp_iface_name);
-				IPACMDBG_H("Del l2tp iface %s to nat ifaces.\n", data->l2tp_iface_name);
+				IPACM_LOG(IPACM_LOG_INFO, "Del l2tp iface %s to nat ifaces.\n", data->l2tp_iface_name);
 			}
 			else
 			{
-				IPACMERR("Incoming mapping is incorrect.\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Incoming mapping is incorrect.\n");
 			}
 			break;
 		}
@@ -2818,18 +2831,18 @@ int IPACM_Config::get_vlan_l2tp_mapping(char *client_iface, l2tp_vlan_mapping_in
 
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return IPACM_FAILURE;
 	}
 
-	IPACMDBG_H("Incoming client iface name: %s\n", client_iface);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Incoming client iface name: %s\n", client_iface);
 
 	for(it_mapping = m_l2tp_vlan_mapping.begin(); it_mapping != m_l2tp_vlan_mapping.end(); it_mapping++)
 	{
 		if(strncmp(client_iface, it_mapping->l2tp_iface_name,
 			strlen(client_iface)) == 0)
 		{
-			IPACMDBG_H("Found vlan-l2tp mapping.\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found vlan-l2tp mapping.\n");
 			info = *it_mapping;
 			pthread_mutex_unlock(&vlan_l2tp_lock);
 			return IPACM_SUCCESS;
@@ -2849,7 +2862,7 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config, int if_
 
 	if(pthread_mutex_lock(&ip_pass_mpdn_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
@@ -2858,7 +2871,7 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config, int if_
 		indx = get_free_ip_pass_pdn_index(pdn_config->dev_name);
 		if (indx < MAX_NUM_IP_PASS_MPDN)
 		{
-			IPACMDBG_H("Enable IP Passthrough: table index %d\n", indx);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Enable IP Passthrough: table index %d\n", indx);
 			ip_pass_mpdn_table[indx].valid_entry = true;
 			memcpy(ip_pass_mpdn_table[indx].ip_pass_mac,
 				pdn_config->u.passthrough_cfg.client_mac_addr, IPA_MAC_ADDR_SIZE);
@@ -2883,7 +2896,7 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config, int if_
 				bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge_from_vid(pdn_config->u.passthrough_cfg.vlan_id);
 				if (!bridge)
 				{
-					IPACMDBG_H("bridge is NULL with vid (%d), ignoring!\n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "bridge is NULL with vid (%d), ignoring!\n",
 						pdn_config->u.passthrough_cfg.vlan_id);
 				}
 				else
@@ -2892,22 +2905,22 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config, int if_
 					{
 						if(IPACM_Iface::ipacmcfg->DelPrivateSubnetByIfIndex(bridge_index) == true)
 						{
-							IPACMDBG_H("Deleted IPACM bridge private subnet_addr for %s\n", bridge->bridge_name);
+							IPACM_LOG(IPACM_LOG_DEBUG, "Deleted IPACM bridge private subnet_addr for %s\n", bridge->bridge_name);
 						}
 						else
 						{
-							IPACMERR("Can't Delete IPACM private subnet_addr for %s\n", bridge->bridge_name);
+							IPACM_LOG(IPACM_LOG_ERR, "Can't Delete IPACM private subnet_addr for %s\n", bridge->bridge_name);
 						}
 					}
 					else
 					{
-						IPACMERR("get interface index failed for %s\n", bridge->bridge_name);
+						IPACM_LOG(IPACM_LOG_ERR, "get interface index failed for %s\n", bridge->bridge_name);
 					}
 				}
 			}
 		}
 		else
-			IPACMERR("IP Passthrough supports only 15 PDNs\n");
+			IPACM_LOG(IPACM_LOG_ERR, "IP Passthrough supports only 15 PDNs\n");
 	}
 	else
 	{
@@ -2915,7 +2928,7 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config, int if_
 		if (indx < MAX_NUM_IP_PASS_MPDN)
 		{
 			/* Reset the configuration */
-			IPACMDBG_H("Reset IP Passthrough config: table index: %d devic_type: %d and PDN IP: 0x%x!\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Reset IP Passthrough config: table index: %d devic_type: %d and PDN IP: 0x%x!\n",
 				indx, pdn_config->pdn_cfg_type, htonl(pdn_config->u.passthrough_cfg.pdn_ip_addr));
 			ip_pass_mpdn_table[indx].valid_entry = false;
 			ip_pass_mpdn_table[indx].ip_pass_skip_nat = false;
@@ -2929,7 +2942,7 @@ void IPACM_Config::ip_pass_config_update(ipa_ioc_pdn_config *pdn_config, int if_
 			ip_pass_mpdn_table[indx].if_index = 0;
 		}
 		else
-			IPACMERR("IP Passthrough PDN not found\n");
+			IPACM_LOG(IPACM_LOG_ERR, "IP Passthrough PDN not found\n");
 	}
 
 	pthread_mutex_unlock(&ip_pass_mpdn_lock);
@@ -2941,7 +2954,7 @@ void IPACM_Config::ip_collision_config_update(ipa_ioc_pdn_config *pdn_config)
 
 	if(pthread_mutex_lock(&ip_pass_mpdn_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 	if (pdn_config->enable)
@@ -2949,7 +2962,7 @@ void IPACM_Config::ip_collision_config_update(ipa_ioc_pdn_config *pdn_config)
 		indx = get_free_ip_collision_pdn_index(pdn_config->dev_name);
 		if (indx < MAX_NUM_IP_PASS_MPDN)
 		{
-			IPACMDBG_H("Enable IP Collision: table index %d, default_pdn: %d\n", indx, pdn_config->default_pdn);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Enable IP Collision: table index %d, default_pdn: %d\n", indx, pdn_config->default_pdn);
 			strlcpy(ip_collision_mpdn_table[indx].dev_name,
 			pdn_config->dev_name, IPA_RESOURCE_NAME_MAX);
 			ip_collision_mpdn_table[indx].is_default_pdn = pdn_config->default_pdn;
@@ -2959,7 +2972,7 @@ void IPACM_Config::ip_collision_config_update(ipa_ioc_pdn_config *pdn_config)
 			ip_collision_mpdn_table[indx].valid_entry = true;
 		}
 		else
-			IPACMERR("IP Collision supports only 15 PDNs\n");
+			IPACM_LOG(IPACM_LOG_ERR, "IP Collision supports only 15 PDNs\n");
 	}
 	else
 	{
@@ -2967,7 +2980,7 @@ void IPACM_Config::ip_collision_config_update(ipa_ioc_pdn_config *pdn_config)
 		if (indx < MAX_NUM_IP_PASS_MPDN)
 		{
 			/* Reset the configuration */
-			IPACMDBG("Disable IP collision config: table index: %d PDN IP: 0x%x Vlan ID: %u\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Disable IP collision config: table index: %d PDN IP: 0x%x Vlan ID: %u\n",
 			indx, htonl(pdn_config->u.passthrough_cfg.pdn_ip_addr), pdn_config->u.collison_cfg.vlan_id);
 			ip_collision_mpdn_table[indx].is_default_pdn = 0;
 			ip_collision_mpdn_table[indx].ip_collision_pdn_ip_addr = 0;
@@ -2975,7 +2988,7 @@ void IPACM_Config::ip_collision_config_update(ipa_ioc_pdn_config *pdn_config)
 			ip_collision_mpdn_table[indx].valid_entry = false;
 		}
 		else
-			IPACMERR("IP Collision PDN not found\n");
+			IPACM_LOG(IPACM_LOG_ERR, "IP Collision PDN not found\n");
 	}
 	pthread_mutex_unlock(&ip_pass_mpdn_lock);
 }
@@ -2991,7 +3004,7 @@ void IPACM_Config::pdn_dscp_config_update(ipa_ioc_pdn_dscp_map_info *pdn_dscp_co
 
 	if(pthread_mutex_lock(&pdn_dscp_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		goto fail;
 	}
 
@@ -3013,7 +3026,7 @@ void IPACM_Config::pdn_dscp_config_update(ipa_ioc_pdn_dscp_map_info *pdn_dscp_co
 			pdn_dscp_table[indx].status = 1;
 			pdn_dscp_table[indx].mux_id = 0;
 			pdn_dscp_table[indx].dscp_val = pdn_dscp_config->pdn_dscp_map[0];
-			IPACMDBG_H("Updated PDN DSCP config for pdn_name:%s at %d with "
+			IPACM_LOG(IPACM_LOG_DEBUG, "Updated PDN DSCP config for pdn_name:%s at %d with "
 				"dscp_val:%d\n", pdn_dscp_table[indx].pdn_name,
 				indx, pdn_dscp_config->pdn_dscp_map[0]);
 
@@ -3021,7 +3034,7 @@ void IPACM_Config::pdn_dscp_config_update(ipa_ioc_pdn_dscp_map_info *pdn_dscp_co
 				(sizeof(ipacm_event_pdn_mux_info));
 			if(data_pdn_mux_info == NULL)
 			{
-				IPACMERR("unable to allocate memory for event data_pdn_mux_info\n");
+				IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_pdn_mux_info\n");
 				pthread_mutex_unlock(&pdn_dscp_lock);
 				return;
 			}
@@ -3031,7 +3044,7 @@ void IPACM_Config::pdn_dscp_config_update(ipa_ioc_pdn_dscp_map_info *pdn_dscp_co
 			strlcpy(data_pdn_mux_info->pdn_name, pdn_dscp_table[indx].pdn_name,
 				sizeof(data_pdn_mux_info->pdn_name));
 
-			IPACMDBG_H("Posting IPA_PDN_MUX_ID_UPDATE with pdn_name:%s indx:%d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Posting IPA_PDN_MUX_ID_UPDATE with pdn_name:%s indx:%d\n",
 				data_pdn_mux_info->pdn_name, indx);
 
 			evt_data.event = IPA_PDN_MUX_ID_UPDATE;
@@ -3050,14 +3063,14 @@ void IPACM_Config::pdn_dscp_config_update(ipa_ioc_pdn_dscp_map_info *pdn_dscp_co
 					(sizeof(ipacm_event_pdn_dscp_info));
 				if(!pdn_dscp_data)
 				{
-					IPACMERR("unable to allocate memory for pdn_dscp_data\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for pdn_dscp_data\n");
 					pthread_mutex_unlock(&pdn_dscp_lock);
 					goto fail;
 				}
 
 				memset(pdn_dscp_data, 0, sizeof(ipacm_event_pdn_dscp_info));
 				pdn_dscp_data->mux_id = pdn_dscp_table[indx].mux_id;
-				IPACMDBG_H("Posting IPA_PDN_DSCP_UPDATE_EVENT event!\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "Posting IPA_PDN_DSCP_UPDATE_EVENT event!\n");
 				evt_data.event = IPA_PDN_DSCP_UPDATE_EVENT;
 				evt_data.evt_data = pdn_dscp_data;
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -3070,19 +3083,19 @@ void IPACM_Config::pdn_dscp_config_update(ipa_ioc_pdn_dscp_map_info *pdn_dscp_co
 			m_fd = open(DEVICE_NAME, O_RDWR);
 			if (0 > m_fd)
 			{
-				IPACMERR("Failed opening %s.\n", DEVICE_NAME);
+				IPACM_LOG(IPACM_LOG_ERR, "Failed opening %s.\n", DEVICE_NAME);
 			}
 
 			if(0 != ioctl(m_fd, IPA_IOC_UPDATE_PDN_DSCP_MAPPING, &pdn_dscp_map_info))
 			{
-				IPACMERR("ioctl to IPA driver failed for setting "
+				IPACM_LOG(IPACM_LOG_ERR, "ioctl to IPA driver failed for setting "
 					"PDN-DSCP Mapping\n");
 			}
 
 			close(m_fd);
 
 			/* Reset the configuration */
-			IPACMDBG_H("Reset PDN DSCP config for pdn_name:%s at %d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Reset PDN DSCP config for pdn_name:%s at %d\n",
 				pdn_dscp_table->pdn_name, indx);
 			pdn_dscp_table[indx].status = 0;
 			pdn_dscp_table[indx].dscp_val = 255;
@@ -3104,7 +3117,7 @@ void IPACM_Config::update_socksv5_client_v6_addr(uint32_t* ipv6_addr)
 	IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[1] = ipv6_addr[1];
 	IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[2] = ipv6_addr[2];
 	IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[3] = ipv6_addr[3];
-	IPACMDBG_H("socksv5_client_v6_addr addr:0x%x:%x:%x:%x\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "socksv5_client_v6_addr addr:0x%x:%x:%x:%x\n",
 		IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[0],
 		IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[1],
 		IPACM_Iface::ipacmcfg->socksv5_client_v6_addr[2],
@@ -3122,81 +3135,81 @@ void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 
 	if(pthread_mutex_lock(&socksv5_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
 	/* print the info */
 	if(add_socksv5_info->ul_in.ip_type == IPA_IP_v4)
 	{
-		IPACMDBG_H("ul-in: ipv4 src:0x%X dst:0x%X\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "ul-in: ipv4 src:0x%X dst:0x%X\n",
 		add_socksv5_info->ul_in.ipv4_src,
 		add_socksv5_info->ul_in.ipv4_dst);
 	}
 	else
 	{
-		IPACMDBG_H("ul-in: ipv6 src address: 0x%x:%x:%x:%x\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "ul-in: ipv6 src address: 0x%x:%x:%x:%x\n",
 		add_socksv5_info->ul_in.ipv6_src[0],
 		add_socksv5_info->ul_in.ipv6_src[1],
 		add_socksv5_info->ul_in.ipv6_src[2],
 		add_socksv5_info->ul_in.ipv6_src[3]);
-		IPACMDBG_H("ul-in: ipv6 dst address: 0x%x:%x:%x:%x\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "ul-in: ipv6 dst address: 0x%x:%x:%x:%x\n",
 		add_socksv5_info->ul_in.ipv6_dst[0],
 		add_socksv5_info->ul_in.ipv6_dst[1],
 		add_socksv5_info->ul_in.ipv6_dst[2],
 		add_socksv5_info->ul_in.ipv6_dst[3]);
 	}
-	IPACMDBG_H("ul-in: src_port:%d dst_port:%d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "ul-in: src_port:%d dst_port:%d\n",
 		add_socksv5_info->ul_in.src_port,
 		add_socksv5_info->ul_in.dst_port);
 	/* print the info */
 	if(add_socksv5_info->dl_in.ip_type == IPA_IP_v4)
 	{
-		IPACMDBG_H("dl-in: ipv4 src:0x%X dst:0x%X\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "dl-in: ipv4 src:0x%X dst:0x%X\n",
 		add_socksv5_info->dl_in.ipv4_src,
 		add_socksv5_info->dl_in.ipv4_dst);
 	}
 	else
 	{
-		IPACMDBG_H("dl-in: ipv6 src address: 0x%x:%x:%x:%x\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "dl-in: ipv6 src address: 0x%x:%x:%x:%x\n",
 		add_socksv5_info->dl_in.ipv6_src[0],
 		add_socksv5_info->dl_in.ipv6_src[1],
 		add_socksv5_info->dl_in.ipv6_src[2],
 		add_socksv5_info->dl_in.ipv6_src[3]);
-		IPACMDBG_H("dl-in: ipv6 dst address: 0x%x:%x:%x:%x\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "dl-in: ipv6 dst address: 0x%x:%x:%x:%x\n",
 		add_socksv5_info->dl_in.ipv6_dst[0],
 		add_socksv5_info->dl_in.ipv6_dst[1],
 		add_socksv5_info->dl_in.ipv6_dst[2],
 		add_socksv5_info->dl_in.ipv6_dst[3]);
 	}
-	IPACMDBG_H("dl-in: src_port:%d dst_port:%d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "dl-in: src_port:%d dst_port:%d\n",
 		add_socksv5_info->dl_in.src_port,
 		add_socksv5_info->dl_in.dst_port);
 
-	IPACMDBG_H("handle %d \n", add_socksv5_info->handle);
+	IPACM_LOG(IPACM_LOG_DEBUG, "handle %d \n", add_socksv5_info->handle);
 
 	/* check connection existed or not */
 	for(it_mapping = socksv5_conn.begin(); it_mapping != socksv5_conn.end(); it_mapping++)
 	{
 		if(add_socksv5_info->dl_in.ip_type == IPA_IP_MAX)
 		{
-			IPACMERR("Invalid entry \n");
+			IPACM_LOG(IPACM_LOG_ERR, "Invalid entry \n");
 			goto fail;
 		}
 		else if(add_socksv5_info->dl_in.ip_type == IPA_IP_v4)
 		{
-			IPACMDBG_H("compare: ipv4 add_socksv5_info:0x%X it_mapping:0x%X\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "compare: ipv4 add_socksv5_info:0x%X it_mapping:0x%X\n",
 				add_socksv5_info->dl_in.ipv4_dst,
 				it_mapping->conn_info.dl_in.ipv4_dst);
 			if (add_socksv5_info->dl_in.ipv4_dst == it_mapping->conn_info.dl_in.ipv4_dst)
 			{
-				IPACMDBG_H(" ipv4 same dst address\n");
+				IPACM_LOG(IPACM_LOG_DEBUG, " ipv4 same dst address\n");
 				/* see this dst-ipv4 already */
 				if ((add_socksv5_info->dl_in.ipv4_src == it_mapping->conn_info.dl_in.ipv4_src) &&
 					(add_socksv5_info->dl_in.src_port == it_mapping->conn_info.dl_in.src_port) &&
 					(add_socksv5_info->dl_in.dst_port == it_mapping->conn_info.dl_in.dst_port))
 				{
-					IPACMDBG_H("This connection was added before with index %d\n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "This connection was added before with index %d\n",
 						it_mapping->conn_info.dl_in.index);
 					goto fail;
 				}
@@ -3216,7 +3229,7 @@ void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 				if ((add_socksv5_info->dl_in.src_port == it_mapping->conn_info.dl_in.src_port) &&
 					(add_socksv5_info->dl_in.dst_port == it_mapping->conn_info.dl_in.dst_port))
 				{
-						IPACMERR("This connection was added before with index %d\n",
+						IPACM_LOG(IPACM_LOG_WARN, "This connection was added before with index %d\n",
 						it_mapping->conn_info.dl_in.index);
 						goto fail;
 				}
@@ -3229,7 +3242,7 @@ void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 		{
 			if (add_socksv5_info->dl_in.ipv4_dst == pdn_ipv4[i])
 			{
-				IPACMERR(" PDN enry %d already added for 0x%X \n",
+				IPACM_LOG(IPACM_LOG_WARN, " PDN enry %d already added for 0x%X \n",
 				i, add_socksv5_info->dl_in.ipv4_dst);
 				SendVlanPDNUpEvent = false;
 				break;
@@ -3243,7 +3256,7 @@ void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 			if ((add_socksv5_info->dl_in.ipv6_dst[0] == pdn_ipv6[i][0])
 				&& (add_socksv5_info->dl_in.ipv6_dst[1] == pdn_ipv6[i][1]))
 			{
-				IPACMERR(" PDN enry %d already add for prefix:0x%X:0x%X \n",
+				IPACM_LOG(IPACM_LOG_WARN, " PDN enry %d already add for prefix:0x%X:0x%X \n",
 				i, add_socksv5_info->dl_in.ipv6_dst[0],
 				add_socksv5_info->dl_in.ipv6_dst[1]);
 				SendVlanPDNUpEvent = false;
@@ -3266,13 +3279,13 @@ void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 			{
 				pdn_ipv4[socksv5_v4_pdn] = add_socksv5_info->dl_in.ipv4_dst;
 				post_socksv5_add_vlan_evt(IPA_IP_v4, add_socksv5_info->dl_in.ipv4_dst, NULL);
-				IPACMDBG_H(" ADD 0x%X to PDN entry %d, total %d\n",
+				IPACM_LOG(IPACM_LOG_INFO, " ADD 0x%X to PDN entry %d, total %d\n",
 				add_socksv5_info->dl_in.ipv4_dst, socksv5_v4_pdn, socksv5_v4_pdn+1);
 				socksv5_v4_pdn++;
 			}
 			else
 			{
-				IPACMERR("This connection exceed max pdn support %d \n",
+				IPACM_LOG(IPACM_LOG_ERR, "This connection exceed max pdn support %d \n",
 					IPA_MAX_NUM_HW_PDNS);
 					goto fail;
 			}
@@ -3286,7 +3299,7 @@ void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 				pdn_ipv6[socksv5_v6_pdn][2] = add_socksv5_info->dl_in.ipv6_dst[2];
 				pdn_ipv6[socksv5_v6_pdn][3] = add_socksv5_info->dl_in.ipv6_dst[3];
 				post_socksv5_add_vlan_evt(IPA_IP_v6, NULL, add_socksv5_info->dl_in.ipv6_dst);
-				IPACMDBG_H(" ADD 0x%X:%X to PDN entry %d, total %d\n",
+				IPACM_LOG(IPACM_LOG_INFO, " ADD 0x%X:%X to PDN entry %d, total %d\n",
 				add_socksv5_info->dl_in.ipv6_dst[0],
 				add_socksv5_info->dl_in.ipv6_dst[1],
 				socksv5_v6_pdn, socksv5_v6_pdn+1);
@@ -3296,7 +3309,7 @@ void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 			}
 			else
 			{
-				IPACMERR("This connection exceed max pdn support %d \n",
+				IPACM_LOG(IPACM_LOG_ERR, "This connection exceed max pdn support %d \n",
 					IPA_MAX_NUM_HW_PDNS);
 					goto fail;
 			}
@@ -3307,7 +3320,7 @@ void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 	memset(&new_mapping, 0, sizeof(new_mapping));
 	memcpy(&new_mapping.conn_info, add_socksv5_info, sizeof(new_mapping.conn_info));
 
-	IPACMDBG_H("ipv4 0x%X it_mapping:0x%X\n",
+	IPACM_LOG(IPACM_LOG_INFO, "ipv4 0x%X it_mapping:0x%X\n",
 				new_mapping.conn_info.dl_in.ipv4_dst);
 
 	socksv5_conn.push_front(new_mapping);
@@ -3321,14 +3334,14 @@ void IPACM_Config::add_socksv5_conn(ipa_socksv5_msg *add_socksv5_info)
 		if (pdn_ipv6_in_use[i] > 0)
 		{
 			pdn_ipv6_in_use_temp ++;
-			IPACMDBG_H(" pdn_ipv6_in_use entry %d, ref %d, total\n", i, pdn_ipv6_in_use[i], pdn_ipv6_in_use_temp);
+			IPACM_LOG(IPACM_LOG_DEBUG, " pdn_ipv6_in_use entry %d, ref %d, total\n", i, pdn_ipv6_in_use[i], pdn_ipv6_in_use_temp);
 		}
 	}
 
 	/* if pdn_ipv6_in_use_temp != total_pdn_ipv6_in_use */
 	if (pdn_ipv6_in_use_temp > total_pdn_ipv6_in_use)
 	{
-		IPACMDBG_H(" have new ipv6-socksv5: old %d, new %d\n",total_pdn_ipv6_in_use, pdn_ipv6_in_use_temp);
+		IPACM_LOG(IPACM_LOG_INFO, " have new ipv6-socksv5: old %d, new %d\n",total_pdn_ipv6_in_use, pdn_ipv6_in_use_temp);
 		total_pdn_ipv6_in_use = pdn_ipv6_in_use_temp;
 		/* send v6-update event */
 		post_socksv5_v6_evt();
@@ -3347,12 +3360,12 @@ void IPACM_Config::del_socksv5_conn(uint32_t *socksv5_handle)
 	int pdn_ipv6_in_use_temp = 0;
 
 	/* print the info */
-	IPACMDBG_H("deleting the socksv5 conn handle %d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "deleting the socksv5 conn handle %d\n",
 		*socksv5_handle);
 
 	if(pthread_mutex_lock(&socksv5_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
@@ -3361,7 +3374,7 @@ void IPACM_Config::del_socksv5_conn(uint32_t *socksv5_handle)
 	{
 		if(it_mapping->conn_info.handle == *socksv5_handle)
 		{
-			IPACMDBG_H("Found the handle matched (%d)\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found the handle matched (%d)\n",
 				it_mapping->conn_info.handle);
 
 			/* decrease v6 in_use ref count */
@@ -3372,18 +3385,18 @@ void IPACM_Config::del_socksv5_conn(uint32_t *socksv5_handle)
 					if ((it_mapping->conn_info.dl_in.ipv6_dst[0] == pdn_ipv6[i][0])
 						&& (it_mapping->conn_info.dl_in.ipv6_dst[1] == pdn_ipv6[i][1]))
 					{
-						IPACMERR(" PDN enry %d found for prefix:0x%X:0x%X \n",
+						IPACM_LOG(IPACM_LOG_DEBUG, " PDN enry %d found for prefix:0x%X:0x%X \n",
 						i, it_mapping->conn_info.dl_in.ipv6_dst[0],
 						it_mapping->conn_info.dl_in.ipv6_dst[1]);
 						if (pdn_ipv6_in_use[i] > 0)
 						{
 							pdn_ipv6_in_use[i]--;
-							IPACMDBG_H("update pdn_ipv6_in_use, entry %d, number %d \n",
+							IPACM_LOG(IPACM_LOG_DEBUG, "update pdn_ipv6_in_use, entry %d, number %d \n",
 								i, pdn_ipv6_in_use[i]);
 						}
 						else
 						{
-							IPACMERR("Potential negative pdn_ipv6_in_use, entry %d, number %d \n",
+							IPACM_LOG(IPACM_LOG_ERR, "Potential negative pdn_ipv6_in_use, entry %d, number %d \n",
 								i, pdn_ipv6_in_use[i]);
 						}
 						break;
@@ -3404,13 +3417,13 @@ void IPACM_Config::del_socksv5_conn(uint32_t *socksv5_handle)
 		if (pdn_ipv6_in_use[i] > 0)
 		{
 			pdn_ipv6_in_use_temp ++;
-			IPACMDBG_H(" pdn_ipv6_in_use entry %d, ref %d, total\n", i, pdn_ipv6_in_use[i], pdn_ipv6_in_use_temp);
+			IPACM_LOG(IPACM_LOG_DEBUG, " pdn_ipv6_in_use entry %d, ref %d, total\n", i, pdn_ipv6_in_use[i], pdn_ipv6_in_use_temp);
 		}
 	}
 	/* if pdn_ipv6_in_use_temp != total_pdn_ipv6_in_use */
 	if (pdn_ipv6_in_use_temp < total_pdn_ipv6_in_use)
 	{
-		IPACMDBG_H(" have new ipv6-socksv5: old %d, new %d\n",total_pdn_ipv6_in_use, pdn_ipv6_in_use_temp);
+		IPACM_LOG(IPACM_LOG_INFO, " have new ipv6-socksv5: old %d, new %d\n",total_pdn_ipv6_in_use, pdn_ipv6_in_use_temp);
 		total_pdn_ipv6_in_use = pdn_ipv6_in_use_temp;
 		/* send v6-update event */
 		post_socksv5_v6_evt();
@@ -3418,7 +3431,7 @@ void IPACM_Config::del_socksv5_conn(uint32_t *socksv5_handle)
 
 	if (it_mapping == socksv5_conn.end())
 	{
-		IPACMERR("Can't find the matched socksv5_conn!\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Can't find the matched socksv5_conn!\n");
 	}
 
 	pthread_mutex_unlock(&socksv5_lock);
@@ -3433,11 +3446,11 @@ void IPACM_Config::add_mux_id_mapping(rmnet_mux_id_info *add_mux_id_info)
 	/* print the info */
 	if (!add_mux_id_info)
 	{
-		IPACMDBG_H("add_mux_id_info is NULL\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "add_mux_id_info is NULL\n");
 		return;
 	}
 
-	IPACMDBG_H("adding the muxd name %s, addr 0x%X mudxd %d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "adding the muxd name %s, addr 0x%X mudxd %d\n",
 		add_mux_id_info->iface_name,
 		add_mux_id_info->ipv4_addr,
 		add_mux_id_info->mux_id);
@@ -3448,7 +3461,7 @@ void IPACM_Config::add_mux_id_mapping(rmnet_mux_id_info *add_mux_id_info)
 
 		if (add_mux_id_info->ipv4_addr == it_mapping->ipv4_addr)
 		{
-			IPACMERR("This qmuxd mapping was added before with muxd %d\n",
+			IPACM_LOG(IPACM_LOG_ERR, "This qmuxd mapping was added before with muxd %d\n",
 			it_mapping->mux_id);
 			goto fail;
 		}
@@ -3458,7 +3471,7 @@ void IPACM_Config::add_mux_id_mapping(rmnet_mux_id_info *add_mux_id_info)
 	memset(&new_mapping, 0, sizeof(new_mapping));
 	memcpy(&new_mapping, add_mux_id_info, sizeof(new_mapping));
 
-	IPACMDBG_H("ipv4 0x%X map to muxd:0x%d\n",
+	IPACM_LOG(IPACM_LOG_INFO, "Mapped ipv4 0x%X to mux: %d\n",
 				new_mapping.ipv4_addr,
 				new_mapping.mux_id);
 
@@ -3475,11 +3488,11 @@ void IPACM_Config::del_mux_id_mapping(rmnet_mux_id_info *del_mux_id_info)
 	/* print the info */
 	if (!del_mux_id_info)
 	{
-		IPACMDBG_H("del_mux_id_info is NULL\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "del_mux_id_info is NULL\n");
 		return;
 	}
 
-	IPACMDBG_H("Removing the muxd name %s, addr 0x%X mudxd %d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "Removing the muxd name %s, addr 0x%X mudxd %d\n",
 		del_mux_id_info->iface_name,
 		del_mux_id_info->ipv4_addr,
 		del_mux_id_info->mux_id);
@@ -3489,7 +3502,7 @@ void IPACM_Config::del_mux_id_mapping(rmnet_mux_id_info *del_mux_id_info)
 	{
 		if (del_mux_id_info->ipv4_addr == it_mapping->ipv4_addr)
 		{
-			IPACMDBG_H("Del this mapping with muxd %d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Del this mapping with muxd %d\n",
 			it_mapping->mux_id);
 			mux_id_mapping.erase(it_mapping);
 			break;
@@ -3498,7 +3511,7 @@ void IPACM_Config::del_mux_id_mapping(rmnet_mux_id_info *del_mux_id_info)
 
 	if (it_mapping == mux_id_mapping.end())
 	{
-		IPACMERR("Can't find the matched rmnet_mux_id_info!\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Can't find the matched rmnet_mux_id_info!\n");
 	}
 
 	return;
@@ -3511,11 +3524,11 @@ int IPACM_Config::query_mux_id(rmnet_mux_id_info *mux_id_info)
 	/* print the info */
 	if (!mux_id_info)
 	{
-		IPACMDBG_H("mux_id_info is NULL\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "mux_id_info is NULL\n");
 		return IPACM_FAILURE;
 	}
 
-	IPACMDBG_H("try to find 0x%X qmuxd\n", mux_id_info->ipv4_addr);
+	IPACM_LOG(IPACM_LOG_DEBUG, "try to find 0x%X qmuxd\n", mux_id_info->ipv4_addr);
 
 	/* check entry*/
 	for(it_mapping = mux_id_mapping.begin(); it_mapping != mux_id_mapping.end(); it_mapping++)
@@ -3523,7 +3536,7 @@ int IPACM_Config::query_mux_id(rmnet_mux_id_info *mux_id_info)
 		if (mux_id_info->ipv4_addr == it_mapping->ipv4_addr)
 		{
 			mux_id_info->mux_id = it_mapping->mux_id;
-			IPACMDBG_H("Found the mapping with muxd %d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found the mapping with muxd %d\n",
 			mux_id_info->mux_id);
 			break;
 		}
@@ -3531,7 +3544,7 @@ int IPACM_Config::query_mux_id(rmnet_mux_id_info *mux_id_info)
 
 	if (it_mapping == mux_id_mapping.end())
 	{
-		IPACMERR("Can't find the matched rmnet_mux_id_info!\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Can't find the matched rmnet_mux_id_info!\n");
 		return IPACM_FAILURE;
 	}
 
@@ -3553,23 +3566,23 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 
 	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
 	/* check & print ipv4_segs range */
 	if (sw_flt->ipv4_segs_enable)
 	{
-		IPACMDBG_H("ipv4_segs_enable number:%d\n", sw_flt->num_of_ipv4_segs);
+		IPACM_LOG(IPACM_LOG_DEBUG, "ipv4_segs_enable number:%d\n", sw_flt->num_of_ipv4_segs);
 		for(i = 0; i < sw_flt->num_of_ipv4_segs; i++)
 		{
-			IPACMDBG_H("%d IPv4-SEGS-flt ipv4 start:0x%X end:0x%X\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "%d IPv4-SEGS-flt ipv4 start:0x%X end:0x%X\n",
 				i, sw_flt->ipv4_segs[i][0], sw_flt->ipv4_segs[i][1]);
 			/*validate the range input*/
 			if (sw_flt->ipv4_segs[i][1] < sw_flt->ipv4_segs[i][0])
 			{
 				sw_flt->ipv4_segs_enable = false;
-				IPACMERR("wrong ipv4-segs-flt in entry(%d)!! disable ipv4_segs(%d) !\n", i, sw_flt->ipv4_segs_enable);
+				IPACM_LOG(IPACM_LOG_ERR, "wrong ipv4-segs-flt in entry(%d)!! disable ipv4_segs(%d) !\n", i, sw_flt->ipv4_segs_enable);
 				break;
 			}
 		}
@@ -3581,10 +3594,10 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 	/* print the mac-sw-flt info and add to the list */
 	if (sw_flt_list.mac_enable)
 	{
-		IPACMDBG_H("MAC_enable number:%d\n", sw_flt_list.num_of_mac);
+		IPACM_LOG(IPACM_LOG_DEBUG, "MAC_enable number:%d\n", sw_flt_list.num_of_mac);
 		for(i = 0; i < sw_flt_list.num_of_mac && sw_flt_list.num_of_mac <=IPA_MAX_NUM_MAC_FLT; i++)
 		{
-			IPACMDBG_H("%d MAC-flt %02x:%02x:%02x:%02x:%02x:%02x\n", i,
+			IPACM_LOG(IPACM_LOG_DEBUG, "%d MAC-flt %02x:%02x:%02x:%02x:%02x:%02x\n", i,
 						sw_flt_list.mac_addr[i][0], sw_flt_list.mac_addr[i][1], sw_flt_list.mac_addr[i][2],
 						sw_flt_list.mac_addr[i][3], sw_flt_list.mac_addr[i][4], sw_flt_list.mac_addr[i][5]);
 			std::copy(std::begin(sw_flt_list.mac_addr[i]), std::end(sw_flt_list.mac_addr[i]), std::begin(mac));
@@ -3598,7 +3611,7 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 				mac_flt_type *temp = (mac_flt_type *)malloc(sizeof(mac_flt_type));
 				if(temp == NULL)
 				{
-					IPACMDBG_H("Failed to allocate memmory \n")
+					IPACM_LOG(IPACM_LOG_DEBUG, "Failed to allocate memmory \n")
 					goto UPDATE;
 				}
 				memset(temp, 0, sizeof(mac_flt_type));
@@ -3612,10 +3625,10 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 	/* print the iface-sw-flt info and add clients to the list */
 	if (sw_flt_list.iface_enable)
 	{
-		IPACMDBG_H("iface_enable number:%d\n", sw_flt_list.num_of_iface);
+		IPACM_LOG(IPACM_LOG_DEBUG, "iface_enable number:%d\n", sw_flt_list.num_of_iface);
 		for(i = 0; i < sw_flt_list.num_of_iface && sw_flt_list.num_of_iface <=IPA_MAX_NUM_IFACE_FLT; i++)
 		{
-			IPACMDBG_H("%d-entry Iface-flt %s\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "%d-entry Iface-flt %s\n",
 				i, sw_flt_list.iface[i]);
 		}
 
@@ -3627,7 +3640,7 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 				{
 					std::copy(std::begin(it->first), std::end(it->first), std::begin(mac_addr));
 
-					IPACMDBG_H("client mac %02x:%02x:%02x:%02x:%02x:%02x matches iface %s \n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "client mac %02x:%02x:%02x:%02x:%02x:%02x matches iface %s \n",
 							mac_addr[0], mac_addr[1], mac_addr[2],
 							mac_addr[3], mac_addr[4], mac_addr[5],
 							sw_flt_list.iface[i]);
@@ -3642,7 +3655,7 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 						mac_flt_type *temp = (mac_flt_type *)malloc(sizeof(mac_flt_type));
 						if(temp == NULL)
 						{
-							IPACMDBG_H("Failed to allocate memmory \n")
+							IPACM_LOG(IPACM_LOG_DEBUG, "Failed to allocate memmory \n")
 							goto UPDATE;
 						}
 						memset(temp, 0, sizeof(mac_flt_type));
@@ -3665,11 +3678,11 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 				/* check client ipv4 in the ipv4_segs range */
 				if ((sw_flt_list.ipv4_segs[i][0] <= it->second->v4_addr) && (it->second->v4_addr <=sw_flt_list.ipv4_segs[i][1]))
 				{
-					IPACMDBG_H("client ipv4 0x%X inside range :0x%X to:0x%X\n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "client ipv4 0x%X inside range :0x%X to:0x%X\n",
 						it->second->v4_addr, sw_flt_list.ipv4_segs[i][0], sw_flt_list.ipv4_segs[i][1]);
 					std::copy(std::begin(it->first), std::end(it->first), std::begin(mac_addr));
 
-					IPACMDBG_H("client mac %02x:%02x:%02x:%02x:%02x:%02x matches ipv4_segs\n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "client mac %02x:%02x:%02x:%02x:%02x:%02x matches ipv4_segs\n",
 							mac_addr[0], mac_addr[1], mac_addr[2],
 							mac_addr[3], mac_addr[4], mac_addr[5]);
 
@@ -3683,7 +3696,7 @@ void IPACM_Config::sw_flt_info(ipa_sw_flt_list_type *sw_flt)
 						mac_flt_type *temp = (mac_flt_type *)malloc(sizeof(mac_flt_type));
 						if(temp == NULL)
 						{
-							IPACMDBG_H("Failed to allocate memmory \n")
+							IPACM_LOG(IPACM_LOG_DEBUG, "Failed to allocate memmory \n")
 							goto UPDATE;
 						}
 						memset(temp, 0, sizeof(mac_flt_type));
@@ -3707,11 +3720,11 @@ UPDATE:
 			{
 				auto itr = it;
 				std::copy(std::begin(it->first), std::end(it->first), std::begin(mac_addr));
-				IPACMDBG_H("Previous  MAC addr to be whitelisted %02x:%02x:%02x:%02x:%02x:%02x\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "Previous  MAC addr to be whitelisted %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
 						 mac_addr[3], mac_addr[4], mac_addr[5]);
 				if(it->second->current_blocked == false) {
-					IPACMDBG_H("remove this client from the mac list as whitelisted\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "remove this client from the mac list as whitelisted\n");
 					free(IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first));
 					IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first) = NULL;
 					++it;
@@ -3746,11 +3759,11 @@ void IPACM_Config::mac_flt_info(ipa_ioc_mac_client_list_type *mac_flt_data)
 
 	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
-	IPACMDBG_H("Mac filtering state enable (%d) num of clients %d\n", mac_flt_data->flt_state, mac_flt_data->num_of_clients);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Mac filtering state enable (%d) num of clients %d\n", mac_flt_data->flt_state, mac_flt_data->num_of_clients);
 	/* if flt state is true then only populate mac_list which contains mac addrs
 	   to be blacklisted and num of clients should be max 32. If flt state is false
 	   then do not add anything to list */
@@ -3758,7 +3771,7 @@ void IPACM_Config::mac_flt_info(ipa_ioc_mac_client_list_type *mac_flt_data)
 	{
 		for(int i=0; i<mac_flt_data->num_of_clients && mac_flt_data->num_of_clients <=IPA_MAX_NUM_MAC_FLT; i++)
 		{
-			IPACMDBG_H("Passed MAC addr to be blacklisted %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Passed MAC addr to be blacklisted %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_flt_data->mac_addr[i][0], mac_flt_data->mac_addr[i][1], mac_flt_data->mac_addr[i][2],
 						 mac_flt_data->mac_addr[i][3], mac_flt_data->mac_addr[i][4], mac_flt_data->mac_addr[i][5]);
 			std::copy(std::begin(mac_flt_data->mac_addr[i]), std::end(mac_flt_data->mac_addr[i]), std::begin(mac));
@@ -3772,7 +3785,7 @@ void IPACM_Config::mac_flt_info(ipa_ioc_mac_client_list_type *mac_flt_data)
 				mac_flt_type *temp = (mac_flt_type *)malloc(sizeof(mac_flt_type));
 				if(temp == NULL)
 				{
-					IPACMDBG_H("Failed to allocate memmory \n")
+					IPACM_LOG(IPACM_LOG_DEBUG, "Failed to allocate memmory \n")
 					goto UPDATE;
 				}
 				memset(temp, 0, sizeof(mac_flt_type));
@@ -3792,11 +3805,11 @@ UPDATE:
 			if(!(it_mac_list != mac_list.end()))
 			{
 				std::copy(std::begin(it->first), std::end(it->first), std::begin(mac_addr));
-				IPACMDBG_H("Previous  MAC addr to be whitelisted %02x:%02x:%02x:%02x:%02x:%02x\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "Previous  MAC addr to be whitelisted %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_addr[0], mac_addr[1], mac_addr[2],
 						 mac_addr[3], mac_addr[4], mac_addr[5]);
 				if(it->second->current_blocked == false) {
-					IPACMDBG_H("remove this client from the mac list as whitelisted\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "remove this client from the mac list as whitelisted\n");
 					free(IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first));
 					IPACM_Iface::ipacmcfg->mac_flt_lists.at(it->first) = NULL;
 					it = IPACM_Iface::ipacmcfg->mac_flt_lists.erase(it);
@@ -3824,7 +3837,7 @@ bool IPACM_Config::mac_addr_in_blacklist(uint8_t *mac_addr)
 
 	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return false;
 	}
 
@@ -3851,10 +3864,10 @@ void IPACM_Config::clear_whitelist_mac_add(uint8_t * mac_addr)
 	uint8_t mac_a[6] = {0};
 	std::array<uint8_t, 6> mac = {0};
 
-	IPACMDBG_H("clear from mac_flt_list! \n")
+	IPACM_LOG(IPACM_LOG_DEBUG, "clear from mac_flt_list! \n")
 	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
@@ -3867,7 +3880,7 @@ void IPACM_Config::clear_whitelist_mac_add(uint8_t * mac_addr)
 			mac_flt_lists.at(mac) = NULL;
 		}
 		mac_flt_lists.erase(mac);
-		IPACMDBG_H("Cleared macaddr from map %02x:%02x:%02x:%02x:%02x:%02x\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "Cleared macaddr from map %02x:%02x:%02x:%02x:%02x:%02x\n",
 						 mac_a[0], mac_a[1], mac_a[2],
 						 mac_a[3], mac_a[4], mac_a[5]);
 		pthread_mutex_unlock(&mac_flt_info_lock);
@@ -3875,7 +3888,7 @@ void IPACM_Config::clear_whitelist_mac_add(uint8_t * mac_addr)
 	else
 	{
 		pthread_mutex_unlock(&mac_flt_info_lock);
-		IPACMDBG_H(" Client not in mac flt list \n");
+		IPACM_LOG(IPACM_LOG_DEBUG, " Client not in mac flt list \n");
 	}
 	return;
 }
@@ -3883,13 +3896,13 @@ void IPACM_Config::clear_whitelist_mac_add(uint8_t * mac_addr)
 /* upadte global config list with current state of mac addr */
 void IPACM_Config::update_mac_flt_lists(uint8_t * mac_addr , mac_flt_type *mac_flt_value)
 {
-	IPACMDBG_H("update mac flt list \n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "update mac flt list \n");
 	uint8_t mac_a[6] = {0};
 	std::array<uint8_t, 6> mac = {0};
 
 	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return ;
 	}
 
@@ -3917,17 +3930,17 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 
 	if(pthread_mutex_lock(&mac_flt_info_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return ;
 	}
 
-	IPACMDBG_H(" updating client info \n");
+	IPACM_LOG(IPACM_LOG_DEBUG, " updating client info \n");
 	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
 	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
 
 	if (is_add)
 	{
-		IPACMDBG_H(" Adding client mac %02x:%02x:%02x:%02x:%02x:%02x ip4 0x%X, iface %s\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, " Adding client mac %02x:%02x:%02x:%02x:%02x:%02x ip4 0x%X, iface %s\n",
 			 mac_a[0], mac_a[1], mac_a[2],
 			 mac_a[3], mac_a[4], mac_a[5],
 			 client_info->v4_addr,
@@ -3939,7 +3952,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 			tether_client_info *temp = (tether_client_info *)malloc(sizeof(tether_client_info));
 			if(temp == NULL)
 			{
-				IPACMERR("Failed to allocate memmory \n");
+				IPACM_LOG(IPACM_LOG_ERR, "Failed to allocate memmory \n");
 					pthread_mutex_unlock(&mac_flt_info_lock);
 					return;
 			}
@@ -3955,7 +3968,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 			if (IPACM_Iface::ipacmcfg->client_lists.at(mac)->v4_addr == 0)
 			{
 				client_lists.at(mac)->v4_addr  = client_info->v4_addr;
-				IPACMDBG_H(" Update client ip4 to 0x%X\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, " Update client ip4 to 0x%X\n",
 				client_lists.at(mac)->v4_addr);
 				update_need = true;
 			}
@@ -3977,7 +3990,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 						mac_flt_type *temp2 = (mac_flt_type *)malloc(sizeof(mac_flt_type));
 						if(temp2 == NULL)
 						{
-							IPACMDBG_H("Failed to allocate memmory \n")
+							IPACM_LOG(IPACM_LOG_DEBUG, "Failed to allocate memmory \n")
 							pthread_mutex_unlock(&mac_flt_info_lock);
 							return;
 						}
@@ -3999,7 +4012,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 				/* check client ipv4 in the ipv4_segs range */
 				if ((sw_flt_list.ipv4_segs[i][0] <= client_info->v4_addr) && (client_info->v4_addr <=sw_flt_list.ipv4_segs[i][1]))
 				{
-					IPACMDBG_H("client ipv4 0x%X inside range :0x%X to:0x%X\n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "client ipv4 0x%X inside range :0x%X to:0x%X\n",
 						client_info->v4_addr, sw_flt_list.ipv4_segs[i][0], sw_flt_list.ipv4_segs[i][1]);
 
 					/* if client ipv4 matched the ipv4_seg_sw_flt, create a node of mac_flt_type
@@ -4010,7 +4023,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 						mac_flt_type *temp2 = (mac_flt_type *)malloc(sizeof(mac_flt_type));
 						if(temp2 == NULL)
 						{
-							IPACMDBG_H("Failed to allocate memmory \n")
+							IPACM_LOG(IPACM_LOG_DEBUG, "Failed to allocate memmory \n")
 							pthread_mutex_unlock(&mac_flt_info_lock);
 							return;
 						}
@@ -4030,7 +4043,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 			evt_data.event = IPA_MAC_ADD_DEL_FLT_EVENT;
 			evt_data.evt_data = NULL;
 			/* finish command queue */
-			IPACMDBG_H("Posting IPA_MAC_ADD_DEL_FLT_EVENT event!\n", evt_data.event);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Posting IPA_MAC_ADD_DEL_FLT_EVENT event!\n", evt_data.event);
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
 	}
@@ -4039,7 +4052,7 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 		if(IPACM_Iface::ipacmcfg->client_lists.count(mac) > 0)
 		{
 			/* erase client in the list */
-			IPACMDBG_H("Cleared client mac %02x:%02x:%02x:%02x:%02x:%02x ip4 0x%X, iface %s\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Cleared client mac %02x:%02x:%02x:%02x:%02x:%02x ip4 0x%X, iface %s\n",
 					 mac_a[0], mac_a[1], mac_a[2],
 					 mac_a[3], mac_a[4], mac_a[5],
 					 client_lists.at(mac)->v4_addr,
@@ -4052,11 +4065,11 @@ void IPACM_Config::update_client_info(uint8_t *mac_addr, tether_client_info *cli
 		if(sw_flt_list.mac_enable && IPACM_Iface::ipacmcfg->mac_flt_lists.count(mac) > 0
 						&& IPACM_Iface::ipacmcfg->mac_flt_lists.at(mac)->mac_sw_enabled)
 		{
-			IPACMDBG_H("Don't remove the client from mac list as mac based flt is enabled for this client\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Don't remove the client from mac list as mac based flt is enabled for this client\n");
 		}
 		else
 		{
-			IPACMDBG_H("remove client from the mac list!\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "remove client from the mac list!\n");
 			pthread_mutex_unlock(&mac_flt_info_lock);
 			IPACM_Iface::ipacmcfg->clear_whitelist_mac_add(mac_addr);
 			return;
@@ -4074,7 +4087,7 @@ void IPACM_Config::stats_client_info(uint8_t *mac_addr, bool is_add)
 
 	if(pthread_mutex_lock(&stats_client_info_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return ;
 	}
 	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
@@ -4100,7 +4113,7 @@ bool IPACM_Config::client_in_stats_cache(uint8_t *mac_addr)
 
 	if(pthread_mutex_lock(&stats_client_info_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return is_enable;
 	}
 	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
@@ -4127,18 +4140,18 @@ bool IPACM_Config::insertOrAssignMacsecMap(struct ipa_macsec_map *macsecMap) {
 	/* first check if we have macsec iface entry or not */
 	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) == IPACM_SUCCESS &&
 	    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) != INVALID_IFACE) {
-		IPACMDBG_H("Will modify the existing macsec interface %s with new phy %s\n", macsecMap->macsec_name, macsecMap->phy_name);
+		IPACM_LOG(IPACM_LOG_INFO, "Will modify the existing macsec interface %s with new phy %s\n", macsecMap->macsec_name, macsecMap->phy_name);
 
 		/* Modify an existing macsec interface macsec interface in the config table*/
 		strlcpy(iface_table[ifaceTableIdx].phy_dev_name, macsecMap->phy_name, sizeof(iface_table[ifaceTableIdx].phy_dev_name));
 	} else {
-		IPACMDBG_H("Will add new macsec interface: %s instead of %s\n", macsecMap->macsec_name, macsecMap->phy_name);
+		IPACM_LOG(IPACM_LOG_INFO, "Will add new macsec interface: %s instead of %s\n", macsecMap->macsec_name, macsecMap->phy_name);
 
 		/* check if physical iface is valid */
 		if (IPACM_Iface::ipa_get_if_index(macsecMap->phy_name, &netlinkIdx) == IPACM_FAILURE ||
 		    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) == INVALID_IFACE) {
 			/* can't find physical nic name, ignoring this macsec handling */
-			IPACMERR("Got wrong physical NIC name: %s\n", macsecMap->phy_name);
+			IPACM_LOG(IPACM_LOG_ERR, "Got wrong physical NIC name: %s\n", macsecMap->phy_name);
 			return false;
 		}
 		/* Replace a physical interface with macsec interface in the config table */
@@ -4160,7 +4173,7 @@ bool IPACM_Config::delMacsecMap(struct ipa_macsec_map *macsecMap) {
 	/* Replace the requested macsec interface with physical interface */
 	if (IPACM_Iface::ipa_get_if_index(macsecMap->macsec_name, &netlinkIdx) == IPACM_SUCCESS &&
 	    (ifaceTableIdx = IPACM_Iface::iface_ipa_index_query(netlinkIdx)) != INVALID_IFACE) {
-		IPACMDBG_H("Will replace the macsec interface: %s with %s\n", macsecMap->macsec_name, macsecMap->phy_name);
+		IPACM_LOG(IPACM_LOG_INFO,"Will replace the macsec interface: %s with %s\n", macsecMap->macsec_name, macsecMap->phy_name);
 		iface_table[ifaceTableIdx].virtual_iface = false;
 		strlcpy(iface_table[ifaceTableIdx].iface_name, iface_table[ifaceTableIdx].phy_dev_name,
 			sizeof(iface_table[ifaceTableIdx].iface_name));
@@ -4190,15 +4203,15 @@ bool operator==(const ipa_ioc_ipsec_ul_flt_attr &uf1, const ipa_ioc_ipsec_ul_flt
 bool IPACM_Config::AddIpsecUlFlt(struct ipa_ioc_ipsec_ul_flt_attr uf)
 {
 	ipsecUlFlt.insert(uf);
-	IPACMDBG_H("Added an UL rule. Now the number of IPsec UL rules is %ld\n", ipsecUlFlt.size());
+	IPACM_LOG(IPACM_LOG_DEBUG, "Added an UL rule. Now the number of IPsec UL rules is %ld\n", ipsecUlFlt.size());
 	if (uf.ip == IPA_IP_v4) {
-		IPACMDBG_H("SRC IPv4: %08X\n", uf.attr.u.v4.src_addr);
-		IPACMDBG_H("DST IPv6: %08X\n", uf.attr.u.v4.dst_addr);
+		IPACM_LOG(IPACM_LOG_DEBUG, "SRC IPv4: %08X\n", uf.attr.u.v4.src_addr);
+		IPACM_LOG(IPACM_LOG_DEBUG, "DST IPv6: %08X\n", uf.attr.u.v4.dst_addr);
 	} else {
-		IPACMDBG_H("SRC IPv6: %08X:%08X:%08X:%08X\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "SRC IPv6: %08X:%08X:%08X:%08X\n",
 			uf.attr.u.v6.src_addr[0], uf.attr.u.v6.src_addr[1],
 			uf.attr.u.v6.src_addr[2], uf.attr.u.v6.src_addr[3]);
-		IPACMDBG_H("DST IPv6: %08X:%08X:%08X:%08X\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "DST IPv6: %08X:%08X:%08X:%08X\n",
 			uf.attr.u.v6.dst_addr[0], uf.attr.u.v6.dst_addr[1],
 			uf.attr.u.v6.dst_addr[2], uf.attr.u.v6.dst_addr[3]);
 	}
@@ -4209,15 +4222,15 @@ bool IPACM_Config::AddIpsecUlFlt(struct ipa_ioc_ipsec_ul_flt_attr uf)
 bool IPACM_Config::DelIpsecUlFlt(struct ipa_ioc_ipsec_ul_flt_attr uf)
 {
 	eraseOne(ipsecUlFlt, uf);
-	IPACMDBG_H("Deleted an UL rule. Now the number of IPsec UL rules is %ld\n", ipsecUlFlt.size());
+	IPACM_LOG(IPACM_LOG_DEBUG, "Deleted an UL rule. Now the number of IPsec UL rules is %ld\n", ipsecUlFlt.size());
 	if (uf.ip == IPA_IP_v4) {
-		IPACMDBG_H("SRC IPv4: %08X\n", uf.attr.u.v4.src_addr);
-		IPACMDBG_H("DST IPv6: %08X\n", uf.attr.u.v4.dst_addr);
+		IPACM_LOG(IPACM_LOG_DEBUG, "SRC IPv4: %08X\n", uf.attr.u.v4.src_addr);
+		IPACM_LOG(IPACM_LOG_DEBUG, "DST IPv6: %08X\n", uf.attr.u.v4.dst_addr);
 	} else {
-		IPACMDBG_H("SRC IPv6: %08X:%08X:%08X:%08X\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "SRC IPv6: %08X:%08X:%08X:%08X\n",
 			uf.attr.u.v6.src_addr[0], uf.attr.u.v6.src_addr[1],
 			uf.attr.u.v6.src_addr[2], uf.attr.u.v6.src_addr[3]);
-		IPACMDBG_H("DST IPv6: %08X:%08X:%08X:%08X\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "DST IPv6: %08X:%08X:%08X:%08X\n",
 			uf.attr.u.v6.dst_addr[0], uf.attr.u.v6.dst_addr[1],
 			uf.attr.u.v6.dst_addr[2], uf.attr.u.v6.dst_addr[3]);
 	}
@@ -4233,18 +4246,18 @@ bool IPACM_Config::is_svap_related(const char* phy_inf) {
 
 	char if_name[IPA_IFACE_NAME_LEN];
 	strlcpy(if_name, phy_inf, IPA_IFACE_NAME_LEN);
-	IPACMDBG_H("dev_name %s\n", phy_inf);
+	IPACM_LOG(IPACM_LOG_DEBUG, "dev_name %s\n", phy_inf);
 
 	char* char_idx =  strstr(if_name, ".");
 
 	if (char_idx) {
 		char_idx[0] = '\0';
-		IPACMDBG_H("truncated iface name %s\n", if_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "truncated iface name %s\n", if_name);
 	}
 	if (char_idx = strstr(if_name, "_"))
 	{
 		char_idx[0] = '\0';
-		IPACMDBG_H("truncated mlo base iface name %s\n", if_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "truncated mlo base iface name %s\n", if_name);
 	}
 
 	snprintf(cmd, 200, "cfg80211tool_mesh %s:0 get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data_ipa/ipa_vap.txt", if_name);
@@ -4252,19 +4265,19 @@ bool IPACM_Config::is_svap_related(const char* phy_inf) {
 
 	fp = fopen("/tmp/data_ipa/ipa_vap.txt", "r");
 	if (fp == NULL) {
-		IPACMERR("can't open fdb file\n");
+		IPACM_LOG(IPACM_LOG_ERR, "can't open fdb file\n");
 		return false;
 	}
 
 	if (fgets(MapBSSType_row, 10, fp) == NULL) {
-		IPACMERR("fgets failed\n");
+		IPACM_LOG(IPACM_LOG_ERR, "fgets failed\n");
 		goto end;
 	}
 
 	if ((72 == atoi(MapBSSType_row))|| (128 == atoi(MapBSSType_row))) {
 		is_svap = true;
 	}
-	IPACMDBG_H("get_MapBSSType %d\n", atoi(MapBSSType_row));
+	IPACM_LOG(IPACM_LOG_DEBUG, "get_MapBSSType %d\n", atoi(MapBSSType_row));
 
 end:
 	fclose(fp);
@@ -4282,7 +4295,7 @@ bool IPACM_Config::add_ext_router_info(ipa_ioc_ext_router_info *data)
 	{
 		if(strncmp(it->pdn_name, data->pdn_name, sizeof(it->pdn_name)) == 0)
 		{
-			IPACMERR("The pdn %s already has ext_router ipv6 added\n", it->pdn_name);
+			IPACM_LOG(IPACM_LOG_ERR, "The pdn %s already has ext_router ipv6 added\n", it->pdn_name);
 			return false;
 		}
 	}
@@ -4313,7 +4326,7 @@ bool IPACM_Config::add_ext_router_info(ipa_ioc_ext_router_info *data)
 	}
 	ext_router_prefix.push_front(info);
 
-	IPACMDBG_H("succesfully added info - mode:%d, pdn_name:%s\nv6_addr:0x%08x:%08x:%08x:%08x\nv6_mask:0x%08x:%08x:%08x:%08x\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "succesfully added info - mode:%d, pdn_name:%s\nv6_addr:0x%08x:%08x:%08x:%08x\nv6_mask:0x%08x:%08x:%08x:%08x\n",
 				data->mode, info.pdn_name,
 				info.ipv6_addr[0], info.ipv6_addr[1], info.ipv6_addr[2], info.ipv6_addr[3],
 				info.ipv6_mask[0], info.ipv6_mask[1], info.ipv6_mask[2], info.ipv6_mask[3]);
@@ -4330,13 +4343,13 @@ bool IPACM_Config::del_ext_router_info(char* pdn_name)
 	{
 		if(strncmp(it->pdn_name, pdn_name, sizeof(it->pdn_name)) == 0)
 		{
-			IPACMDBG_H("Found pdn %s\n", it->pdn_name)
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found pdn %s\n", it->pdn_name)
 			ext_router_prefix.erase(it);
 			return true;
 		}
 	}
 
-	IPACMERR("Cannot find pdn %s\n", it->pdn_name);
+	IPACM_LOG(IPACM_LOG_ERR, "Cannot find pdn %s\n", it->pdn_name);
 	return false;
 }
 
@@ -4348,7 +4361,7 @@ bool IPACM_Config::get_ext_router_info(ext_router_prefix_info *data)
 	{
 		if(strncmp(it->pdn_name, data->pdn_name, sizeof(it->pdn_name)) == 0)
 		{
-			IPACMDBG_H("Found pdn %s\n", data->pdn_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found pdn %s\n", data->pdn_name);
 			memcpy(data->ipv6_addr, it->ipv6_addr, sizeof(data->ipv6_addr));
 			memcpy(data->ipv6_mask, it->ipv6_mask, sizeof(data->ipv6_mask));
 			memcpy(data->idu_wan_ip, it->idu_wan_ip, sizeof(data->idu_wan_ip));
@@ -4357,7 +4370,7 @@ bool IPACM_Config::get_ext_router_info(ext_router_prefix_info *data)
 			return true;
 		}
 	}
-	IPACMERR("Could not find pdn %s\n", data->pdn_name);
+	IPACM_LOG(IPACM_LOG_ERR, "Could not find pdn %s\n", data->pdn_name);
 
 	return false;
 }
@@ -4374,11 +4387,11 @@ char* IPACM_Config::is_ext_route_ipv6_prefix(uint32_t *addr)
 			((addr[2] & it->ipv6_mask[2]) == it->ipv6_addr[2]) &&
 			((addr[3] & it->ipv6_mask[3]) == it->ipv6_addr[3]))
 		{
-			IPACMDBG_H("prefix [%X][%X] matches ext router prefix for pdn %s\n", addr[0], addr[1], it->pdn_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "prefix [%X][%X] matches ext router prefix for pdn %s\n", addr[0], addr[1], it->pdn_name);
 			return it->pdn_name;
 		}
 	}
-	IPACMDBG("no match for [%X][%X]\n", addr[0], addr[1]);
+	IPACM_LOG(IPACM_LOG_DEBUG, "no match for [%X][%X]\n", addr[0], addr[1]);
 	return NULL;
 }
 
@@ -4395,7 +4408,7 @@ int IPACM_Config::get_mapped_delegated_prefix_idx(uint32_t *addr)
 			if ((addr[0] == it->idu_wan_ip[i][0]) && (addr[1] == it->idu_wan_ip[i][1]) &&
 				(addr[2] == it->idu_wan_ip[i][2]) && (addr[3] == it->idu_wan_ip[i][3]))
 			{
-				IPACMDBG("IDU ip:[%X][%X][%X][%X] maps to del prefix %d:[%X][%X]\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "IDU ip:[%X][%X][%X][%X] maps to del prefix %d:[%X][%X]\n",
 					addr[0], addr[1], addr[2], addr[3], i,
 					it->idu_client_prefix[i][0], it->idu_client_prefix[i][1]);
 				return i;
@@ -4403,7 +4416,7 @@ int IPACM_Config::get_mapped_delegated_prefix_idx(uint32_t *addr)
 		}
 	}
 
-	IPACMDBG("no match for [%X][%X][%X][%X]\n", addr[0], addr[1], addr[2], addr[3]);
+	IPACM_LOG(IPACM_LOG_DEBUG, "no match for [%X][%X][%X][%X]\n", addr[0], addr[1], addr[2], addr[3]);
 	return IPA_PREFIX_MAPPING_MAX;
 }
 #endif
@@ -4416,40 +4429,40 @@ int IPACM_Config::SwitchAPVlanMode(char *event_iface_name, bool vlan_mpdn) {
 	char if_name[IPA_IFACE_NAME_LEN];
 
 	if (event_iface_name == NULL) {
-		IPACMERR("Invalid input\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid input\n");
 		return IPACM_FAILURE;
 	}
 
 	/* extract the parent if_name from the vlan iface */
 	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
-	IPACMDBG_H("iface %s, event iface %s\n", if_name, event_iface_name);
+	IPACM_LOG(IPACM_LOG_DEBUG, "iface %s, event iface %s\n", if_name, event_iface_name);
 
 	char *char_idx =  strrchr(if_name, '.');
 	if (char_idx) {
 		char_idx[0] = '\0';
-		IPACMDBG_H("truncated iface name %s\n", if_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "truncated iface name %s\n", if_name);
 	} else return IPACM_FAILURE;
 
 	/* check if the AP iface already exists or not*/
 	ret = IPACM_Iface::ipa_get_if_index(if_name, &(if_index));
 	if (ret != IPACM_SUCCESS) {
-		IPACMERR("Error while getting interface index for %s device", if_name);
+		IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface index for %s device", if_name);
 		return IPACM_FAILURE;
 	}
 
 	/* Map the interface index. */
 	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
-	IPACMDBG_H("if_cat:%d, if_vlan: %d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "if_cat:%d, if_vlan: %d\n",
 			   IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat,
 			   IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_wlan_if_vlan);
 	if (IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WLAN_IF &&
 		!IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_wlan_if_vlan) {
-		IPACMDBG_H("AP interface already exists, change it to VLAN mode %s\n", if_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "AP interface already exists, change it to VLAN mode %s\n", if_name);
 
 		/* Function to bring lan2lan connection down and restart */
 		data = (ipacm_event_vlan_mode *)malloc(sizeof(ipacm_event_vlan_mode));
 		if (data == NULL) {
-			IPACMERR("Unable to allocate memory\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory\n");
 			return IPACM_FAILURE;
 		}
 		data->wlan_vlan_mpdn_enable = vlan_mpdn;
@@ -4458,12 +4471,12 @@ int IPACM_Config::SwitchAPVlanMode(char *event_iface_name, bool vlan_mpdn) {
 		evt_data.evt_data = data;
 
 		/* finish command queue */
-		IPACMDBG_H("Posting event:%s\n", IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
+		IPACM_LOG(IPACM_LOG_DEBUG, "Posting event:%s\n", IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 		IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_wlan_if_vlan = vlan_mpdn;
 	} else {
-		IPACMDBG_H("AP interface doesn't exists, exiting switch mode %s\n", if_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "AP interface doesn't exists, exiting switch mode %s\n", if_name);
 	}
 
 	return ret;
@@ -4476,29 +4489,29 @@ bool IPACM_Config::IsWlanIfVlan(const char *event_iface_name) {
 	char if_name[IPA_IFACE_NAME_LEN];
 
 	if (event_iface_name == NULL) {
-		IPACMERR("Invalid input\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid input\n");
 		return false;
 	}
 
 	/* extract the parent if_name from the vlan iface */
 	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
-	IPACMDBG_H("iface %s, event iface %s\n", if_name, event_iface_name);
+	IPACM_LOG(IPACM_LOG_DEBUG, "iface %s, event iface %s\n", if_name, event_iface_name);
 
 	char *char_idx =  strrchr(if_name, '.');
 	if (char_idx) {
 		char_idx[0] = '\0';
-		IPACMDBG_H("truncated iface name %s\n", if_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "truncated iface name %s\n", if_name);
 	}
 	if (char_idx = strstr(if_name, "_"))
 	{
 		char_idx[0] = '\0';
-		IPACMDBG_H("truncated mlo base iface name %s\n", if_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "truncated mlo base iface name %s\n", if_name);
 	}
 
 	/* check if the AP iface already exists or not*/
 	ret = IPACM_Iface::ipa_get_if_index(if_name, &(if_index));
 	if (ret != IPACM_SUCCESS) {
-		IPACMERR("Error while getting interface index for %s device", if_name);
+		IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface index for %s device", if_name);
 		return false;
 	}
 
@@ -4507,9 +4520,9 @@ bool IPACM_Config::IsWlanIfVlan(const char *event_iface_name) {
 
 	if (IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WLAN_IF) {
 		res = IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_wlan_if_vlan;
-		IPACMDBG_H("AP is WLAN AP, vlan enabled %d\n", res);
+		IPACM_LOG(IPACM_LOG_DEBUG, "AP is WLAN AP, vlan enabled %d\n", res);
 	} else {
-		IPACMDBG_H("AP %s interface is not WLAN AP, exiting\n", if_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "AP %s interface is not WLAN AP, exiting\n", if_name);
 	}
 
 	return res;
@@ -4521,43 +4534,43 @@ int IPACM_Config::SetWlanVlanAp(char *event_iface_name) {
 	char if_name[IPA_IFACE_NAME_LEN];
 
 	if (event_iface_name == NULL) {
-		IPACMERR("Invalid input\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid input\n");
 		return IPACM_FAILURE;
 	}
 
 	/* extract the parent if_name from the vlan iface */
 	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
-	IPACMDBG_H("iface %s, event iface %s\n", if_name, event_iface_name);
+	IPACM_LOG(IPACM_LOG_DEBUG, "iface %s, event iface %s\n", if_name, event_iface_name);
 
 	char *char_idx =  strrchr(if_name, '.');
 	if (char_idx) {
 		char_idx[0] = '\0';
-		IPACMDBG_H("truncated iface name %s\n", if_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "truncated iface name %s\n", if_name);
 	}
 
 	char_idx =  strrchr(if_name, '_');
 	if (char_idx) {
 		char_idx[0] = '\0';
-		IPACMDBG_H("truncated iface name %s\n", if_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "truncated iface name %s\n", if_name);
 	}
 
 	/* check if the AP iface already exists or not*/
 	ret = IPACM_Iface::ipa_get_if_index(if_name, &(if_index));
 	if (ret != IPACM_SUCCESS) {
-		IPACMERR("Error while getting interface index for %s device", if_name);
+		IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface index for %s device", if_name);
 		return IPACM_FAILURE;
 	}
 
 	/* Map the interface index. */
 	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
 
-	IPACMDBG_H("Debug logs, if_cat:%d\n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Debug logs, if_cat:%d\n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat);
 	if (IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WLAN_IF) {
-		IPACMDBG_H("VLAN AP interface already exists, change it to VLAN mode %s\n", if_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "VLAN AP interface already exists, change it to VLAN mode %s\n", if_name);
 
 		IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_wlan_if_vlan = true;
 	} else {
-		IPACMDBG_H("AP interface doesn't exists, exiting switch mode %s\n", if_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "AP interface doesn't exists, exiting switch mode %s\n", if_name);
 	}
 
 	return ret;
@@ -4571,28 +4584,28 @@ bool IPACM_Config::IsSpclIface(const char *event_iface_name) {
 	char input_iface[IPA_IFACE_NAME_LEN] = {'\0'};
 
 	if (event_iface_name == NULL) {
-		IPACMERR("Invalid input\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid input\n");
 		return IPACM_FAILURE;
 	}
 
 	/* extract the parent if_name from the vlan iface */
 	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
-	IPACMDBG_H("iface %s, event iface %s\n", if_name, event_iface_name);
+	IPACM_LOG(IPACM_LOG_DEBUG, "iface %s, event iface %s\n", if_name, event_iface_name);
 
 	strlcpy(input_iface, if_name, IPA_IFACE_NAME_LEN);
 	char *char_idx =  strrchr(if_name, '.');
 	if (char_idx) {
 		char_idx[0] = '\0';
-		IPACMDBG_H("truncated iface name %s\n", if_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "truncated iface name %s\n", if_name);
 	}
 
 	extract_mlo_base_iface(input_iface);
-	IPACMDBG("Extracted iface name %s\n", input_iface);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Extracted iface name %s\n", input_iface);
 
 	/* check if the AP iface already exists or not*/
 	ret = IPACM_Iface::ipa_get_if_index(input_iface, &(if_index));
 	if (ret != IPACM_SUCCESS) {
-		IPACMERR("Error while getting interface index for %s device", if_name);
+		IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface index for %s device", if_name);
 		return IPACM_FAILURE;
 	}
 
@@ -4600,7 +4613,7 @@ bool IPACM_Config::IsSpclIface(const char *event_iface_name) {
 	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
 
 	res = IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_spcl_if;
-	IPACMDBG_H("%s is Ezmesh AP, vlan enabled special AP %d\n", if_name, res);
+	IPACM_LOG(IPACM_LOG_DEBUG, "%s is Ezmesh AP, vlan enabled special AP %d\n", if_name, res);
 
 	return res;
 }
@@ -4611,35 +4624,35 @@ int IPACM_Config::SetSpclIface(char *event_iface_name) {
 	char if_name[IPA_IFACE_NAME_LEN];
 
 	if (event_iface_name == NULL) {
-		IPACMERR("Invalid input\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid input\n");
 		return IPACM_FAILURE;
 	}
 
 	/* extract the parent if_name from the vlan iface */
 	strlcpy(if_name, event_iface_name, IPA_IFACE_NAME_LEN);
-	IPACMDBG_H("iface %s, event iface %s\n", if_name, event_iface_name);
+	IPACM_LOG(IPACM_LOG_DEBUG, "iface %s, event iface %s\n", if_name, event_iface_name);
 
 	char *char_idx =  strrchr(if_name, '.');
 	if (char_idx) {
 		char_idx[0] = '\0';
-		IPACMDBG_H("truncated iface name %s\n", if_name);
+		IPACM_LOG(IPACM_LOG_DEBUG, "truncated iface name %s\n", if_name);
 	}
 
 	/* check if the AP iface already exists or not*/
 	ret = IPACM_Iface::ipa_get_if_index(if_name, &(if_index));
 	if (ret != IPACM_SUCCESS) {
-		IPACMERR("Error while getting interface index for %s device", if_name);
+		IPACM_LOG(IPACM_LOG_ERR, "Error while getting interface index for %s device", if_name);
 		return IPACM_FAILURE;
 	}
 
 	/* Map the interface index. */
 	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
 
-	IPACMDBG_H("ipa_interface_index %d, if_cat:%d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "ipa_interface_index %d, if_cat:%d\n",
 			   ipa_interface_index ,IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat);
 	IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_spcl_if = true;
 
-	IPACMDBG("eth %s changed to special iface %d\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "eth %s changed to special iface %d\n",
 			    if_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].is_spcl_if);
 
 	return ret;
@@ -4652,19 +4665,19 @@ void IPACM_Config::update_dscp_pcp_mapping_table()
 	dscp_pcp_map_info.add = IPACM_Iface::ipacmcfg->dscp_pcp_config.add;
 
 	/* Issue add/delete ioctl and update cache */
-	IPACMDBG_H("Issuing DSCP PCP %s command\n", (dscp_pcp_map_info.add)?"add":"delete");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Issuing DSCP PCP %s command\n", (dscp_pcp_map_info.add)?"add":"delete");
 
 	memcpy(&(dscp_pcp_map_info.dscp_pcp_map[0]), IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
 		sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
 	fd = open(IPA_DEVICE_NAME, O_RDWR);
 	if (fd < 0)
 	{
-		IPACMDBG_H("Failed to open IPA device\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Failed to open IPA device\n");
 		return;
 	}
 	if (0 != ioctl(fd, IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING, &dscp_pcp_map_info))
 	{
-		IPACMDBG_H("Failed ioctl IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Failed ioctl IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING\n");
 		close(fd);
 		return;
 	}
@@ -4685,27 +4698,27 @@ void IPACM_Config::add_dscp_pcp_mapping()
 	if((memcmp(&(IPACM_Iface::ipacmcfg->dscp_pcp_config), &(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache),
 		sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config)) == 0))
 	{
-		IPACMDBG_H("Ignore Config file change as there is no change in the config\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Ignore Config file change as there is no change in the config\n");
 		return;
 	}
 
 	if (IPACM_Iface::ipacmcfg->dscp_pcp_config.add == 1)
 	{
 		/* Issue add ioctl and update cache */
-		IPACMDBG_H("Issuing DSCP PCP add command\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Issuing DSCP PCP add command\n");
 		dscp_pcp_map_info.add = 1;
 		memcpy(&(dscp_pcp_map_info.dscp_pcp_map[0]), IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
 			sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
 		fd = open(IPA_DEVICE_NAME, O_RDWR);
 		if (fd < 0)
 		{
-			IPACMDBG_H("Failed to open IPA device\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Failed to open IPA device\n");
 			return;
 		}
 
 		if (0 != ioctl(fd, IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING, &dscp_pcp_map_info))
 		{
-			IPACMDBG_H("Failed ioctl IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Failed ioctl IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING\n");
 			close(fd);
 			return;
 		}
@@ -4717,7 +4730,7 @@ void IPACM_Config::add_dscp_pcp_mapping()
 	}
 	else
 	{
-		IPACMDBG_H("Ignoring addition of DSCP PCP mapping\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Ignoring addition of DSCP PCP mapping\n");
 	}
 	return;
 }
@@ -4730,13 +4743,13 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 
 	if(pthread_mutex_lock(&qos_param_list_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
-	IPACMDBG_H("add_qos_params_info called start 0x%x,       end 0x%x \n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "add_qos_params_info called start 0x%x,       end 0x%x \n",
 			   m_qos_params.begin(), m_qos_params.end());
-	IPACMDBG_H("qos iface: %s vlan id: %d\n", data->dev_name, data->dir);
+	IPACM_LOG(IPACM_LOG_DEBUG, "qos iface: %s vlan id: %d\n", data->dev_name, data->dir);
 	for (it_qos_params = m_qos_params.begin(); it_qos_params != m_qos_params.end(); it_qos_params++)
 	{
 		if(strncmp(data->dev_name, it_qos_params->iface_name, sizeof(data->dev_name)) == 0 &&
@@ -4765,16 +4778,16 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 				{
 					if (data->vlan_ids[i] == it_qos_params->vlan_id)
 					{
-						IPACMDBG_H("The qos param was added before with vlan id %d for tc %d\n", it_qos_params->vlan_id, it_qos_params->traffic_class);
+						IPACM_LOG(IPACM_LOG_DEBUG, "The qos param was added before with vlan id %d for tc %d\n", it_qos_params->vlan_id, it_qos_params->traffic_class);
 						pthread_mutex_unlock(&qos_param_list_lock);
 						return;
 					}
 				}
-				IPACMERR("No matching vlan id %d for tc %d was found. Add a new entry\n", it_qos_params->vlan_id, it_qos_params->traffic_class);
+				IPACM_LOG(IPACM_LOG_ERR, "No matching vlan id %d for tc %d was found. Add a new entry\n", it_qos_params->vlan_id, it_qos_params->traffic_class);
 			}
 			else
 			{
-				IPACMERR("The qos param was added before with tc %d\n", it_qos_params->traffic_class);
+				IPACM_LOG(IPACM_LOG_ERR, "The qos param was added before with tc %d\n", it_qos_params->traffic_class);
 				pthread_mutex_unlock(&qos_param_list_lock);
 				return;
 			}
@@ -4837,7 +4850,7 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 	new_qos_info.pcp_mask = data->pcp_mask;
 	new_qos_info.dscp_mark_val = data->dscp_mark_val;
 
-	IPACMDBG("added pcp val 0x%x mask 0x%x\n", new_qos_info.pcp, new_qos_info.pcp_mask);
+	IPACM_LOG(IPACM_LOG_DEBUG, "added pcp val 0x%x mask 0x%x\n", new_qos_info.pcp, new_qos_info.pcp_mask);
 	m_qos_params.push_front(new_qos_info);
 	pthread_mutex_unlock(&qos_param_list_lock);
 
@@ -4851,8 +4864,8 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 			return a.flt_cat > b.flt_cat;
 	});
 
-	IPACMDBG_H("Added qos iface: %s vlan id: %d with traffic class :%d \n", data->dev_name, data->dir, data->traffic_class);
-	IPACMDBG_H("qos params list size now :%d \n", m_qos_params.size());
+	IPACM_LOG(IPACM_LOG_DEBUG, "Added qos iface: %s vlan id: %d with traffic class :%d \n", data->dev_name, data->dir, data->traffic_class);
+	IPACM_LOG(IPACM_LOG_DEBUG, "qos params list size now :%d \n", m_qos_params.size());
 
 
 	//Send qos rule add event
@@ -4861,17 +4874,17 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 	qos_param = (qos_param_info *)malloc(sizeof(qos_param_info));
 	if (qos_param == NULL)
 	{
-		IPACMERR("Unable to allocate memory\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory\n");
 		return;
 	}
 	memset(qos_param, 0, sizeof(qos_param_info));
 	memcpy(qos_param, &new_qos_info, sizeof(qos_param_info));
 	evt_data.evt_data = (void *)qos_param;
 
-	IPACMDBG_H("Posting event %s\n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "Posting event %s\n",
 			   IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
-	IPACMDBG_H("Posted IPA_QOS_RULE_ADD_EVENT.\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Posted IPA_QOS_RULE_ADD_EVENT.\n");
 	return;
 }
 
@@ -4886,11 +4899,11 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 
 	if(pthread_mutex_lock(&qos_param_list_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
-	IPACMDBG_H("qos iface: %s vlan id: %d\n", data->dev_name, data->dir);
+	IPACM_LOG(IPACM_LOG_DEBUG, "qos iface: %s vlan id: %d\n", data->dev_name, data->dir);
 	for(it_qos_params = m_qos_params.begin(); it_qos_params != m_qos_params.end(); it_qos_params++)
 	{
 		if(strncmp(data->dev_name, it_qos_params->iface_name, sizeof(data->dev_name)) == 0 &&
@@ -4919,7 +4932,7 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 			qos_param = (qos_delete_param_info *)malloc(sizeof(qos_delete_param_info) + it_qos_params->qos_client_list.size() * sizeof(qos_client_info));
 			if (qos_param == NULL)
 			{
-				IPACMERR("Unable to allocate memory\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory\n");
 				pthread_mutex_unlock(&qos_param_list_lock);
 				return;
 			}
@@ -4933,7 +4946,7 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 				qos_param->qos_client_list[i].qos_l2l_rt_rule_hdl_v4 = it_qos_client->qos_l2l_rt_rule_hdl_v4;
 				qos_param->qos_client_list[i].qos_rt_rule_hdl_v6 = it_qos_client->qos_rt_rule_hdl_v6;
 				qos_param->qos_client_list[i].qos_l2l_rt_rule_hdl_v6 = it_qos_client->qos_l2l_rt_rule_hdl_v6;
-				IPACMDBG("v6 rule to delete wan hdl %d\n",
+				IPACM_LOG(IPACM_LOG_DEBUG,"v6 rule to delete wan hdl %d\n",
 						qos_param->qos_client_list[i].qos_rt_rule_hdl_v6);
 				qos_param->qos_client_list[i].route_rule_set_v4 = it_qos_client->route_rule_set_v4;
 				qos_param->qos_client_list[i].route_rule_l2l_set_v4 = it_qos_client->route_rule_l2l_set_v4;
@@ -4947,10 +4960,10 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 
 			evt_data.evt_data = (void *)qos_param;
 
-			IPACMDBG_H("Posting event %s\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Posting event %s\n",
 			   IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
-			IPACMDBG_H("Posted IPA_QOS_RULE_DEL_EVENT.\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Posted IPA_QOS_RULE_DEL_EVENT.\n");
 
 
 			m_qos_params.erase(it_qos_params);
@@ -4960,8 +4973,8 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 
 	pthread_mutex_unlock(&qos_param_list_lock);
 
-	IPACMDBG_H("Deleted qos iface: %s vlan id: %d with traffic class :%d \n", data->dev_name, data->dir, data->traffic_class);
-	IPACMDBG_H("qos params list size now :%d \n", m_qos_params.size());
+	IPACM_LOG(IPACM_LOG_DEBUG, "Deleted qos iface: %s vlan id: %d with traffic class :%d \n", data->dev_name, data->dir, data->traffic_class);
+	IPACM_LOG(IPACM_LOG_DEBUG, "qos params list size now :%d \n", m_qos_params.size());
 	return;
 }
 
@@ -4976,14 +4989,14 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 
 	if(pthread_mutex_lock(&qos_param_list_lock) != 0)
 	{
-		IPACMERR("Unable to lock the mutex\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
-	IPACMDBG_H("qos iface: %s vlan id: %d\n", data->dev_name, data->dir);
+	IPACM_LOG(IPACM_LOG_DEBUG, "qos iface: %s vlan id: %d\n", data->dev_name, data->dir);
 	for (it_qos_params = m_qos_params.begin(); it_qos_params != m_qos_params.end(); )
 	{
-		IPACMDBG_H("Flusing the qos parameters \n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Flusing the qos parameters \n");
 		//Send qos rule del event
 		evt_data.event = IPA_QOS_RULE_DEL_EVENT;
 		i = 0;
@@ -4991,7 +5004,7 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 		qos_param = (qos_delete_param_info *)malloc(sizeof(qos_delete_param_info) + it_qos_params->qos_client_list.size() * sizeof(qos_client_info));
 		if (qos_param == NULL)
 		{
-			IPACMERR("Unable to allocate memory\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory\n");
 			pthread_mutex_unlock(&qos_param_list_lock);
 			return;
 		}
@@ -5013,17 +5026,17 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 
 		evt_data.evt_data = (void *)qos_param;
 
-		IPACMDBG_H("Posting event %s\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "Posting event %s\n",
 				   IPACM_Iface::ipacmcfg->getEventName(evt_data.event));
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
-		IPACMDBG_H("Posted IPA_QOS_RULE_DEL_EVENT.\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Posted IPA_QOS_RULE_DEL_EVENT.\n");
 
 		it_qos_params = m_qos_params.erase(it_qos_params);
 	}
 
 	pthread_mutex_unlock(&qos_param_list_lock);
 
-	IPACMDBG_H("Flushed qos params list size now :%d \n", m_qos_params.size());
+	IPACM_LOG(IPACM_LOG_DEBUG, "Flushed qos params list size now :%d \n", m_qos_params.size());
 	return;
 }
 #ifdef IPA_HW_FNR_STATS
@@ -5032,13 +5045,13 @@ void IPACM_Config::alloc_fnr_counter(void)
 {
 	if(ipacm_lan_stats_enable) {
 		if (hw_fnr_stats_support == true) {
-			IPACMERR("FnR counter allocated already, skip dup allocation\n");
+			IPACM_LOG(IPACM_LOG_ERR, "FnR counter allocated already, skip dup allocation\n");
 		}
 		if (ipacm_alloc_fnr_counters(&fnr_counters, m_fd))
 		{
-			IPACMERR("Failed to allocate fnr counters.\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Failed to allocate fnr counters.\n");
 		} else {
-			IPACMDBG_H("Allocating fnr counters :  Done\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Allocating fnr counters :  Done\n");
 			hw_fnr_stats_support = true;
 		}
 	}

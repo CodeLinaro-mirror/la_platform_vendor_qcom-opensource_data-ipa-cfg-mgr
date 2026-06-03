@@ -121,7 +121,7 @@ ipa_nl_sk_info_t sk_info;
 /* start netlink query socket thread*/
 void* netlink_events_query(void *param)
 {
-	IPACMDBG_H("ipa_query_nl_getevents started\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "ipa_query_nl_getevents started\n");
 	ipa_query_nl_getevents();
 	return NULL;
 }
@@ -132,7 +132,7 @@ void* netlink_start(void *param)
 	ipa_nl_sk_fd_set_info_t sk_fdset;
 	int ret_val = 0;
 	memset(&sk_fdset, 0, sizeof(ipa_nl_sk_fd_set_info_t));
-	IPACMDBG_H("netlink starter memset sk_fdset succeeds\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "netlink starter memset sk_fdset succeeds\n");
 	ret_val = ipa_nl_listener_init(NETLINK_ROUTE, (RTMGRP_IPV4_ROUTE | RTMGRP_IPV6_ROUTE | RTMGRP_LINK |
 																										RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR | RTMGRP_NEIGH |
 																										RTNLGRP_IPV6_PREFIX),
@@ -140,10 +140,11 @@ void* netlink_start(void *param)
 
 	if (ret_val != IPACM_SUCCESS)
 	{
-		IPACMERR("Failed to initialize IPA netlink event listener\n");
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to initialize IPA netlink event listener\n");
 		return NULL;
 	}
 
+	IPACM_LOG(IPACM_LOG_DEBUG, "Success to initialize IPA netlink event listener\n");
 	return NULL;
 }
 
@@ -160,10 +161,11 @@ void* firewall_monitor(void *param)
 	inotify_fd = inotify_init();
 	if (inotify_fd < 0)
 	{
-		PERROR("inotify_init");
+		perror("inotify_init");
+		IPACM_LOG(IPACM_LOG_ERR, "inotify_init");
 	}
 
-	IPACMDBG_H("Waiting for nofications in dirs %s with mask: 0x%x\n", IPACM_DIR_NAME,
+	IPACM_LOG(IPACM_LOG_DEBUG,"Waiting for nofications in dirs %s with mask: 0x%x\n", IPACM_DIR_NAME,
 		mask);
 
 	wd = inotify_add_watch(inotify_fd,
@@ -175,7 +177,7 @@ void* firewall_monitor(void *param)
 		length = read(inotify_fd, buffer, INOTIFY_BUF_LEN);
 		if (length < 0)
 		{
-			IPACMERR("inotify read() error return length: %d and mask: 0x%x\n", length, mask);
+			IPACM_LOG(IPACM_LOG_ERR, "inotify read() error return length: %d and mask: 0x%x\n", length, mask);
 			continue;
 		}
 
@@ -183,7 +185,7 @@ void* firewall_monitor(void *param)
 		event = (struct inotify_event*)malloc(length);
 		if(event == NULL)
 		{
-			IPACMERR("Failed to allocate memory.\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Failed to allocate memory.\n");
 			return NULL;
 		}
 		memset(event, 0, length);
@@ -195,12 +197,12 @@ void* firewall_monitor(void *param)
 			{
 				if (event->mask & IN_ISDIR)
 				{
-					IPACMDBG_H("The directory %s was 0x%x\n", event->name, event->mask);
+					IPACM_LOG(IPACM_LOG_DEBUG, "The directory %s was 0x%x\n", event->name, event->mask);
 				}
 				else if (!strncmp(event->name, IPACM_CFG_FILE_NAME, event->len)) // IPACM_configuration change
 				{
-					IPACMDBG_H("File \"%s\" was 0x%x\n", event->name, event->mask);
-					IPACMDBG_H("The interested file %s .\n", IPACM_CFG_FILE_NAME);
+					IPACM_LOG(IPACM_LOG_DEBUG,"File \"%s\" was 0x%x\n", event->name, event->mask);
+					IPACM_LOG(IPACM_LOG_DEBUG,"The interested file %s .\n", IPACM_CFG_FILE_NAME);
 
 					evt_data.event = IPA_CFG_CHANGE_EVENT;
 					evt_data.evt_data = NULL;
@@ -214,19 +216,19 @@ void* firewall_monitor(void *param)
 									((IPACM_Iface::ipacmcfg->device_mode == DEVMODE_STABRIDGE ) && IPACM_Iface::ipacmcfg->device_vlan_mode))
 					{
 						char IPACM_config_ext_file[IPA_MAX_FILE_LEN];
-						IPACMDBG_H("File \"%s\" was 0x%x\n", event->name, event->mask);
-						IPACMDBG_H("The interested file %s .\n", IPACM_CFG_EXT_FILE_NAME);
+						IPACM_LOG(IPACM_LOG_DEBUG,"File \"%s\" was 0x%x\n", event->name, event->mask);
+						IPACM_LOG(IPACM_LOG_DEBUG,"The interested file %s .\n", IPACM_CFG_EXT_FILE_NAME);
 
 						strlcpy(IPACM_config_ext_file, IPACM_CFG_EXT_FILE, sizeof(IPACM_config_ext_file));
 						if (IPACM_SUCCESS == IPACM_read_cfg_ext_xml(IPACM_config_ext_file,
 							&IPACM_Iface::ipacmcfg->dscp_pcp_config))
 						{
-							IPACMDBG_H("Config EXT (DSCP-PCP) XML read OK \n");
+							IPACM_LOG(IPACM_LOG_DEBUG, "Config EXT (DSCP-PCP) XML read OK \n");
 
 							if((memcmp(&(IPACM_Iface::ipacmcfg->dscp_pcp_config), &(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache),
 								sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config)) == 0))
 							{
-								IPACMDBG_H("Ignore Config file change as there is no change in the config\n");
+								IPACM_LOG(IPACM_LOG_DEBUG, "Ignore Config file change as there is no change in the config\n");
 							}
 							else
 							{
@@ -240,16 +242,16 @@ void* firewall_monitor(void *param)
 						}
 						else
 						{
-							IPACMERR("Config EXT (DSCP-PCP) XML read failed and not updating uc \n");
+							IPACM_LOG(IPACM_LOG_ERR, "Config EXT (DSCP-PCP) XML read failed and not updating uc \n");
 						}
 					}
 					else
 					{
-						IPACMERR("Easy Mesh is not supported or has lower mode \n");
+						IPACM_LOG(IPACM_LOG_ERR, "Easy Mesh is not supported or has lower mode \n");
 					}
 				}
 			}
-			IPACMDBG_H("Received monitoring event %s.\n", event->name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received monitoring event %s.\n", event->name);
 		}
 		free(event);
 	}
@@ -337,13 +339,13 @@ void* ipa_driver_msg_notifier(void *param)
 	fd = open(IPA_DRIVER, O_RDWR);
 	if (fd < 0)
 	{
-		IPACMERR("Failed opening %s.\n", IPA_DRIVER);
+		IPACM_LOG(IPACM_LOG_ERR, "Failed opening %s.\n", IPA_DRIVER);
 		return NULL;
 	}
 
 	while (1)
 	{
-		IPACMDBG_H("Waiting for nofications from IPA driver \n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Waiting for notifications from IPA driver \n");
 		memset(buffer, 0, sizeof(buffer));
 		memset(&evt_data, 0, sizeof(evt_data));
 		memset(&new_neigh_evt, 0, sizeof(ipacm_cmd_q_data));
@@ -356,46 +358,47 @@ void* ipa_driver_msg_notifier(void *param)
 		length = read(fd, buffer, IPA_DRIVER_WLAN_META_MSG + IPA_DRIVER_WLAN_BUF_LEN);
 		if (length < 0)
 		{
-			PERROR("didn't read IPA_driver correctly");
+			perror("didn't read IPA_driver correctly");
+			IPACM_LOG(IPACM_LOG_ERR, "didn't read IPA_driver correctly");
 			continue;
 		}
 
 		memcpy(&event_hdr, buffer,sizeof(struct ipa_msg_meta));
-		IPACMDBG_H("Message type: %d\n", event_hdr.msg_type);
-		IPACMDBG_H("Event header length received: %d\n",event_hdr.msg_len);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Message type: %d\n", event_hdr.msg_type);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Event header length received: %d\n",event_hdr.msg_len);
 
 		/* Insert WLAN_DRIVER_EVENT to command queue */
 		switch (event_hdr.msg_type)
 		{
 
 		case SW_ROUTING_ENABLE:
-			IPACMDBG_H("Received SW_ROUTING_ENABLE\n");
+			IPACM_LOG(IPACM_LOG_INFO, "Received SW_ROUTING_ENABLE\n");
 			evt_data.event = IPA_SW_ROUTING_ENABLE;
-			IPACMDBG_H("Not supported anymore\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Not supported anymore\n");
 			continue;
 
 		case SW_ROUTING_DISABLE:
-			IPACMDBG_H("Received SW_ROUTING_DISABLE\n");
+			IPACM_LOG(IPACM_LOG_INFO, "Received SW_ROUTING_DISABLE\n");
 			evt_data.event = IPA_SW_ROUTING_DISABLE;
-			IPACMDBG_H("Not supported anymore\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Not supported anymore\n");
 			continue;
 
 		case WLAN_AP_CONNECT:
 			event_wlan = (struct ipa_wlan_msg *) (buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received WLAN_AP_CONNECT name: %s\n",event_wlan->name);
-			IPACMDBG_H("AP Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_INFO, "Received WLAN_AP_CONNECT name: %s\n",event_wlan->name);
+			IPACM_LOG(IPACM_LOG_INFO, "AP Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
 							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
                         data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
-				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
-				goto done;
+				IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event_wlan data_fid\n");
+				return NULL;
 			}
 			memset(data_fid,0,sizeof(ipacm_event_data_fid));
 			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data_fid->if_index))){
 				data_fid->if_index = event_wlan->if_index;
-				IPACMDBG_H("Using WLAN_AP_CONNECT if_index: %d\n",event_wlan->if_index);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Using WLAN_AP_CONNECT if_index: %d\n",event_wlan->if_index);
 			}
 			if(event_wlan->mld_enabled && strstr(event_wlan->name,"mld"))
 			{
@@ -408,8 +411,8 @@ void* ipa_driver_msg_notifier(void *param)
 				strlcpy(data_fid->iface_name, event_wlan->name, sizeof(data_fid->iface_name));
 			}
 			data_fid->mlo_enabled = event_wlan->mld_enabled;
-			IPACMDBG_H("AP MLO enabled %d",event_wlan->mld_enabled);
-			IPACMDBG("Posting event with %s\n", data_fid->iface_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "AP MLO enabled %d",event_wlan->mld_enabled);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Posting event with %s\n", data_fid->iface_name);
 			evt_data.event = IPA_WLAN_AP_LINK_UP_EVENT;
 #ifdef IPA_WDI_AST_UPDATE
 			data_fid->ast_update = event_wlan->ast_update;
@@ -419,21 +422,21 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case WLAN_AP_DISCONNECT:
 			event_wlan = (struct ipa_wlan_msg *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received WLAN_AP_DISCONNECT name: %s\n",event_wlan->name);
-			IPACMDBG_H("AP Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_INFO, "Received WLAN_AP_DISCONNECT name: %s\n",event_wlan->name);
+			IPACM_LOG(IPACM_LOG_INFO, "AP Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
 							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
                         data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
-				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
-				goto done;
+				IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event_wlan data_fid\n");
+				return NULL;
 			}
 			memset(data_fid,0,sizeof(ipacm_event_data_fid));
 			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data_fid->if_index)))
 			{
 				data_fid->if_index = event_wlan->if_index;
-				IPACMDBG_H("Using WLAN_AP_DISCONNECT if_index: %d\n",event_wlan->if_index);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Using WLAN_AP_DISCONNECT if_index: %d\n",event_wlan->if_index);
 			}
 			if(event_wlan->mld_enabled && strstr(event_wlan->name,"mld"))
 			{
@@ -444,21 +447,21 @@ void* ipa_driver_msg_notifier(void *param)
 			{
 				strlcpy(data_fid->iface_name, event_wlan->name, sizeof(data_fid->iface_name));
 			}
-			IPACMDBG("Posting event with %s\n", data_fid->iface_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Posting event with %s\n", data_fid->iface_name);
 			evt_data.event = IPA_WLAN_LINK_DOWN_EVENT;
 			evt_data.evt_data = data_fid;
 			break;
 		case WLAN_STA_CONNECT:
 			event_wlan = (struct ipa_wlan_msg *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received WLAN_STA_CONNECT name: %s\n",event_wlan->name);
-			IPACMDBG_H("STA Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_INFO, "Received WLAN_STA_CONNECT name: %s\n",event_wlan->name);
+			IPACM_LOG(IPACM_LOG_INFO, "STA Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
 							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
 			data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
 			if(data == NULL)
 			{
-				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
-				goto done;
+				IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event_wlan data_fid\n");
+				return NULL;
 			}
 			memcpy(data->mac_addr,
 				 event_wlan->mac_addr,
@@ -470,20 +473,20 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case WLAN_STA_DISCONNECT:
 			event_wlan = (struct ipa_wlan_msg *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received WLAN_STA_DISCONNECT name: %s\n",event_wlan->name);
-			IPACMDBG_H("STA Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_INFO, "Received WLAN_STA_DISCONNECT name: %s\n",event_wlan->name);
+			IPACM_LOG(IPACM_LOG_INFO, "STA Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
 							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
                         data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
-				IPACMERR("unable to allocate memory for event_wlan data_fid\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event_wlan data_fid\n");
 				goto done;
 			}
 			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data_fid->if_index)))
 			{
 				data_fid->if_index = event_wlan->if_index;
-				IPACMDBG_H("Using WLAN_STA_DISCONNECT if_index: %d\n",event_wlan->if_index);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Using WLAN_STA_DISCONNECT if_index: %d\n",event_wlan->if_index);
 			}
 			evt_data.event = IPA_WLAN_LINK_DOWN_EVENT;
 			evt_data.evt_data = data_fid;
@@ -491,14 +494,13 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case WLAN_CLIENT_CONNECT:
 			event_wlan = (struct ipa_wlan_msg *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received WLAN_CLIENT_CONNECT\n");
-			IPACMDBG_H("Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_INFO, "WLAN_CLIENT_CONNECT: Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
 							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
 		        data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
 		        if (data == NULL)
 		        {
-		    	        IPACMERR("unable to allocate memory for event_wlan data\n");
+		    	        IPACM_LOG(IPACM_LOG_INFO,"unable to allocate memory for event_wlan data\n");
 		    	        goto done;
 		        }
 			memcpy(data->mac_addr,
@@ -510,27 +512,27 @@ void* ipa_driver_msg_notifier(void *param)
 			break;
 
 		case WLAN_CLIENT_CONNECT_EX:
-			IPACMDBG_H("Received WLAN_CLIENT_CONNECT_EX\n");
+			IPACM_LOG(IPACM_LOG_INFO, "Received WLAN_CLIENT_CONNECT_EX\n");
 
 			memcpy(&event_ex_o, buffer + sizeof(struct ipa_msg_meta),sizeof(struct ipa_wlan_msg_ex));
 			if(event_ex_o.num_of_attribs > IPA_DRIVER_WLAN_EVENT_MAX_OF_ATTRIBS)
 			{
-				IPACMERR("buffer size overflow\n");
+				IPACM_LOG(IPACM_LOG_INFO,"buffer size overflow\n");
 				goto done;
 			}
 			length = sizeof(ipa_wlan_msg_ex)+ event_ex_o.num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val);
-			IPACMDBG_H("num_of_attribs %d, length %d\n", event_ex_o.num_of_attribs, length);
+			IPACM_LOG(IPACM_LOG_DEBUG, "num_of_attribs %d, length %d\n", event_ex_o.num_of_attribs, length);
 			event_ex = (ipa_wlan_msg_ex *)malloc(length);
 			if(event_ex == NULL )
 			{
-				IPACMERR("Unable to allocate memory\n");
+				IPACM_LOG(IPACM_LOG_ERR,"Unable to allocate memory\n");
 				goto done;
 			}
 			memcpy(event_ex, buffer + sizeof(struct ipa_msg_meta), length);
 			data_ex = (ipacm_event_data_wlan_ex *)malloc(sizeof(ipacm_event_data_wlan_ex) + event_ex_o.num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val));
 			if (data_ex == NULL)
 			{
-				IPACMERR("unable to allocate memory for event data\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event data\n");
 		    	goto done;
 		    }
 
@@ -538,7 +540,7 @@ void* ipa_driver_msg_notifier(void *param)
 			new_neigh_data = (ipacm_event_data_all*)malloc(sizeof(ipacm_event_data_all));
 			if(new_neigh_data == NULL)
 			{
-				IPACMERR("Failed to allocate memory.\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Failed to allocate memory.\n");
 				goto done;
 			}
 
@@ -556,7 +558,7 @@ void* ipa_driver_msg_notifier(void *param)
 				char* char_idx =  strstr(iface_name, "_");
 				if (char_idx) {
 					char_idx[0] = '\0';
-					IPACMDBG_H("truncated iface name %s\n", iface_name);
+					IPACM_LOG(IPACM_LOG_DEBUG, "truncated iface name %s\n", iface_name);
 				}
 				ipa_get_if_index(iface_name, &(data_ex->if_index));
 			}
@@ -570,7 +572,7 @@ void* ipa_driver_msg_notifier(void *param)
 				strlcpy(data_ex->iface_name, event_ex->name, sizeof(data_ex->iface_name));
 			}
 
-			IPACMDBG_H("Received interface index %d for interface name %s\n",data_ex->if_index, data_ex->iface_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received interface index %d for interface name %s\n",data_ex->if_index, data_ex->iface_name);
 			evt_data.event = IPA_WLAN_CLIENT_ADD_EVENT_EX;
 			evt_data.evt_data = data_ex;
 
@@ -581,23 +583,23 @@ void* ipa_driver_msg_notifier(void *param)
 				if(event_ex->attribs[cnt].attrib_type == WLAN_HDR_ATTRIB_MAC_ADDR)
 				{
 					memcpy(new_neigh_data->mac_addr, event_ex->attribs[cnt].u.mac_addr, sizeof(new_neigh_data->mac_addr));
-					IPACMDBG_H("Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
+					IPACM_LOG(IPACM_LOG_DEBUG, "Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 								 event_ex->attribs[cnt].u.mac_addr[0], event_ex->attribs[cnt].u.mac_addr[1], event_ex->attribs[cnt].u.mac_addr[2],
 								 event_ex->attribs[cnt].u.mac_addr[3], event_ex->attribs[cnt].u.mac_addr[4], event_ex->attribs[cnt].u.mac_addr[5]);
 				}
 				else if(event_ex->attribs[cnt].attrib_type == WLAN_HDR_ATTRIB_STA_ID)
 				{
-					IPACMDBG_H("Wlan client id %d\n",event_ex->attribs[cnt].u.sta_id);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Wlan client id %d\n",event_ex->attribs[cnt].u.sta_id);
 				}
 	#ifdef WLAN_HDR_ATTRIB_TA_PEER_ID
 				else if(event_ex->attribs[cnt].attrib_type == WLAN_HDR_ATTRIB_TA_PEER_ID)
 				{
-					IPACMDBG_H("Wlan ta peer id %d\n",event_ex->attribs[cnt].u.ta_peer_id);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Wlan ta peer id %d\n",event_ex->attribs[cnt].u.ta_peer_id);
 				}
 	#endif
 				else
 				{
-					IPACMDBG_H("Wlan message has unexpected type!\n");
+					IPACM_LOG(IPACM_LOG_DEBUG, "Wlan message has unexpected type!\n");
 				}
 			}
 			new_neigh_data->if_index = data_ex->if_index;
@@ -608,26 +610,26 @@ void* ipa_driver_msg_notifier(void *param)
 			break;
 
 		case WLAN_CLIENT_DISCONNECT:
-			IPACMDBG_H("Received WLAN_CLIENT_DISCONNECT\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received WLAN_CLIENT_DISCONNECT\n");
 			event_wlan = (struct ipa_wlan_msg *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_INFO,"Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
 							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
 			data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
 			if (data == NULL)
 			{
-				IPACMERR("unable to allocate memory for event_wlan data\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event_wlan data\n");
 				goto done;
 			}
 			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data->if_index)))
 			{
 				data->if_index = event_wlan->if_index;
-				IPACMDBG_H("Using WLAN_CLIENT_DISCONNECT if_index: %d\n",event_wlan->if_index);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Using WLAN_CLIENT_DISCONNECT if_index: %d\n",event_wlan->if_index);
 			}
 			new_neigh_data = (ipacm_event_data_all*)malloc(sizeof(ipacm_event_data_all));
 			if(new_neigh_data == NULL)
 			{
-				IPACMERR("Failed to allocate memory.\n");
+				IPACM_LOG(IPACM_LOG_ERR,"Failed to allocate memory.\n");
 				goto done;
 			}
 			memset(new_neigh_data, 0, sizeof(ipacm_event_data_all));
@@ -648,7 +650,7 @@ void* ipa_driver_msg_notifier(void *param)
 			new_neigh_evt.evt_data = (void*)new_neigh_data;
 			new_neigh_evt.event = IPA_DEL_NEIGH_EVENT;
 
-			IPACMDBG("Posting with %s\n", data->iface_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Posting with %s\n", data->iface_name);
 			memcpy(data->mac_addr,
 						 event_wlan->mac_addr,
 						 sizeof(event_wlan->mac_addr));
@@ -657,16 +659,16 @@ void* ipa_driver_msg_notifier(void *param)
 			break;
 
 		case WLAN_CLIENT_POWER_SAVE_MODE:
-			IPACMDBG_H("Received WLAN_CLIENT_POWER_SAVE_MODE\n");
+			IPACM_LOG(IPACM_LOG_INFO, "Received WLAN_CLIENT_POWER_SAVE_MODE\n");
 			event_wlan = (struct ipa_wlan_msg *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_INFO, "Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
 							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
 		        data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
 		        if (data == NULL)
 		        {
-		    	        IPACMERR("unable to allocate memory for event_wlan data\n");
-		    	        goto done;
+		    	        IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event_wlan data\n");
+		    	        return NULL;
 		        }
 			memcpy(data->mac_addr,
 						 event_wlan->mac_addr,
@@ -677,15 +679,15 @@ void* ipa_driver_msg_notifier(void *param)
 			break;
 
 		case WLAN_CLIENT_NORMAL_MODE:
-			IPACMDBG_H("Received WLAN_CLIENT_NORMAL_MODE\n");
+			IPACM_LOG(IPACM_LOG_INFO, "Received WLAN_CLIENT_NORMAL_MODE\n");
 			event_wlan = (struct ipa_wlan_msg *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_INFO, "Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
 							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
 		        data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
 		        if (data == NULL)
 		        {
-		    	       IPACMERR("unable to allocate memory for event_wlan data\n");
+		    	       IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event_wlan data\n");
 		    	       goto done;
 		        }
 			memcpy(data->mac_addr,
@@ -698,16 +700,16 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case ECM_CONNECT:
 			memcpy(&event_ecm, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_ecm_msg));
-			IPACMDBG_H("Received ECM_CONNECT name: %s, ifindex: %d\n", event_ecm.name, event_ecm.ifindex);
+			IPACM_LOG(IPACM_LOG_INFO,"Received ECM_CONNECT name: %s, ifindex: %d\n", event_ecm.name, event_ecm.ifindex);
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
-				IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event_ecm data_fid\n");
 				goto done;
 			}
 			if (IPACM_Iface::ipa_get_if_index(event_ecm.name, &CurrentIfaceIndex) == IPACM_SUCCESS)
 			{
-				IPACMDBG_H("Notifing ifindex: %d\n", CurrentIfaceIndex);
+				IPACM_LOG(IPACM_LOG_INFO,"Notifing ifindex: %d\n", CurrentIfaceIndex);
 				data_fid->if_index = CurrentIfaceIndex;
 			}
 			else
@@ -720,16 +722,16 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case ECM_DISCONNECT:
 			memcpy(&event_ecm, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_ecm_msg));
-			IPACMDBG_H("Received ECM_DISCONNECT name: %s\n",event_ecm.name);
+			IPACM_LOG(IPACM_LOG_INFO,"Received ECM_DISCONNECT name: %s\n",event_ecm.name);
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
-				IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event_ecm data_fid\n");
 				goto done;
 			}
 			if (IPACM_Iface::ipa_get_if_index(event_ecm.name, &CurrentIfaceIndex) == IPACM_SUCCESS)
 			{
-				IPACMDBG_H("Notifing ifindex: %d\n", CurrentIfaceIndex);
+				IPACM_LOG(IPACM_LOG_DEBUG,"Notifing ifindex: %d\n", CurrentIfaceIndex);
 				data_fid->if_index = CurrentIfaceIndex;
 			}
 			else
@@ -742,16 +744,16 @@ void* ipa_driver_msg_notifier(void *param)
 
 #ifdef FEATURE_IPACM_RESTART
 		case IPA_DONE_RESTORE_EVENT:
-			IPACMDBG_H("Received IPA_DONE_RESTORE_EVENT\n");
+			IPACM_LOG(IPACM_LOG_INFO, "Received IPA_DONE_RESTORE_EVENT\n");
 			fp = fopen(IPA_READY_QCMAP_NOTIFIER_FILE, "w");
 			if (fp == NULL)
 			{
-				IPACMERR("can't open IPA ready monitor file\n");
+				IPACM_LOG(IPACM_LOG_ERR, "can't open IPA ready monitor file\n");
 				break;
 			}
 			if (fputs("IPA event restore done", fp) < 0)
 			{
-				IPACMERR("Failed to write to IPA ready monitor file\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Failed to write to IPA ready monitor file\n");
 			}
 			fclose(fp);
 			break;
@@ -759,34 +761,34 @@ void* ipa_driver_msg_notifier(void *param)
 		/* Add for 8994 Android case */
 		case WAN_UPSTREAM_ROUTE_ADD:
 			memcpy(&event_wan, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_wan_msg));
-			IPACMDBG_H("Received WAN_UPSTREAM_ROUTE_ADD name: %s, tethered name: %s\n", event_wan.upstream_ifname, event_wan.tethered_ifname);
+			IPACM_LOG(IPACM_LOG_INFO,"Received WAN_UPSTREAM_ROUTE_ADD name: %s, tethered name: %s\n", event_wan.upstream_ifname, event_wan.tethered_ifname);
 			data_iptype = (ipacm_event_data_iptype *)malloc(sizeof(ipacm_event_data_iptype));
 			if(data_iptype == NULL)
 			{
-				IPACMERR("unable to allocate memory for event_ecm data_iptype\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event_ecm data_iptype\n");
 				goto done;
 			}
 			ipa_get_if_index(event_wan.upstream_ifname, &(data_iptype->if_index));
 			ipa_get_if_index(event_wan.tethered_ifname, &(data_iptype->if_index_tether));
 			data_iptype->iptype = event_wan.ip;
-			IPACMDBG_H("Received WAN_UPSTREAM_ROUTE_ADD: fid(%d) tether_fid(%d) ip-type(%d)\n", data_iptype->if_index,
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received WAN_UPSTREAM_ROUTE_ADD: fid(%d) tether_fid(%d) ip-type(%d)\n", data_iptype->if_index,
 					data_iptype->if_index_tether, data_iptype->iptype);
 			evt_data.event = IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT;
 			evt_data.evt_data = data_iptype;
 			break;
 		case WAN_UPSTREAM_ROUTE_DEL:
 			memcpy(&event_wan, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_wan_msg));
-			IPACMDBG_H("Received WAN_UPSTREAM_ROUTE_DEL name: %s, tethered name: %s\n", event_wan.upstream_ifname, event_wan.tethered_ifname);
+			IPACM_LOG(IPACM_LOG_INFO,"Received WAN_UPSTREAM_ROUTE_DEL name: %s, tethered name: %s\n", event_wan.upstream_ifname, event_wan.tethered_ifname);
 			data_iptype = (ipacm_event_data_iptype *)malloc(sizeof(ipacm_event_data_iptype));
 			if(data_iptype == NULL)
 			{
-				IPACMERR("unable to allocate memory for event_ecm data_iptype\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event_ecm data_iptype\n");
 				goto done;
 			}
 			ipa_get_if_index(event_wan.upstream_ifname, &(data_iptype->if_index));
 			ipa_get_if_index(event_wan.tethered_ifname, &(data_iptype->if_index_tether));
 			data_iptype->iptype = event_wan.ip;
-			IPACMDBG_H("Received WAN_UPSTREAM_ROUTE_DEL: fid(%d) ip-type(%d)\n", data_iptype->if_index, data_iptype->iptype);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received WAN_UPSTREAM_ROUTE_DEL: fid(%d) ip-type(%d)\n", data_iptype->if_index, data_iptype->iptype);
 			evt_data.event = IPA_WAN_UPSTREAM_ROUTE_DEL_EVENT;
 			evt_data.evt_data = data_iptype;
 			break;
@@ -795,11 +797,11 @@ void* ipa_driver_msg_notifier(void *param)
 		/* Add for embms case */
 		case WAN_EMBMS_CONNECT:
 			memcpy(&event_wan, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_wan_msg));
-			IPACMDBG("Received WAN_EMBMS_CONNECT name: %s\n",event_wan.upstream_ifname);
+			IPACM_LOG(IPACM_LOG_DEBUG,"Received WAN_EMBMS_CONNECT name: %s\n",event_wan.upstream_ifname);
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
-				IPACMERR("unable to allocate memory for event data_fid\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event data_fid\n");
 				goto done;
 			}
 			ipa_get_if_index(event_wan.upstream_ifname, &(data_fid->if_index));
@@ -808,9 +810,9 @@ void* ipa_driver_msg_notifier(void *param)
 			break;
 
 		case WLAN_SWITCH_TO_SCC:
-			IPACMDBG_H("Received WLAN_SWITCH_TO_SCC\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received WLAN_SWITCH_TO_SCC\n");
 		case WLAN_WDI_ENABLE:
-			IPACMDBG_H("Received WLAN_WDI_ENABLE\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received WLAN_WDI_ENABLE\n");
 			if (IPACM_Iface::ipacmcfg->isMCC_Mode == true)
 			{
 				IPACM_Iface::ipacmcfg->isMCC_Mode = false;
@@ -819,9 +821,9 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			continue;
 		case WLAN_SWITCH_TO_MCC:
-			IPACMDBG_H("Received WLAN_SWITCH_TO_MCC\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received WLAN_SWITCH_TO_MCC\n");
 		case WLAN_WDI_DISABLE:
-			IPACMDBG_H("Received WLAN_WDI_DISABLE\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received WLAN_WDI_DISABLE\n");
 			if (IPACM_Iface::ipacmcfg->isMCC_Mode == false)
 			{
 				IPACM_Iface::ipacmcfg->isMCC_Mode = true;
@@ -835,14 +837,14 @@ void* ipa_driver_msg_notifier(void *param)
 			data_tethering_stats = (ipa_get_data_stats_resp_msg_v01 *)malloc(sizeof(struct ipa_get_data_stats_resp_msg_v01));
 			if(data_tethering_stats == NULL)
 			{
-				IPACMERR("unable to allocate memory for event data_tethering_stats\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event data_tethering_stats\n");
 				goto done;
 			}
 			memcpy(data_tethering_stats,
 					 &event_data_stats,
 						 sizeof(struct ipa_get_data_stats_resp_msg_v01));
-			IPACMDBG("Received IPA_TETHERING_STATS_UPDATE_STATS ipa_stats_type: %d\n",data_tethering_stats->ipa_stats_type);
-			IPACMDBG("Received %d UL, %d DL pipe stats\n",data_tethering_stats->ul_src_pipe_stats_list_len, data_tethering_stats->dl_dst_pipe_stats_list_len);
+			IPACM_LOG(IPACM_LOG_DEBUG,"Received IPA_TETHERING_STATS_UPDATE_STATS ipa_stats_type: %d\n",data_tethering_stats->ipa_stats_type);
+			IPACM_LOG(IPACM_LOG_DEBUG,"Received %d UL, %d DL pipe stats\n",data_tethering_stats->ul_src_pipe_stats_list_len, data_tethering_stats->dl_dst_pipe_stats_list_len);
 			evt_data.event = IPA_TETHERING_STATS_UPDATE_EVENT;
 			evt_data.evt_data = data_tethering_stats;
 			break;
@@ -852,24 +854,24 @@ void* ipa_driver_msg_notifier(void *param)
 			data_network_stats = (ipa_get_apn_data_stats_resp_msg_v01 *)malloc(sizeof(ipa_get_apn_data_stats_resp_msg_v01));
 			if(data_network_stats == NULL)
 			{
-				IPACMERR("unable to allocate memory for event data_network_stats\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event data_network_stats\n");
 				goto done;
 			}
 			memcpy(data_network_stats,
 					 &event_network_stats,
 						 sizeof(struct ipa_get_apn_data_stats_resp_msg_v01));
-			IPACMDBG("Received %d apn network stats \n", data_network_stats->apn_data_stats_list_len);
+			IPACM_LOG(IPACM_LOG_DEBUG,"Received %d apn network stats \n", data_network_stats->apn_data_stats_list_len);
 			evt_data.event = IPA_NETWORK_STATS_UPDATE_EVENT;
 			evt_data.evt_data = data_network_stats;
 			break;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		case IPA_PER_CLIENT_STATS_CONNECT_EVENT:
-			IPACMDBG_H("Received IPA_PER_CLIENT_STATS_CONNECT_EVENT\n");
+			IPACM_LOG(IPACM_LOG_INFO,"Received IPA_PER_CLIENT_STATS_CONNECT_EVENT\n");
 			memcpy(&event_lan_client, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_lan_client_msg));
 			data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
 			if(data == NULL)
 			{
-				IPACMERR("unable to allocate memory for event data\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event data\n");
 				goto done;
 			}
 			memcpy(data->mac_addr,
@@ -882,12 +884,12 @@ void* ipa_driver_msg_notifier(void *param)
 			break;
 
 		case IPA_PER_CLIENT_STATS_DISCONNECT_EVENT:
-			IPACMDBG_H("Received IPA_PER_CLIENT_STATS_DISCONNECT_EVENT\n");
+			IPACM_LOG(IPACM_LOG_INFO, "Received IPA_PER_CLIENT_STATS_DISCONNECT_EVENT\n");
 			memcpy(&event_lan_client, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_lan_client_msg));
 			data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
 			if(data == NULL)
 			{
-				IPACMERR("unable to allocate memory for event data\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event data\n");
 				goto done;
 			}
 			memcpy(data->mac_addr,
@@ -916,12 +918,12 @@ void* ipa_driver_msg_notifier(void *param)
 			IPACM_Iface::ipacmcfg->ipacm_socksv5_enable = TRUE;
 			IPACM_Iface::ipacmcfg->ipa_ipv6ct_max_entries = 500;
 
-			IPACMDBG_H("Received IPA_SOCKV5_ADD (%d) \n", IPACM_Iface::ipacmcfg->ipacm_socksv5_enable);
+			IPACM_LOG(IPACM_LOG_INFO, "Received IPA_SOCKV5_ADD (%d) \n", IPACM_Iface::ipacmcfg->ipacm_socksv5_enable);
 			memcpy(&add_socksv5_info, buffer + sizeof(struct ipa_msg_meta), sizeof(add_socksv5_info));
 
 			if (add_socksv5_info.ul_in.ip_type == IPA_IP_v4)
 			{
-				IPACMERR("not support inner ipv4 connections \n");
+				IPACM_LOG(IPACM_LOG_ERR, "not support inner ipv4 connections \n");
 				continue;
 			}
 			/* adjust network order */
@@ -951,32 +953,32 @@ void* ipa_driver_msg_notifier(void *param)
 			{
 				add_socksv5_info.dl_in.ipv4_src = ntohl(add_socksv5_info.dl_in.ipv4_src);
 				add_socksv5_info.dl_in.ipv4_dst = ntohl(add_socksv5_info.dl_in.ipv4_dst);
-				IPACMDBG("dst_ipv4 addr:0x%x src_ipv4 addr:0x%x\n",
+				IPACM_LOG(IPACM_LOG_DEBUG,"dst_ipv4 addr:0x%x src_ipv4 addr:0x%x\n",
 					add_socksv5_info.dl_in.ipv4_dst,
 					add_socksv5_info.dl_in.ipv4_src);
 			}
 
 			if (IPACM_Iface::ipacmcfg->socksv5_conn.size() == 0)
 			{
-				IPACMDBG_H("socksv5_conn size %zu \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
-				IPACMDBG_H("src_ipv6 addr:0x%x:%x:%x:%x\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "socksv5_conn size %zu \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
+				IPACM_LOG(IPACM_LOG_DEBUG, "src_ipv6 addr:0x%x:%x:%x:%x\n",
 					add_socksv5_info.ul_in.ipv6_src[0],
 					add_socksv5_info.ul_in.ipv6_src[1],
 					add_socksv5_info.ul_in.ipv6_src[2],
 					add_socksv5_info.ul_in.ipv6_src[3]);
-				IPACMDBG_H("dst_ipv6 addr:0x%x:%x:%x:%x\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "dst_ipv6 addr:0x%x:%x:%x:%x\n",
 					add_socksv5_info.ul_in.ipv6_dst[0],
 					add_socksv5_info.ul_in.ipv6_dst[1],
 					add_socksv5_info.ul_in.ipv6_dst[2],
 					add_socksv5_info.ul_in.ipv6_dst[3]);
 				/* update client ipv6 */
 				IPACM_Iface::ipacmcfg->update_socksv5_client_v6_addr(add_socksv5_info.ul_in.ipv6_src);
-				IPACMDBG_H("socksv5_conn size %zu \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
+				IPACM_LOG(IPACM_LOG_DEBUG, "socksv5_conn size %d \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
 
 				data_event_conn = (ipacm_event_connection *)malloc(sizeof(ipacm_event_connection));
 				if(data_event_conn == NULL)
 				{
-					IPACMERR("unable to allocate memory for event_wlan data_event_conn\n");
+					IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event_wlan data_event_conn\n");
 					goto done;
 				}
 				data_event_conn->iptype = add_socksv5_info.ul_in.ip_type;
@@ -991,15 +993,15 @@ void* ipa_driver_msg_notifier(void *param)
 				evt_data.event = IPA_HANDLE_SOCKSv5_UP;
 				evt_data.evt_data = data_event_conn;
 				/* finish command queue */
-				IPACMDBG_H("Posting IPA_HANDLE_SOCKSv5_UP event:%d\n", evt_data.event);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Posting IPA_HANDLE_SOCKSv5_UP event:%d\n", evt_data.event);
 				IPACM_EvtDispatcher::PostEvt(&evt_data);
 			}
-				IPACMDBG_H("socksv5_conn size %zu \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
+				IPACM_LOG(IPACM_LOG_DEBUG,"socksv5_conn size %zu \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
 				IPACM_Iface::ipacmcfg->add_socksv5_conn(&add_socksv5_info);
 			continue;
 
 		case IPA_SOCKV5_DEL:
-			IPACMDBG_H("Received IPA_SOCKV5_DEL \n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_SOCKV5_DEL \n");
 			memcpy(&del_socksv5_info, buffer + sizeof(struct ipa_msg_meta), sizeof(del_socksv5_info));
 			IPACM_Iface::ipacmcfg->del_socksv5_conn(&del_socksv5_info);
 
@@ -1012,17 +1014,17 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			else
 			{
-				IPACMDBG_H("socksv5_conn size %zu \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
+				IPACM_LOG(IPACM_LOG_DEBUG,"socksv5_conn size %zu \n", IPACM_Iface::ipacmcfg->socksv5_conn.size());
 				continue;
 			}
 #endif //defined(FEATURE_SOCKSv5) && defined(IPA_SOCKV5_EVENT_MAX)
 		case IPA_GSB_CONNECT:
 			event_gsb = (ipa_ioc_gsb_info *) (buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received IPA_GSB_CONNECT name: %s\n",event_gsb->name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_GSB_CONNECT name: %s\n",event_gsb->name);
             		data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
-				IPACMERR("unable to allocate memory for event_gsb\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event_gsb\n");
 				goto done;
 			}
 			ipa_get_if_index(event_gsb->name, &(data_fid->if_index));
@@ -1032,11 +1034,11 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case IPA_GSB_DISCONNECT:
 			event_gsb = (ipa_ioc_gsb_info *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received IPA_GSB_DISCONNECT name: %s\n",event_gsb->name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_GSB_DISCONNECT name: %s\n",event_gsb->name);
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
-				IPACMERR("unable to allocate memory for event_gsb\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for event_gsb\n");
 				goto done;
 			}
 			ipa_get_if_index(event_gsb->name, &(data_fid->if_index));
@@ -1046,10 +1048,10 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case IPA_PDN_IP_PASSTHROUGH_MODE_CONFIG:
 			pdn_info = (ipa_ioc_pdn_config *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received IPA_PDN_IP_PASSTHROUGH_MODE_CONFIG name: %s, default_pdn: %d, type: %d, enable: %d, VLAN ID: %d, Nat config: %d and PDN IP: 0x%x!\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_PDN_IP_PASSTHROUGH_MODE_CONFIG name: %s, default_pdn: %d, type: %d, enable: %d, VLAN ID: %d, Nat config: %d and PDN IP: 0x%x!\n",
 				pdn_info->dev_name, pdn_info->default_pdn, pdn_info->pdn_cfg_type, pdn_info->enable, pdn_info->u.passthrough_cfg.vlan_id,
 				pdn_info->u.passthrough_cfg.skip_nat, htonl(pdn_info->u.passthrough_cfg.pdn_ip_addr));
-			IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 pdn_info->u.passthrough_cfg.client_mac_addr[0],
 							 pdn_info->u.passthrough_cfg.client_mac_addr[1],
 							 pdn_info->u.passthrough_cfg.client_mac_addr[2],
@@ -1062,7 +1064,7 @@ void* ipa_driver_msg_notifier(void *param)
 			ip_pass_pdn_data = (ipacm_event_ip_pass_pdn_info *)malloc(sizeof(ipacm_event_ip_pass_pdn_info));
 			if(!ip_pass_pdn_data)
 			{
-				IPACMERR("unable to allocate memory for pdn_config\n");
+				IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for pdn_config\n");
 				goto done;
 			}
 			ipa_get_if_index(pdn_info->dev_name, &(ip_pass_pdn_data->if_index));
@@ -1076,7 +1078,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case IPA_PDN_IP_COLLISION_MODE_CONFIG:
 			pdn_info = (ipa_ioc_pdn_config *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received IPA_PDN_IP_COLLISION_MODE_CONFIG name: %s, default_pdn: %d, type: %d, enable: %d and PDN IP: 0x%x!\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_PDN_IP_COLLISION_MODE_CONFIG name: %s, default_pdn: %d, type: %d, enable: %d and PDN IP: 0x%x!\n",
 				pdn_info->dev_name, pdn_info->default_pdn, pdn_info->pdn_cfg_type, pdn_info->enable, htonl(pdn_info->u.collison_cfg.pdn_ip_addr));
 
 			evt_data.event = IPA_IP_COLLISION_UPDATE_EVENT;
@@ -1085,7 +1087,7 @@ void* ipa_driver_msg_notifier(void *param)
 			IPACM_Iface::ipacmcfg->ip_collision_config_update(pdn_info);
 			if(!ip_collision_pdn_data)
 			{
-				IPACMERR("unable to allocate memory for pdn_config\n");
+				IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for pdn_config\n");
 				return NULL;
 			}
 
@@ -1101,14 +1103,14 @@ void* ipa_driver_msg_notifier(void *param)
 		case IPA_PDN_DSCP_ADD_EVENT:
 			pdn_dscp_info = (ipa_ioc_pdn_dscp_map_info *)
 				(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received IPA_PDN_DSCP_ADD_EVENT add: %d\n",pdn_dscp_info->add);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_PDN_DSCP_ADD_EVENT add: %d\n",pdn_dscp_info->add);
 			IPACM_Iface::ipacmcfg->pdn_dscp_config_update(pdn_dscp_info);
 			continue;
 
 		case IPA_PDN_DSCP_DEL_EVENT:
 			pdn_dscp_info = (ipa_ioc_pdn_dscp_map_info *)
 				(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received IPA_PDN_DSCP_DEL_EVENT add: %d\n",pdn_dscp_info->add);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_PDN_DSCP_DEL_EVENT add: %d\n",pdn_dscp_info->add);
 			IPACM_Iface::ipacmcfg->pdn_dscp_config_update(pdn_dscp_info);
 			continue;
 #endif
@@ -1118,14 +1120,14 @@ void* ipa_driver_msg_notifier(void *param)
 			if (IPACM_Iface::ipacmcfg->ipacm_flt_enable != IPACM_SW_FLT)
 			{
 				event_mac_flt = (ipa_ioc_mac_client_list_type *)(buffer + sizeof(struct ipa_msg_meta));
-				IPACMDBG_H("Received IPA_MAC_FLT_EVENT having flt state %d\n", event_mac_flt->flt_state);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_MAC_FLT_EVENT having flt state %d\n", event_mac_flt->flt_state);
 
 				IPACM_Iface::ipacmcfg->mac_flt_info(event_mac_flt);
-				IPACMDBG_H("map updated with current input \n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "map updated with current input \n");
 				data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 				if(data_fid == NULL)
 				{
-					IPACMERR("unable to allocate memory for mac_flt_event\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for mac_flt_event\n");
 					goto done;
 				}
 				evt_data.event = IPA_MAC_ADD_DEL_FLT_EVENT;
@@ -1133,7 +1135,7 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACM_Iface::ipacmcfg->ipacm_flt_enable = IPACM_MAC_FLT;
 			}
 			else{
-				IPACMDBG_H("Ignored IPA_MAC_FLT_EVENT in sw_flt mode %d\n", IPACM_Iface::ipacmcfg->ipacm_flt_enable);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Ignored IPA_MAC_FLT_EVENT in sw_flt mode %d\n", IPACM_Iface::ipacmcfg->ipacm_flt_enable);
 			}
 			break;
 #endif
@@ -1142,17 +1144,17 @@ void* ipa_driver_msg_notifier(void *param)
 			if (IPACM_Iface::ipacmcfg->ipacm_flt_enable != IPACM_MAC_FLT)
 			{
 				sw_flt = (ipa_sw_flt_list_type *)(buffer + sizeof(struct ipa_msg_meta));
-				IPACMDBG_H("Received IPA_SW_FLT_EVENT mac_enable %d ipv4_segs_enable %d iface_enable %d\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_SW_FLT_EVENT mac_enable %d ipv4_segs_enable %d iface_enable %d\n",
 				sw_flt->mac_enable,
 				sw_flt->ipv4_segs_enable,
 				sw_flt->iface_enable);
 
 				IPACM_Iface::ipacmcfg->sw_flt_info(sw_flt);
-				IPACMDBG_H("map updated with current input \n");
+				IPACM_LOG(IPACM_LOG_DEBUG, "map updated with current input \n");
 				data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 				if(data_fid == NULL)
 				{
-					IPACMERR("unable to allocate memory for mac_flt_event\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for mac_flt_event\n");
 					goto done;
 				}
 				evt_data.event = IPA_MAC_ADD_DEL_FLT_EVENT;
@@ -1160,14 +1162,14 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACM_Iface::ipacmcfg->ipacm_flt_enable = IPACM_SW_FLT;
 			}
 			else{
-				IPACMDBG_H("Ignored IPA_MAC_FLT_EVENT in mac_flt mode %d\n", IPACM_Iface::ipacmcfg->ipacm_flt_enable);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Ignored IPA_MAC_FLT_EVENT in mac_flt mode %d\n", IPACM_Iface::ipacmcfg->ipacm_flt_enable);
 			}
 			break;
 #endif
 #ifdef IPA_IOC_SET_IPPT_SW_FLT
 		case IPA_IPPT_SW_FLT_EVENT:
 			ippt_sw_flt_list = (ipa_ippt_sw_flt_list_type *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received IPA_IPPT_SW_FLT_EVENT ipv4_enable %d(num:%d) port_enable %d(num:%d)\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_IPPT_SW_FLT_EVENT ipv4_enable %d(num:%d) port_enable %d(num:%d)\n",
 				ippt_sw_flt_list->ipv4_enable,
 				ippt_sw_flt_list->num_of_ipv4,
 				ippt_sw_flt_list->port_enable,
@@ -1176,7 +1178,7 @@ void* ipa_driver_msg_notifier(void *param)
 			ippt_sw_flt_list_info = (ipa_ippt_sw_flt_list_type *)malloc(sizeof(ipa_ippt_sw_flt_list_type));
 			if(ippt_sw_flt_list_info == NULL)
 			{
-				IPACMERR("Failed to allocate memory.\n");
+				IPACM_LOG(IPACM_LOG_ERR,"Failed to allocate memory.\n");
 				return NULL;
 			}
 			memcpy(ippt_sw_flt_list_info, ippt_sw_flt_list, sizeof(struct ipa_ippt_sw_flt_list_type));
@@ -1188,12 +1190,12 @@ void* ipa_driver_msg_notifier(void *param)
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 		case IPA_PKT_THRESHOLD_EVENT:
 			pkt_th = (ipa_set_pkt_threshold *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received IPA_PKT_THRESHOLD_EVENT enable %d threshold %d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_PKT_THRESHOLD_EVENT enable %d threshold %d\n",
 				pkt_th->pkt_threshold_enable, pkt_th->pkt_threshold);
 			pkt_th_info = (ipa_set_pkt_threshold *)malloc(sizeof(ipa_set_pkt_threshold));
 			if(pkt_th_info == NULL)
 			{
-				IPACMERR("Failed to allocate memory.\n");
+				IPACM_LOG(IPACM_LOG_ERR,"Failed to allocate memory.\n");
 				return NULL;
 			}
 			memcpy(pkt_th_info, pkt_th, sizeof(struct ipa_set_pkt_threshold));
@@ -1203,12 +1205,12 @@ void* ipa_driver_msg_notifier(void *param)
 #endif
 		case IPA_MOVE_NAT_TABLE:
 			move_nat = (struct ipa_move_nat_req_msg_v01 *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("received IPA_MOVE_NAT_TABLE direction %s\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "received IPA_MOVE_NAT_TABLE direction %s\n",
 				move_nat->nat_move_direction == QMI_IPA_MOVE_NAT_TO_DDR_V01 ? "TO_DDR" : "TO_SRAM");
 			move_nat_data = (ipacm_event_move_nat *)malloc(sizeof(ipacm_event_move_nat));
 			if(move_nat_data == NULL)
 			{
-				IPACMERR("unable to allocate memory for move_nat_tbl_evnt\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for move_nat_tbl_evnt\n");
 				return NULL;
 			}
 
@@ -1220,11 +1222,11 @@ void* ipa_driver_msg_notifier(void *param)
 
 #ifdef FEATURE_EoGRE
 		case IPA_EoGRE_UP_EVENT: {
-			IPACMDBG_H("Received an IPA_EoGRE_UP_EVENT\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received an IPA_EoGRE_UP_EVENT\n");
 
 			if ( IPACM_Iface::ipacmcfg->eogre_enabled == true )
 			{
-				IPACMERR("Can't enable eogre when it's already enabled\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Can't enable eogre when it's already enabled\n");
 				break;
 			}
 
@@ -1254,7 +1256,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 			if ( new_contains_nulls )
 			{
-				IPACMERR("Inbound ipa_ipgre_info on IPA_EoGRE_UP_EVENT is empty/NULL\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Inbound ipa_ipgre_info on IPA_EoGRE_UP_EVENT is empty/NULL\n");
 				break;
 			}
 			else /* ( ! new_contains_nulls ) */
@@ -1266,7 +1268,7 @@ void* ipa_driver_msg_notifier(void *param)
 					/* check if ipv4 src and dst is valid */
 					if (new_ipgre_info.ipv4_src == 0 || new_ipgre_info.ipv4_dst == 0)
 					{
-						IPACMERR("invalid GRE ipv4 addr, mark ipacmcfg->eogre_enabled = false \n");
+						IPACM_LOG(IPACM_LOG_ERR, "invalid GRE ipv4 addr, mark ipacmcfg->eogre_enabled = false \n");
 						IPACM_Iface::ipacmcfg->eogre_enabled = false;
 						break;
 					}
@@ -1292,7 +1294,7 @@ void* ipa_driver_msg_notifier(void *param)
 						(new_ipgre_info.ipv6_dst[0] == 0 && new_ipgre_info.ipv6_dst[1] == 0
 						&& new_ipgre_info.ipv6_dst[2] == 0 && new_ipgre_info.ipv6_dst[3] == 0))
 					{
-						IPACMERR("invalid GRE ipv6 addr, mark ipacmcfg->eogre_enabled = false \n");
+						IPACM_LOG(IPACM_LOG_ERR, "invalid GRE ipv6 addr, mark ipacmcfg->eogre_enabled = false \n");
 						IPACM_Iface::ipacmcfg->eogre_enabled = false;
 						break;
 					}
@@ -1323,11 +1325,11 @@ void* ipa_driver_msg_notifier(void *param)
 			break;
 
 		case IPA_EoGRE_DOWN_EVENT:
-			IPACMDBG_H("Received an IPA_EoGRE_DOWN_EVENT\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received an IPA_EoGRE_DOWN_EVENT\n");
 
 			if ( IPACM_Iface::ipacmcfg->eogre_enabled == false )
 			{
-				IPACMERR("Can't disable eogre when it's already disabled\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Can't disable eogre when it's already disabled\n");
 				break;
 			}
 
@@ -1339,22 +1341,22 @@ void* ipa_driver_msg_notifier(void *param)
 			break;
 
 		case IPA_EoGRE_NOTIFY_EVENT:
-			IPACMDBG_H("Received an IPA_EoGRE_NOTIFY_EVENT\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received an IPA_EoGRE_NOTIFY_EVENT\n");
 
 			if ( IPACM_Iface::ipacmcfg->eogre_enabled == false )
 			{
-				IPACMERR("eogre tunnel is not up yet, no work need to be done\n");
+				IPACM_LOG(IPACM_LOG_ERR, "eogre tunnel is not up yet, no work need to be done\n");
 				break;
 			}
 
 			evt_data.event    = IPA_HANDLE_EoGRE_DOWN;
 			evt_data.evt_data = 0;
-			IPACMDBG_H("srinu Posting IPA_HANDLE_EoGRE_DOWN \n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "srinu Posting IPA_HANDLE_EoGRE_DOWN \n");
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 			evt_data.event    = IPA_HANDLE_EoGRE_UP;
 			evt_data.evt_data = 0;
-			IPACMDBG_H("srinu Posting IPA_HANDLE_EoGRE_UP \n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "srinu Posting IPA_HANDLE_EoGRE_UP \n");
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 			continue;
@@ -1362,13 +1364,13 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case IPA_MACSEC_ADD_EVENT:
 		case IPA_MACSEC_DEL_EVENT:
-			IPACMDBG_H("Received an %s\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received an %s\n",
 				event_hdr.msg_type == IPA_MACSEC_ADD_EVENT ? "IPA_MACSEC_ADD_EVENT" : "IPA_MACSEC_DEL_EVENT");
 
 			macsec_map = (struct ipa_macsec_map *)malloc(sizeof(struct ipa_macsec_map));
 			if (macsec_map == NULL)
 			{
-				IPACMERR("unable to allocate memory for macsec_map\n");
+				IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for macsec_map\n");
 				goto done;
 			}
 
@@ -1376,14 +1378,14 @@ void* ipa_driver_msg_notifier(void *param)
 				buffer + sizeof(struct ipa_msg_meta),
 				sizeof(struct ipa_macsec_map));
 
-			IPACMDBG_H("macsec map: %s - %s\n", macsec_map->macsec_name, macsec_map->phy_name);
+			IPACM_LOG(IPACM_LOG_INFO,"macsec map: %s - %s\n", macsec_map->macsec_name, macsec_map->phy_name);
 
 			if (event_hdr.msg_type == IPA_MACSEC_ADD_EVENT &&
 			    IPACM_Iface::ipacmcfg->insertOrAssignMacsecMap(macsec_map) == false ||
 			    event_hdr.msg_type == IPA_MACSEC_DEL_EVENT &&
 			    IPACM_Iface::ipacmcfg->delMacsecMap(macsec_map) == false)
 			{
-				IPACMERR("Couldn't find the mapping, ignoring this macsec handling\n");
+				IPACM_LOG(IPACM_LOG_ERR,"Couldn't find the mapping, ignoring this macsec handling\n");
 				free(macsec_map);
 				goto done;
 			}
@@ -1396,30 +1398,30 @@ void* ipa_driver_msg_notifier(void *param)
 
 #ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
 		case IPA_SET_EXT_ROUTER_MODE_EVENT:
-			IPACMDBG_H("Received IPA_SET_EXT_ROUTER_MODE_EVENT\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_SET_EXT_ROUTER_MODE_EVENT\n");
 
 			ipa_ioc_ext_router_info ext_router_info;
 			memcpy(&ext_router_info, buffer + sizeof(struct ipa_msg_meta),
 				sizeof(struct ipa_ioc_ext_router_info));
 
-			IPACMDBG_H("got ext_router_info - mode:%d, pdn_name:%s\nv6_addr:0x%08x:%08x:%08x:%08x\nv6_mask:0x%08x:%08x:%08x:%08x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "got ext_router_info - mode:%d, pdn_name:%s\nv6_addr:0x%08x:%08x:%08x:%08x\nv6_mask:0x%08x:%08x:%08x:%08x\n",
 				ext_router_info.mode, ext_router_info.pdn_name,
 				ext_router_info.ipv6_addr[0], ext_router_info.ipv6_addr[1], ext_router_info.ipv6_addr[2], ext_router_info.ipv6_addr[3],
 				ext_router_info.ipv6_mask[0], ext_router_info.ipv6_mask[1], ext_router_info.ipv6_mask[2], ext_router_info.ipv6_mask[3]);
 
 			if (!strlen(ext_router_info.pdn_name)){
-				IPACMERR("Received the null pdn name for IPA_SET_EXT_ROUTER_MODE_EVENT\n");
+				IPACM_LOG(IPACM_LOG_INFO,"Received the null pdn name for IPA_SET_EXT_ROUTER_MODE_EVENT\n");
 				goto done;
 			}
 			if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_DISABLED && ext_router_info.mode == IPA_PREFIX_DISABLED )
 			{
-				IPACMERR("IPACM is already in ext_router disabled mode\n");
+				IPACM_LOG(IPACM_LOG_ERR,"IPACM is already in ext_router disabled mode\n");
 				break;
 			}
 			else if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_SHARING && ext_router_info.mode == IPA_PREFIX_DELEGATION ||
 				IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_DELEGATION && ext_router_info.mode == IPA_PREFIX_SHARING)
 			{
-				IPACMERR("IPACM cannot toggle between modes without disabling first\n");
+				IPACM_LOG(IPACM_LOG_ERR,"IPACM cannot toggle between modes without disabling first\n");
 				break;
 			}
 			else
@@ -1431,7 +1433,7 @@ void* ipa_driver_msg_notifier(void *param)
 			pdn_name = (char*) malloc(IPA_RESOURCE_NAME_MAX * sizeof(*pdn_name));
 			if (pdn_name == NULL)
 			{
-				IPACMERR("unable to allocate memory for pdn_name\n");
+				IPACM_LOG(IPACM_LOG_ERR,"unable to allocate memory for pdn_name\n");
 				goto done;
 			}
 			strlcpy(pdn_name, ext_router_info.pdn_name, IPA_RESOURCE_NAME_MAX);
@@ -1441,7 +1443,7 @@ void* ipa_driver_msg_notifier(void *param)
 			{
 				if(IPACM_Iface::ipacmcfg->add_ext_router_info(&ext_router_info) == false)
 				{
-					IPACMERR("failed to add ext_router_info for pdn_name:%s\n", pdn_name);
+					IPACM_LOG(IPACM_LOG_ERR, "failed to add ext_router_info for pdn_name:%s\n", pdn_name);
 					free(pdn_name);
 					goto done;
 				}
@@ -1454,7 +1456,7 @@ void* ipa_driver_msg_notifier(void *param)
 				/*delete the cached info*/
 				if(IPACM_Iface::ipacmcfg->del_ext_router_info(pdn_name) == false) //might need to move this to LAN so we can delete rules first then remove cache
 				{
-					IPACMERR("failed to del ext_router_info for pdn_name:%s\n", pdn_name);
+					IPACM_LOG(IPACM_LOG_ERR, "failed to del ext_router_info for pdn_name:%s\n", pdn_name);
 					free(pdn_name);
 					goto done;
 				}
@@ -1465,11 +1467,11 @@ void* ipa_driver_msg_notifier(void *param)
 			break;
 #endif
 		case IPA_ENABLE_ETH_PDU_MODE_EVENT:
-			IPACMDBG_H("Received IPA_ENABLE_ETH_PDU_MODE_EVENT\n");
+			IPACM_LOG(IPACM_LOG_DEBUG,"Received IPA_ENABLE_ETH_PDU_MODE_EVENT\n");
 
 			if (IPACM_Iface::ipacmcfg->eth_pdu_enabled)
 			{
-				IPACMERR("eth pdu already enabled\n");
+				IPACM_LOG(IPACM_LOG_ERR, "eth pdu already enabled\n");
 				break;
 			}
 
@@ -1479,12 +1481,12 @@ void* ipa_driver_msg_notifier(void *param)
 
 #ifdef FEATURE_IPA_IPSEC
 		case IPA_IPSEC_UL_FLT_ADD_EVENT:
-			IPACMDBG_H("Received an IPA_IPSEC_UL_FLT_ADD_EVENT (%u)\n", event_hdr.msg_type);
+			IPACM_LOG(IPACM_LOG_DEBUG,"Received an IPA_IPSEC_UL_FLT_ADD_EVENT (%u)\n", event_hdr.msg_type);
 
 			ipsec_ul_flt = (ipa_ioc_ipsec_ul_flt_attr *)malloc(sizeof(struct ipa_ioc_ipsec_ul_flt_attr));
 			if(ipsec_ul_flt == NULL )
 			{
-				IPACMERR("Unable to allocate memory\n");
+				IPACM_LOG(IPACM_LOG_ERR,"Unable to allocate memory\n");
 				goto done;
 			}
 			memcpy(ipsec_ul_flt, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_ioc_ipsec_ul_flt_attr));
@@ -1495,12 +1497,12 @@ void* ipa_driver_msg_notifier(void *param)
 			break;
 
 		case IPA_IPSEC_UL_FLT_DEL_EVENT:
-			IPACMDBG_H("Received an IPA_IPSEC_UL_FLT_DEL_EVENT (%u)\n", event_hdr.msg_type);
+			IPACM_LOG(IPACM_LOG_DEBUG,"Received an IPA_IPSEC_UL_FLT_DEL_EVENT (%u)\n", event_hdr.msg_type);
 
 			ipsec_ul_flt = (ipa_ioc_ipsec_ul_flt_attr *)malloc(sizeof(struct ipa_ioc_ipsec_ul_flt_attr));
 			if(ipsec_ul_flt == NULL )
 			{
-				IPACMERR("Unable to allocate memory\n");
+				IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory\n");
 				goto done;
 			}
 			memcpy(ipsec_ul_flt, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_ioc_ipsec_ul_flt_attr));
@@ -1513,7 +1515,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case IPA_QOS_PARAM_ADD_EVENT:
 			qos_param = (ipa_ioc_qos_config *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received IPA_QOS_PARAM_ADD_EVENT (%s) qos enabled (%d) \n", qos_param->dev_name, IPACM_Iface::ipacmcfg->ipacm_qos_enable);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_QOS_PARAM_ADD_EVENT (%s) qos enabled (%d) \n", qos_param->dev_name, IPACM_Iface::ipacmcfg->ipacm_qos_enable);
 
 			if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
 			{
@@ -1523,7 +1525,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case IPA_QOS_PARAM_DELETE_EVENT:
 			qos_param = (ipa_ioc_qos_config *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received IPA_QOS_PARAM_DELETE_EVENT (%s) qos enabled (%d) \n", qos_param->dev_name, IPACM_Iface::ipacmcfg->ipacm_qos_enable);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_QOS_PARAM_DELETE_EVENT (%s) qos enabled (%d) \n", qos_param->dev_name, IPACM_Iface::ipacmcfg->ipacm_qos_enable);
 
 			if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
 			{
@@ -1533,7 +1535,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case IPA_QOS_PARAM_FLUSH_EVENT:
 			qos_param = (ipa_ioc_qos_config *)(buffer + sizeof(struct ipa_msg_meta));
-			IPACMDBG_H("Received IPA_QOS_PARAM_FLUSH_EVENT (%s) qos enabled (%d) \n", qos_param->dev_name, IPACM_Iface::ipacmcfg->ipacm_qos_enable);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_QOS_PARAM_FLUSH_EVENT (%s) qos enabled (%d) \n", qos_param->dev_name, IPACM_Iface::ipacmcfg->ipacm_qos_enable);
 
 			if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
 			{
@@ -1542,16 +1544,16 @@ void* ipa_driver_msg_notifier(void *param)
 			continue;
 
 		default:
-			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Unhandled message type: %d\n", event_hdr.msg_type);
 			continue;
 		}
 		/* finish command queue */
-		IPACMDBG_H("Posting event:%d\n", evt_data.event);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Posting event:%d\n", evt_data.event);
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 		/* push new_neighbor with netdev device internally */
 		if(new_neigh_data != NULL)
 		{
-			IPACMDBG_H("Internally post event IPA_NEW_NEIGH/DEL_NEIGH_EVENT\n");
+			IPACM_LOG(IPACM_LOG_DEBUG,"Internally post event IPA_NEW_NEIGH/DEL_NEIGH_EVENT\n");
 			IPACM_EvtDispatcher::PostEvt(&new_neigh_evt);
 		}
 	}
@@ -1573,18 +1575,18 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	int size, i;
 	char **messages;
 
-	IPACMERR("Received Signal: %d %s\n", sig, strsignal(sig));
+	IPACM_LOG(IPACM_LOG_WARN, "Received Signal: %d %s\n", sig, strsignal(sig));
 	memset(&evt_data, 0, sizeof(evt_data));
 
 	switch(sig)
 	{
 	case SIGUSR1:
-		IPACMDBG_H("Received SW_ROUTING_ENABLE request \n");
+		IPACM_LOG(IPACM_LOG_WARN, "Received SW_ROUTING_ENABLE request \n");
 		evt_data.event = IPA_SW_ROUTING_ENABLE;
 		IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = true;
 		break;
 	case SIGUSR2:
-		IPACMDBG_H("Received SW_ROUTING_DISABLE request \n");
+		IPACM_LOG(IPACM_LOG_WARN, "Received SW_ROUTING_DISABLE request \n");
 		evt_data.event = IPA_SW_ROUTING_DISABLE;
 		IPACM_Iface::ipacmcfg->ipa_sw_rt_enable = false;
 		break;
@@ -1596,32 +1598,32 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	case SIGTERM:
 		{
 		p = (ucontext_t *)extra;
-		IPACMERR("siginfo address=%x\n", info->si_addr);
-		IPACMERR("fault address = 0x%X\n", p->uc_mcontext.fault_address);
+		IPACM_LOG(IPACM_LOG_INFO,"siginfo address=%x\n", info->si_addr);
+		IPACM_LOG(IPACM_LOG_INFO,"fault address = 0x%X\n", p->uc_mcontext.fault_address);
 #ifdef FEATURE_LOW_MEMORY_TARGET
-		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.arm_pc);
-		IPACMERR("cpsr = 0x%X\n", p->uc_mcontext.arm_cpsr);
-		IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.arm_sp);
-		IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.arm_lr);
-		IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.arm_r0);
+		IPACM_LOG(IPACM_LOG_INFO,"arm_pc address = 0x%X\n", p->uc_mcontext.arm_pc);
+		IPACM_LOG(IPACM_LOG_INFO,"cpsr = 0x%X\n", p->uc_mcontext.arm_cpsr);
+		IPACM_LOG(IPACM_LOG_INFO,"arm_sp address = 0x%X\n", p->uc_mcontext.arm_sp);
+		IPACM_LOG(IPACM_LOG_INFO,"arm_lr address = 0x%X\n", p->uc_mcontext.arm_lr);
+		IPACM_LOG(IPACM_LOG_INFO,"arm_r0  address = 0x%X\n", p->uc_mcontext.arm_r0);
 #else
-		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.pc);
-		IPACMERR("pstate = 0x%X\n", p->uc_mcontext.pstate);
-		IPACMERR("arm_sp address = 0x%X\n", p->uc_mcontext.sp);
-		IPACMERR("arm_lr address = 0x%X\n", p->uc_mcontext.regs[30]);
-		IPACMERR("arm_r0  address = 0x%X\n", p->uc_mcontext.regs[0]);
+		IPACM_LOG(IPACM_LOG_INFO,"arm_pc address = 0x%X\n", p->uc_mcontext.pc);
+		IPACM_LOG(IPACM_LOG_INFO,"pstate = 0x%X\n", p->uc_mcontext.pstate);
+		IPACM_LOG(IPACM_LOG_INFO,"arm_sp address = 0x%X\n", p->uc_mcontext.sp);
+		IPACM_LOG(IPACM_LOG_INFO,"arm_lr address = 0x%X\n", p->uc_mcontext.regs[30]);
+		IPACM_LOG(IPACM_LOG_INFO,"arm_r0  address = 0x%X\n", p->uc_mcontext.regs[0]);
 #endif
 		size = backtrace(array, MAX_IPACM_TRACE_STACK);
 
 		messages = backtrace_symbols(array, size);
 
 		/* skip first stack frame (points here) */
-		IPACMERR("crash stack:\n");
+		IPACM_LOG(IPACM_LOG_ERR,"crash stack:\n");
 		for(i = 1; i < size && messages != NULL; ++i)
 		{
-			IPACMERR("[bt]: (%d) %s\n", i, messages[i]);
+			IPACM_LOG(IPACM_LOG_ERR,"[bt]: (%d) %s\n", i, messages[i]);
 		}
-		IPACMERR("return to default signal handler\n");
+		IPACM_LOG(IPACM_LOG_INFO,"return to default signal handler\n");
 
 		/* make sure buffer is printed to stodut before we crash */
 		fflush(stdout);
@@ -1629,10 +1631,10 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 		free(messages);
 		close(sk_info.sk_fd); /* closing netlink socket */
 		/* got regular kill <PID>, kill -9 <PID> generates SIGKILL that cannot be handled by a signal handler */
-		IPACMDBG_DMESG("IPACM process stoped, So ipa path is broken");
+		IPACM_LOG(IPACM_LOG_WARN, "IPACM process stoped, So ipa path is broken");
 		if(sig == SIGTERM)
 		{
-			IPACMERR("IPACM gracefully requested to quit by PID %d, complying\n", info->si_pid);
+			IPACM_LOG(IPACM_LOG_WARN, "IPACM gracefully requested to quit by PID %d, complying\n", info->si_pid);
 			exit(-1);
 		}
 
@@ -1642,14 +1644,14 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 		break;
                 }
 	default:
-		IPACMERR("unknown signal %d\n", sig);
+		IPACM_LOG(IPACM_LOG_ERR, "unknown signal %d\n", sig);
 		/* restore to default signal handler so core dump is generated from original fault point */
 		RegisterForSignals(true);
 		return;
 	}
 
 	/* finish command queue */
-	IPACMDBG_H("Posting event:%d\n", evt_data.event);
+	IPACM_LOG(IPACM_LOG_DEBUG, "Posting event:%d\n", evt_data.event);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 	return;
 }
@@ -1713,21 +1715,21 @@ int main(int argc, char **argv)
 
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();
-	IPACMDBG_H("In main()\n");
-	IPACMERR("debug deleting ipacm.pid file\n");
+	IPACM_LOG(IPACM_LOG_DEBUG,"In main()\n");
+	IPACM_LOG(IPACM_LOG_ERR, "debug deleting ipacm.pid file\n");
 	char cmd[200] = {0};
 	snprintf(cmd, 200, "rm -rf /var/run/data/monitor/ipacmd.pid");
 	system(cmd);
 #ifdef FEATURE_IPACM_RESTART
-	IPACMDBG_H("RESET IPA-HW Rules\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "RESET IPA-HW Rules\n");
 	ipa_reset();
-	IPACMDBG_H("RESET completed\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "RESET completed\n");
 
 #endif
 
 #ifdef IPA_HW_FNR_STATS
 	IPACM_Iface::ipacmcfg->alloc_fnr_counter();
-	IPACMDBG_H("Reallocation FNR Counter: Done\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "Reallocation FNR Counter: Done\n");
 #endif
 
 	IPACM_IfaceManager *ifacemgr = new IPACM_IfaceManager();
@@ -1738,7 +1740,7 @@ int main(int argc, char **argv)
 #endif
 
 #ifdef FEATURE_IPACM_RESTART
-	IPACMDBG_H("RESTORE IPA Clients Event.\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "RESTORE IPA Clients Event.\n");
 	ipa_query_driver_event();
 #endif
 
@@ -1748,8 +1750,8 @@ int main(int argc, char **argv)
 	/* Query bridge FDB to populate neighbor cache and create interfaces if missed any*/
 	neigh->update_neigh_cache();
 
-	IPACMDBG_H("Staring IPA main\n");
-	IPACMDBG_H("ipa_cmdq_successful\n");
+	IPACM_LOG(IPACM_LOG_INFO,"Staring IPA main\n");
+	IPACM_LOG(IPACM_LOG_DEBUG,"ipa_cmdq_successful\n");
 
 
 	RegisterForSignals(false);
@@ -1759,13 +1761,13 @@ int main(int argc, char **argv)
 		ret = pthread_create(&cmd_queue_thread, NULL, MessageQueue::Process, NULL);
 		if (IPACM_SUCCESS != ret)
 		{
-			IPACMERR("unable to command queue thread\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to create command queue thread\n");
 			return ret;
 		}
-		IPACMDBG_H("created command queue thread\n");
-		if(pthread_setname_np(cmd_queue_thread, "cmd-queue") != 0)
+		IPACM_LOG(IPACM_LOG_INFO, "created command queue thread\n");
+		if(pthread_setname_np(cmd_queue_thread, "cmd queue") != 0)
 		{
-			IPACMERR("unable to set thread name\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to set thread name\n");
 		}
 	}
 
@@ -1774,13 +1776,13 @@ int main(int argc, char **argv)
 		ret = pthread_create(&netlink_thread, NULL, netlink_start, NULL);
 		if (IPACM_SUCCESS != ret)
 		{
-			IPACMERR("unable to create netlink thread\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to create netlink thread\n");
 			return ret;
 		}
-		IPACMDBG_H("created netlink thread\n");
+		IPACM_LOG(IPACM_LOG_INFO, "created netlink thread\n");
 		if(pthread_setname_np(netlink_thread, "netlink socket") != 0)
 		{
-			IPACMERR("unable to set thread name\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to set thread name\n");
 		}
 	}
 
@@ -1791,13 +1793,13 @@ int main(int argc, char **argv)
 		ret = pthread_create(&monitor_thread, NULL, firewall_monitor, NULL);
 		if (IPACM_SUCCESS != ret)
 		{
-			IPACMERR("unable to create monitor thread\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to create monitor thread\n");
 			return ret;
 		}
-		IPACMDBG_H("created firewall monitor thread\n");
-		if(pthread_setname_np(monitor_thread, "firewall-cfg") != 0)
+		IPACM_LOG(IPACM_LOG_INFO, "created firewall monitor thread\n");
+		if(pthread_setname_np(monitor_thread, "firewall cfg process") != 0)
 		{
-			IPACMERR("unable to set thread name\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to set thread name\n");
 		}
 	}
 #endif
@@ -1807,13 +1809,13 @@ int main(int argc, char **argv)
 		ret = pthread_create(&ipa_driver_thread, NULL, ipa_driver_msg_notifier, NULL);
 		if (IPACM_SUCCESS != ret)
 		{
-			IPACMERR("unable to create ipa_driver_wlan thread\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to create ipa_driver_wlan thread\n");
 			return ret;
 		}
-		IPACMDBG_H("created ipa_driver_wlan thread\n");
+		IPACM_LOG(IPACM_LOG_INFO, "created ipa_driver_wlan thread\n");
 		if(pthread_setname_np(ipa_driver_thread, "ipa driver ntfy") != 0)
 		{
-			IPACMERR("unable to set thread name\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to set thread name\n");
 		}
 	}
 
@@ -1822,13 +1824,13 @@ int main(int argc, char **argv)
 		ret = pthread_create(&netlinks_query_thread, NULL, netlink_events_query, NULL);
 		if (IPACM_SUCCESS != ret)
 		{
-			IPACMERR("unable to create netlink thread\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to create netlink thread\n");
 			return ret;
 		}
-		IPACMDBG_H("created netlink_events_query thread\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "created netlink_events_query thread\n");
 		if(pthread_setname_np(netlinks_query_thread, "netlinks_query_thread") != 0)
 		{
-			IPACMERR("unable to set thread name\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to set thread name\n");
 		}
 	}
 	/* Create Conntrack listener threads here to support on-demand PDNs connections before WAN is up */
@@ -1873,7 +1875,7 @@ void ipa_is_ipacm_running(void) {
 	fd = open(IPACM_PID_FILE, O_RDWR | O_CREAT, 0600);
 	if ( fd <= 0 )
 	{
-		IPACMERR("Failed to open %s, error is %d - %s\n",
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to open %s, error is %d - %s\n",
 				 IPACM_PID_FILE, errno, strerror(errno));
 		exit(0);
 	}
@@ -1892,7 +1894,7 @@ void ipa_is_ipacm_running(void) {
 		retval = fcntl(fd, F_GETLK, &lock);
 		if (retval == 0)
 		{
-			IPACMERR("Unable to get lock on file %s (my PID %d), PID %d already has it\n",
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to get lock on file %s (my PID %d), PID %d already has it\n",
 					 IPACM_PID_FILE, getpid(), lock.l_pid);
 			close(fd);
 			exit(0);
@@ -1900,7 +1902,7 @@ void ipa_is_ipacm_running(void) {
 	}
 	else
 	{
-		IPACMERR("PID %d is IPACM main process\n", getpid());
+		IPACM_LOG(IPACM_LOG_ERR, "PID %d is IPACM main process\n", getpid());
 	}
 
 	return;
@@ -1936,7 +1938,8 @@ int ipa_get_if_index
 
 	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
-		PERROR("get interface index socket create failed");
+		perror("get interface index socket create failed");
+		IPACM_LOG(IPACM_LOG_ERR, "get interface index socket create failed");
 		return IPACM_FAILURE;
 	}
 
@@ -1946,7 +1949,7 @@ int ipa_get_if_index
 
 	if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0)
 	{
-		IPACMERR("call_ioctl_on_dev: ioctl failed: can't find device %s\n",if_name);
+		IPACM_LOG(IPACM_LOG_ERR, "call_ioctl_on_dev: ioctl failed: can't find device %s",if_name);
 		*if_index = -1;
 		close(fd);
 		return IPACM_FAILURE;
@@ -1963,20 +1966,19 @@ int ipa_reset()
 	int fd = -1;
 
 	if ((fd = open(IPA_DRIVER, O_RDWR)) < 0)
-	{
-		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+	{IPACM_LOG(IPACM_LOG_ERR,"Failed opening %s.\n", IPA_DEVICE_NAME);
 		return IPACM_FAILURE;
 	}
 
 	if (ioctl(fd, IPA_IOC_CLEANUP) < 0)
 	{
-		IPACMERR("IOCTL IPA_IOC_CLEANUP call failed: %s \n",
+		IPACM_LOG(IPACM_LOG_ERR,"IOCTL IPA_IOC_CLEANUP call failed: %s \n",
 			strerror(errno));
 	}
 	IPACM_Config* config = IPACM_Config::GetInstance();
-	IPACMDBG_H("config->hw_fnr_stats_support %d\n",config->hw_fnr_stats_support);
+	IPACM_LOG(IPACM_LOG_DEBUG, "config->hw_fnr_stats_support %d\n",config->hw_fnr_stats_support);
 	config->hw_fnr_stats_support = false;
-	IPACMDBG_H("send IPA_IOC_CLEANUP \n");
+	IPACM_LOG(IPACM_LOG_DEBUG,"send IPA_IOC_CLEANUP \n");
 	close(fd);
 	return IPACM_SUCCESS;
 }
@@ -1985,21 +1987,19 @@ int ipa_query_driver_event()
 {
 	int fd = -1;
 
-	if ((fd = open(IPA_DRIVER, O_RDWR)) < 0)
-	{
-		IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
+	if ((fd = open(IPA_DEVICE_NAME, O_RDWR)) < 0) {
+		IPACM_LOG(IPACM_LOG_ERR, "Failed opening %s.\n", IPA_DEVICE_NAME);
 		return IPACM_FAILURE;
 	}
 
-	if (ioctl(fd, IPA_IOC_QUERY_CACHED_DRIVER_MSG, 0) < 0)
-	{
-		IPACMERR("IOCTL IPA_IOC_QUERY_CACHED_DRIVER_MSG call failed: %s \n",
+	if (ioctl(fd, IPA_IOC_QUERY_CACHED_DRIVER_MSG) < 0) {
+		IPACM_LOG(IPACM_LOG_ERR, "IOCTL IPA_IOC_QUERY_CACHED_DRIVER_MSG call failed: %s \n",
 			strerror(errno));
 		close(fd);
 		return IPACM_FAILURE;
 	}
 
-	IPACMDBG_H("send IPA_IOC_QUERY_CACHED_DRIVER_MSG \n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "send IPA_IOC_QUERY_CACHED_DRIVER_MSG \n");
 	close(fd);
 	return IPACM_SUCCESS;
 }

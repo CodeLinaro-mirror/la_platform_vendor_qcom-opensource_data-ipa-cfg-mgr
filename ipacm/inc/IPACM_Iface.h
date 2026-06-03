@@ -279,7 +279,7 @@ public:
 		ipa_ip_type      iptype,
 		ipa_rule_attrib* attrib ) {
 		if ( ! VALID_IPA_IP_TYPE(iptype) || ! attrib ) {
-			IPACMERR(
+			IPACM_LOG(IPACM_LOG_ERR, 
 				"Bad iptype(%u) and/or attribute pointer(%p) is NULL.\n",
 				iptype, attrib);
 		}
@@ -289,7 +289,7 @@ public:
 			addr2network(iptype, attrib->u.v6.dst_addr);
 			addr2network(iptype, attrib->u.v6.dst_addr_mask);
 		} else {
-			IPACMDBG_H("IP type is not IPv6, do nothing: %d\n", iptype);
+			IPACM_LOG(IPACM_LOG_DEBUG, "IP type is not IPv6, do nothing: %d\n", iptype);
 		}
 	}
 

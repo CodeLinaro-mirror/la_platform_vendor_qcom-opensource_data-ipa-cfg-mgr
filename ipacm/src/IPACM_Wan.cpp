@@ -6204,6 +6204,15 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				m_pFilteringTableafter->num_rules = (uint8_t)1;
 				m_pFilteringTableafter->add_after_hdl = IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4];
 			}
+			else if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true) {
+				memset(m_pFilteringTable, 0, len);
+				m_pFilteringTable->commit = 1;
+				m_pFilteringTable->ep = rx_prop->rx[2].src_pipe;
+				m_pFilteringTable->global = false;
+				m_pFilteringTable->ip = IPA_IP_v4;
+				m_pFilteringTable->num_rules = (uint8_t)1;
+				IPACMERR("HnDebug: Install v4 rule from index 2...\n");
+			}
 			else
 			{
 				memset(m_pFilteringTable, 0, len);
@@ -6215,6 +6224,7 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			}
 			IPACMDBG_H("RX prop src pipe: %x\n", rx_prop->rx[0].src_pipe);
 
+			IPACMDBG_H("eth_wan_pppoe_enable %d, m_pFilteringTable->ep %d\n",IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable, m_pFilteringTable->ep);
 			memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 			if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_lan_v4))
 			{
@@ -6323,6 +6333,22 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				m_pFilteringTableafter->ip = IPA_IP_v6;
 				m_pFilteringTableafter->num_rules = (uint8_t)1;
 				m_pFilteringTableafter->add_after_hdl = ipv6_dest_flt_rule_hdl[num_ipv6_dest_flt_rule - 1];
+			}
+			else if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true)
+			{
+				m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)calloc(1, len);
+				if (!m_pFilteringTable)
+				{
+					IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+					return IPACM_FAILURE;
+				}
+				memset(m_pFilteringTable, 0, len);
+				m_pFilteringTable->commit = 1;
+				m_pFilteringTable->ep = rx_prop->rx[2].src_pipe;
+				m_pFilteringTable->global = false;
+				m_pFilteringTable->ip = IPA_IP_v6;
+				m_pFilteringTable->num_rules = (uint8_t)1;
+				IPACMERR("HnDebug: Install v6 rule from index 2...\n");
 			}
 			else
 			{

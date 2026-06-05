@@ -958,7 +958,7 @@
 			<IPOEVlanLanWanIface>eth0</IPOEVlanLanWanIface>
 		</IPACMIPOEEthVlanWan>
 		<MultiVlanBridgeConfig>
-			<MultiVlanOnBridgeEnable>0</MultiVlanOnBridgeEnable>
+			<MultiVlanOnBridgeEnable>1</MultiVlanOnBridgeEnable>
 		</MultiVlanBridgeConfig>
 		<IPACMLog>
 			<IPACMfilevar>2097152</IPACMfilevar>

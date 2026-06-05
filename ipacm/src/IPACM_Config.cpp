@@ -276,11 +276,12 @@ IPACM_Config::IPACM_Config()
 	eth_vlan_wan_enable = false;
 	rt_tbl_inter_l2l_v4_set = false;
 	rt_tbl_inter_l2l_v6_set = false;
-	blackhole_valid = false;
+	delegate_prefix_valid = false;
 	memset(&rt_tbl_inter_l2l_v4, 0, sizeof(rt_tbl_inter_l2l_v4));
 	memset(&rt_tbl_inter_l2l_v6, 0, sizeof(rt_tbl_inter_l2l_v6));
 
-	memset(ipv6_blackhole_prefix, 0, sizeof(ipv6_blackhole_prefix));
+	memset(ipv6_delegate_prefix, 0, sizeof(ipv6_delegate_prefix));
+	ipv6_delegate_prefix_len = 0;
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));
 	memset(&rt_tbl_wan_v4, 0, sizeof(rt_tbl_wan_v4));

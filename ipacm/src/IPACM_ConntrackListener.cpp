@@ -4256,44 +4256,41 @@ bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
 
 void IPACM_ConntrackListener::start_query_conntrack_thread(ipa_ip_type iptype, void *ip_addr)
 {
-	if (ipacm_restarted)
+	struct query_nl_conntrack *query_nl_ct = (struct query_nl_conntrack *)calloc(1, sizeof(struct query_nl_conntrack));
+	if (!query_nl_ct)
 	{
-		struct query_nl_conntrack *query_nl_ct = (struct query_nl_conntrack *)calloc(1, sizeof(struct query_nl_conntrack));
-		if (!query_nl_ct)
-		{
-			IPACMERR("Failed to allocate memory for query_nl_ct\n");
-			return;
-		}
-
-		if (iptype == IPA_IP_v4)
-		{
-			query_nl_ct->is_ipv4 = true;
-			query_nl_ct->ipv4_addr = *(uint32_t *)ip_addr;
-			query_nl_ct->is_ipv6 = false;
-		}
-		else if (iptype == IPA_IP_v6)
-		{
-			query_nl_ct->is_ipv4 = false;
-			query_nl_ct->ipv4_addr = 0;
-			query_nl_ct->is_ipv6 = true;
-			memcpy(query_nl_ct->ipv6_addr, ip_addr, sizeof(query_nl_ct->ipv6_addr));
-		}
-		else
-		{
-			IPACMERR("Invalid IP type\n");
-			free(query_nl_ct);
-			return;
-		}
-
-		pthread_t query_ct_thread;
-		int ret = pthread_create(&query_ct_thread, NULL, query_conntracks, (void *)query_nl_ct);
-		if (ret != 0)
-		{
-			IPACMERR("Failed to create query thread: %d\n", ret);
-			free(query_nl_ct);
-			return;
-		}
-		pthread_detach(query_ct_thread);
-		IPACMDBG("thread detached\n");
+		IPACMERR("Failed to allocate memory for query_nl_ct\n");
+		return;
 	}
+
+	if (iptype == IPA_IP_v4)
+	{
+		query_nl_ct->is_ipv4 = true;
+		query_nl_ct->ipv4_addr = *(uint32_t *)ip_addr;
+		query_nl_ct->is_ipv6 = false;
+	}
+	else if (iptype == IPA_IP_v6)
+	{
+		query_nl_ct->is_ipv4 = false;
+		query_nl_ct->ipv4_addr = 0;
+		query_nl_ct->is_ipv6 = true;
+		memcpy(query_nl_ct->ipv6_addr, ip_addr, sizeof(query_nl_ct->ipv6_addr));
+	}
+	else
+	{
+		IPACMERR("Invalid IP type\n");
+		free(query_nl_ct);
+		return;
+	}
+
+	pthread_t query_ct_thread;
+	int ret = pthread_create(&query_ct_thread, NULL, query_conntracks, (void *)query_nl_ct);
+	if (ret != 0)
+	{
+		IPACMERR("Failed to create query thread: %d\n", ret);
+		free(query_nl_ct);
+		return;
+	}
+	pthread_detach(query_ct_thread);
+	IPACMDBG("thread detached\n");
 }

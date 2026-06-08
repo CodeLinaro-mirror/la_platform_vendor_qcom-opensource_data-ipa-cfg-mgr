@@ -193,6 +193,8 @@ extern "C"
 #define BRIDGE_0 "bridge0"
 
 #define IPA_MAX_NUM_PROPS 5
+/* Max number of immediate peer ULA address cache */
+#define IPA_MAX_NUM_PEER_ULA 32
 
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
@@ -573,12 +575,12 @@ struct vlan_iface_info
 	char lower_iface_name[IPA_RESOURCE_NAME_MAX];
 	uint16_t vlan_id;
 	uint32_t vlan_iface_ipv6_addr[4];
-	uint8_t vlan_client_mac[6];
-	uint32_t vlan_client_ipv6_addr[4];
 #ifdef IPA_VLAN_PRIORITY
 	uint8_t priority;
 #endif
 	uint16_t vlan_interface_index;
+	uint8_t vlan_client_mac[IPA_MAX_NUM_PEER_ULA][6];
+	uint32_t vlan_client_ipv6_addr[IPA_MAX_NUM_PEER_ULA][4];
 };
 
 struct l2tp_vlan_mapping_info
@@ -609,6 +611,7 @@ struct l2tp_vlan_mapping_info
 	uint32_t l2tp_bridge_vlan_id;
 #endif
 	bool is_session_info_updated;
+	uint32_t vlan_client_ipv6_gw_addr[4];
 };
 
 struct ipa_bridge_vlan_mapping_info {
@@ -635,6 +638,14 @@ struct bridge_vlan_mapping_info
 struct l2tp_client_info
 {
 	char client_iface_name[IPA_IFACE_NAME_LEN];
+};
+
+struct l2tp_client_gw_info
+{
+	char client_iface_name[IPA_IFACE_NAME_LEN];
+	uint8_t client_mac[6];
+	uint32_t client_ipv6_addr[4];
+	uint32_t client_ipv6_gw_addr[4];
 };
 
 struct l2tp_tunnel_info

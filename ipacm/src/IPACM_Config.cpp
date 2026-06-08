@@ -96,6 +96,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WLAN_CLIENT_DEL_EVENT),                /* ipacm_event_data_mac */
 	__stringify(IPA_WLAN_CLIENT_POWER_SAVE_EVENT),         /* ipacm_event_data_mac */
 	__stringify(IPA_WLAN_CLIENT_RECOVER_EVENT),            /* ipacm_event_data_mac */
+	__stringify(IPA_WLAN_BRIDGE_UPDATE_EVENT),             /* ipacm_event_data_all */
 	__stringify(IPA_NEW_NEIGH_EVENT),                      /* ipacm_event_data_all */
 	__stringify(IPA_DEL_NEIGH_EVENT),                      /* ipacm_event_data_all */
 	__stringify(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT),       /* ipacm_event_data_all */

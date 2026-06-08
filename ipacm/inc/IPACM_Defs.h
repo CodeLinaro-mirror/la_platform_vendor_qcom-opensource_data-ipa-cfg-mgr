@@ -28,8 +28,8 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
@@ -104,6 +104,7 @@ extern "C"
 #define ETH1_INTF "eth1"
 #define RNDIS_INTF "rndis0"
 #define ECM_INTF "ecm0"
+#define WLAN_INTF "wlan"
 
 
 #ifndef FEATURE_IPA_V3
@@ -247,6 +248,7 @@ typedef enum
 	IPA_WAN_GW_ADDR_ADD_EVENT,                /* ipacm_event_data_addr */
 	IPA_EXTERNAL_EVENT_MAX,
 
+	IPA_WLAN_BRIDGE_UPDATE_EVENT,             /* ipacm_event_data_all */
 	IPA_HANDLE_WAN_UP,                        /* ipacm_event_iface_up  */
 	IPA_HANDLE_WAN_DOWN,                      /* ipacm_event_iface_up  */
 	IPA_HANDLE_WAN_UP_V6,                     /* ipacm_event_iface_up */

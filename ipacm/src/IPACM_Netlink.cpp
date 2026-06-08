@@ -533,7 +533,7 @@ static int ipa_nl_decode_rtm_link
 						 RTA_DATA(attrib),
 						 sizeof(link_info->master_interface_index));
 			IPACMDBG("Extracted master interface index %d\n",
-					link_info->metainfo.ifi_index);
+					link_info->master_interface_index);
 		}
 	}
 	return IPACM_SUCCESS;
@@ -815,7 +815,8 @@ static int ipa_nl_decode_nlmsg
 (
 	const char   *buffer,
 	unsigned int  buflen,
-	ipa_nl_msg_t  *msg_ptr
+	ipa_nl_msg_t  *msg_ptr,
+	char	      *iface_name
 )
 {
 	char dev_name[IF_NAME_LEN] = {0};
@@ -833,15 +834,16 @@ static int ipa_nl_decode_nlmsg
 	uint32_t ipv6_unique_local_prefix = 0xFD000000;
 	uint32_t ipv6_unique_local_prefix_mask = 0xFF000000;
 
-	ipacm_cmd_q_data evt_data;
-	ipacm_cmd_q_data vlan_event;
+	ipacm_cmd_q_data evt_data = {};
+	ipacm_cmd_q_data bridge_evt_data = {};
+	ipacm_cmd_q_data vlan_event = {};
 	ipacm_event_data_all *data_all = NULL;
 	ipacm_event_data_fid *data_fid = NULL;
 	ipacm_event_data_addr *data_addr = NULL;
 	ipacm_event_data_all *vlan_data = NULL;
 	struct ipa_vlan_iface_info vlan_info;
 	struct ipa_macsec_map macsec_map, *macsec_map_data = NULL;
-	IPACM_Config* config = NULL;
+	IPACM_Config* config = IPACM_Config::GetInstance();
 	int idx = 0;
 
 	memset(nullMac, 0, sizeof(nullMac));
@@ -900,6 +902,30 @@ static int ipa_nl_decode_nlmsg
 						if (ret_val != IPACM_SUCCESS) {
 							IPACMERR("Error while getting interface name\n");
 							goto fail;
+						}
+
+						/* Handle non-default AP. AP mode iface: wlan0
+						   AP+STA mode iface: wlan1 */
+						idx = IPACM_Iface::iface_ipa_index_query(msg_ptr->nl_link_info.metainfo.ifi_index);
+						if((msg_ptr->nl_link_info.master_interface_index != 0) &&
+						   (idx != INVALID_IFACE) && (config->iface_table[idx].if_cat != WAN_IF) &&
+						   (strncmp(dev_name, WLAN_INTF, strlen(WLAN_INTF)) == 0))
+						{
+							IPACMDBG_H("Received NEWLINK on %s. ifi_idx: %d, master_idx: %d\n",
+									dev_name,
+									msg_ptr->nl_link_info.metainfo.ifi_index,
+									msg_ptr->nl_link_info.master_interface_index);
+							data_all = (ipacm_event_data_all *)calloc(1, sizeof(*data_all));
+							if(!data_all) {
+								IPACMERR("malloc failed\n");
+								ret_val = -ENOMEM;
+								goto fail;
+							}
+							data_all->if_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+							data_all->master_if_index = msg_ptr->nl_link_info.master_interface_index;
+							bridge_evt_data.evt_data = data_all;
+							bridge_evt_data.event = IPA_WLAN_BRIDGE_UPDATE_EVENT;
+							IPACM_EvtDispatcher::PostEvt(&bridge_evt_data);
 						}
 
 						if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN) {
@@ -1117,7 +1143,7 @@ static int ipa_nl_decode_nlmsg
 					}
 
 					if(msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_VLAN) {
-						data_all = (ipacm_event_data_all *)malloc(sizeof(*data_all));
+						data_all = (ipacm_event_data_all *)calloc(1, sizeof(*data_all));
 						if (!data_all) {
 							IPACMERR("malloc failed\n");
 							ret_val = -ENOMEM;
@@ -1880,6 +1906,16 @@ static int ipa_nl_decode_nlmsg
 				}
 				IPACMDBG("Neighbour event with interface index %d master interface index %d family %d\n", msg_ptr->nl_neigh_info.metainfo.ndm_ifindex, msg_ptr->nl_neigh_info.master_interface_index, msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 
+				if(iface_name != NULL)
+				{
+					if(strncmp(iface_name, dev_name, strlen(iface_name)) != 0)
+					{
+						IPACMDBG("Skiping this neighbor as it does not belong"
+							 " to interface %s\n", iface_name);
+						goto fail;
+					}
+				}
+
 				if(((msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET) ||
 							(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family == AF_INET6)) &&
 						(msg_ptr->nl_neigh_info.metainfo.ndm_state != NUD_REACHABLE) && (msg_ptr->nl_neigh_info.metainfo.ndm_state != NUD_PERMANENT))
@@ -2001,8 +2037,6 @@ static int ipa_nl_decode_nlmsg
 							dev_name, data_all->if_index,
 							msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 
-					config = IPACM_Config::GetInstance();
-
 					/* Add Dummy VLAN Mapping for Non-Vlan Ifaces */
 					idx = IPACM_Iface::iface_ipa_index_query(msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
 					if((config != NULL) && ((idx != INVALID_IFACE && config->iface_table[idx].if_cat != WAN_IF &&
@@ -2033,15 +2067,17 @@ static int ipa_nl_decode_nlmsg
 								else
 #endif
 								{
-									/* Currently we support dummy VLAN logic only on On-Demand Bridge */
-									if(strncmp(master_dev_name, BRIDGE_0, strlen(master_dev_name)) != 0)
-									{
-										config->add_dummy_vlan_mapping(master_dev_name,
-												data_all->iface_name, msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
-										config->add_bridge_vlan_mapping(&vlan_bridge_data);
-										vlan_bridge_data.status = 1;
-										config->add_bridge_vlan_mapping(&vlan_bridge_data);
+									vlan_data = (ipacm_event_data_all *)calloc(1, sizeof(*vlan_data));
+									if(!vlan_data) {
+										IPACMERR("malloc failed\n");
+										ret_val = -ENOMEM;
+										goto fail;
 									}
+									vlan_data->if_index = msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
+									vlan_data->master_if_index = msg_ptr->nl_neigh_info.master_interface_index;
+									bridge_evt_data.evt_data = vlan_data;
+									bridge_evt_data.event = IPA_WLAN_BRIDGE_UPDATE_EVENT;
+									IPACM_EvtDispatcher::PostEvt(&bridge_evt_data);
 								}
 							}
 						}
@@ -2197,12 +2233,12 @@ int ipa_nl_recv_msg(int fd)
 		iov = msghdr->msg_iov;
 
 		memset(nlmsg, 0, sizeof(ipa_nl_msg_t));
-		ret_val = ipa_nl_decode_nlmsg((char *)iov->iov_base, msglen, nlmsg);
-		if(IPACM_SUCCESS != ret_val)
+		if(IPACM_SUCCESS != ipa_nl_decode_nlmsg((char *)iov->iov_base, msglen, nlmsg, NULL))
 		{
 			IPACMERR("Failed to decode nl message, ret_val[%d]\n", ret_val);
 			goto error;
 		}
+		ret_val = IPACM_SUCCESS;
 	}
 
 error:
@@ -3347,7 +3383,8 @@ int  ipa_nl_query_getlink(int af_family)
 			{
 				if(iface_info->ifi_flags & IFF_UP)
 				{
-					if (ipa_nl_decode_nlmsg((const char*)nl_hdr, nl_hdr->nlmsg_len, msg_ptr))
+					if (ipa_nl_decode_nlmsg((const char*)nl_hdr, nl_hdr->nlmsg_len,
+								 msg_ptr, NULL))
 					{
 						IPACMERR("Failed to decode rtm link message\n");
 						goto next_msg;
@@ -3392,7 +3429,7 @@ int ipa_nl_query_ip_addr_info(int af_family)
 		return IPACM_FAILURE;
 	}
 
-	msg_ptr = (ipa_nl_msg_t*)calloc(1, sizeof(ipa_nl_msg_t));//msg_ptr2;
+	msg_ptr = (ipa_nl_msg_t*)calloc(1, sizeof(ipa_nl_msg_t));
 	if(msg_ptr == NULL)
 	{
 		IPACMERR("Failed malloc for msg_ptr\n");
@@ -3434,7 +3471,7 @@ int ipa_nl_query_ip_addr_info(int af_family)
 
 	IPACMDBG("Route msg_len : %d\n", msglen);
 
-	ret_val = ipa_nl_decode_nlmsg((const char*)buf, msglen, msg_ptr);
+	ret_val = ipa_nl_decode_nlmsg((const char*)buf, msglen, msg_ptr, NULL);
 	if (IPACM_SUCCESS != ret_val) {
 		IPACMERR("Failed to decode rtm link message\n");
 		goto end;
@@ -3513,7 +3550,8 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name)
 		goto end;
 	}
 
-	ret_val = ipa_nl_decode_nlmsg((const char*)buf, msglen, msg_ptr);
+	ret_val = ipa_nl_decode_nlmsg((const char*)buf, msglen, msg_ptr, dev_name);
+
 	if (IPACM_SUCCESS != ret_val) {
 		IPACMERR("Failed to decode rtm link message\n");
 		goto end;

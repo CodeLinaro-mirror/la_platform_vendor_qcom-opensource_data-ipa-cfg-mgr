@@ -2,35 +2,6 @@
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *    * Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *    * Redistributions in binary form must reproduce the above
- *      copyright notice, this list of conditions and the following
- *      disclaimer in the documentation and/or other materials provided
- *      with the distribution.
- *    * Neither the name of The Linux Foundation nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
- * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
  * disclaimer below) provided that the following conditions are met:
  *
@@ -60,8 +31,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
  /*!
@@ -83,6 +54,8 @@
 
 #include <sys/socket.h>
 #include <signal.h>
+#include <unistd.h>
+#include <sys/types.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <sys/ioctl.h>
@@ -184,6 +157,7 @@ ipacm_thread_info ipacm_child_threads[IPACM_CHILD_THREADS_MAX] = {
 
 IPACM_Neighbor *neigh = NULL;
 
+bool ipacm_restarted = false;
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
 
 void ipa_is_ipacm_running(void);
@@ -1286,6 +1260,11 @@ int main(int argc, char **argv)
 
 	for(int t_itr = 0; t_itr< IPACM_CHILD_THREADS_MAX; t_itr++)
 	{
+		if (strcmp(ipacm_child_threads[t_itr].t_name, "IPACM_NTLNK_QRY") == 0 && !ipacm_restarted)
+		{
+			IPACMDBG("Not creating %s thread on non-restart\n", ipacm_child_threads[t_itr].t_name);
+			continue;
+		}
 		if(0 == ipacm_child_threads[t_itr].tid)
 		{
 			ret = pthread_create(&ipacm_child_threads[t_itr].tid, NULL, ipacm_child_threads[t_itr].t_func, NULL);
@@ -1304,6 +1283,8 @@ int main(int argc, char **argv)
 
 	for(int t_itr = 0; t_itr< IPACM_CHILD_THREADS_MAX; t_itr++)
 	{
+		if (ipacm_child_threads[t_itr].tid == 0)
+			continue;
 		pthread_join(ipacm_child_threads[t_itr].tid, NULL);
 	}
 
@@ -1367,6 +1348,38 @@ void ipa_is_ipacm_running(void) {
 	}
 	else
 	{
+		char pid_buf[16];
+		int pid_len;
+		pid_t old_pid = 0;
+
+		pid_len = read(fd, pid_buf, sizeof(pid_buf) - 1);
+		if (pid_len > 0)
+		{
+			pid_buf[pid_len] = '\0';
+			old_pid = atoi(pid_buf);
+			if (old_pid != 0 && old_pid != getpid())
+			{
+				ipacm_restarted = true;
+				IPACMDBG_H("IPACM is restarted. Old PID: %d, New PID: %d\n", old_pid, getpid());
+			}
+		}
+
+		if (lseek(fd, 0, SEEK_SET) < 0)
+		{
+			IPACMERR("lseek failed on pid file");
+		}
+
+		if (ftruncate(fd, 0) < 0)
+		{
+			IPACMERR("ftruncate failed on pid file");
+		}
+
+		pid_len = snprintf(pid_buf, sizeof(pid_buf), "%d\n", getpid());
+		if (pid_len > 0 && write(fd, pid_buf, pid_len) != pid_len)
+		{
+			IPACMERR("write failed on pid file");
+		}
+
 		IPACMERR("PID %d is IPACM main process\n", getpid());
 	}
 

@@ -807,24 +807,14 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt(
 				IPACMDBG("Flushing temp entries client %d\n", i);
 				iptodot("client ip", data->ipv4_addr);
 				nat_inst->FlushTempEntries(data->ipv4_addr, true);
-
 			}
-			query_nl_ct = (struct query_nl_conntrack *)calloc(1, sizeof(struct query_nl_conntrack));
-		        if (!query_nl_ct) {
-		            IPACMERR("Failed to allocate memory for query_nl_ct\n");
-		            return;
-		        }
-			query_nl_ct->is_ipv4 = true;
-			query_nl_ct->ipv4_addr = data->ipv4_addr;
-			query_nl_ct->is_ipv6 = false;
-			ret = pthread_create(&query_ct_thread, NULL, query_conntracks, (void*)query_nl_ct);
-			if (ret != 0) {
-				IPACMERR("Failed to create query thread: %d\n", ret);
-				free(query_nl_ct);
-				return;
+			auto it = std::find(pConfig->queried_v4_list.begin(), pConfig->queried_v4_list.end(), data->ipv4_addr);
+			if (it != pConfig->queried_v4_list.end())
+			{
+				IPACMDBG("Starting query thread for IPV4: 0x%x\n", data->ipv4_addr);
+				start_query_conntrack_thread(IPA_IP_v4, &data->ipv4_addr);
+				pConfig->queried_v4_list.erase(it);
 			}
-			pthread_detach(query_ct_thread);
-			IPACMDBG("thread detached\n");
 		}
 	}
 	return;
@@ -873,30 +863,20 @@ void IPACM_ConntrackListener::HandleIPPassPDNInfoUpdate(void *in_param)
 	{
 		if(pdn_data->ipv4_addr == wan_ipaddr)
 		{
-				IPACMDBG_H("Updating default pdn info, ip_pass_enable_default_pdn %d\n", ip_pass_enable_default_pdn);
-				ip_pass_dummy_ip_default_pdn = pdn_data->ip_pass_dummy_ip;
-				ip_pass_enable_default_pdn = pdn_data->ip_pass_enable;
-				ip_pass_skip_nat_default_pdn = pdn_data->ip_pass_skip_nat;
-				if (pdn_data->ip_pass_enable && !pdn_data->ip_pass_skip_nat)
+			IPACMDBG_H("Updating default pdn info, ip_pass_enable_default_pdn %d\n", ip_pass_enable_default_pdn);
+			ip_pass_dummy_ip_default_pdn = pdn_data->ip_pass_dummy_ip;
+			ip_pass_enable_default_pdn = pdn_data->ip_pass_enable;
+			ip_pass_skip_nat_default_pdn = pdn_data->ip_pass_skip_nat;
+			if (pdn_data->ip_pass_enable && !pdn_data->ip_pass_skip_nat)
+			{
+				nat_inst->DelDummyNatEntries(wan_ipaddr);
+				auto it = std::find(pConfig->queried_v4_list.begin(), pConfig->queried_v4_list.end(), pdn_data->ipv4_addr);
+				if (it != pConfig->queried_v4_list.end())
 				{
-					nat_inst->DelDummyNatEntries(wan_ipaddr);
-					query_nl_ct = (struct query_nl_conntrack *)calloc(1, sizeof(struct query_nl_conntrack));
-					if (!query_nl_ct) {
-					    IPACMERR("Failed to allocate memory for query_nl_ct\n");
-					    return;
-					}
-					query_nl_ct->is_ipv4 = true;
-					query_nl_ct->ipv4_addr = pdn_data->ipv4_addr;
-					query_nl_ct->is_ipv6 = false;
-					ret = pthread_create(&query_ct_ippass_thread, NULL, query_conntracks, (void*)query_nl_ct);
-					if (ret != 0) {
-						IPACMERR("Failed to create query thread: %d\n", ret);
-						free(query_nl_ct);
-						return;
-					}
-					pthread_detach(query_ct_ippass_thread);
-					IPACMDBG("thread detached\n");
+					start_query_conntrack_thread(IPA_IP_v4, &pdn_data->ipv4_addr);
+					pConfig->queried_v4_list.erase(it);
 				}
+			}
 		}
 	}
 	return;
@@ -1022,23 +1002,16 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *d
 				ipv6ct_inst->ResetPwrSaveIf(ip);
 				ipv6ct_inst->FlushTempEntries(ip, true, false, false);
 			}
-			query_nl_ct = (struct query_nl_conntrack *)calloc(1, sizeof(struct query_nl_conntrack));
-			if (!query_nl_ct) {
-			    IPACMERR("Failed to allocate memory for query_nl_ct\n");
-			    return;
+			std::array<uint32_t, 4> ipv6_addr_arr = {data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]};
+			auto it = std::find(pConfig->queried_v6_list.begin(), pConfig->queried_v6_list.end(), ipv6_addr_arr);
+			if (it != pConfig->queried_v6_list.end())
+			{
+				IPACMDBG("Starting query thread for IPV6 addrss:0x%x:%x:%x:%x\n",
+						data->ipv6_addr[0], data->ipv6_addr[1],
+						data->ipv6_addr[2], data->ipv6_addr[3]);
+				start_query_conntrack_thread(IPA_IP_v6, data->ipv6_addr);
+				pConfig->queried_v6_list.erase(it);
 			}
-			query_nl_ct->is_ipv4 = false;
-			query_nl_ct->ipv4_addr = 0;
-			query_nl_ct->is_ipv6 = true;
-			memcpy(query_nl_ct->ipv6_addr, data->ipv6_addr, sizeof(data->ipv6_addr));
-			ret = pthread_create(&query_ct_ipv6_thread, NULL, query_conntracks, (void*)query_nl_ct);
-			if (ret != 0) {
-				IPACMERR("Failed to create query thread: %d\n", ret);
-				free(query_nl_ct);
-				return;
-			}
-			pthread_detach(query_ct_ipv6_thread);
-			IPACMDBG("thread detached\n");
 		}
 	}
 
@@ -2096,6 +2069,7 @@ bool is_dns_port(struct nf_conntrack *ct)
 	}
 	return false;
 }
+
 int v4_conntrack_callback(enum nf_conntrack_msg_type type, struct nf_conntrack *ct, void *data)
 {
 	char buf[1024];
@@ -2302,12 +2276,12 @@ void* query_conntracks(void *arguments)
 	if(family == AF_INET)
 	{
 		nfct_callback_register(handle, NFCT_T_ALL, v4_conntrack_callback, &args->ipv4_addr);
-		IPACMDBG("quering ipv4 conntracks for 0x%X\n", args->ipv4_addr);
+		IPACMDBG("querying ipv4 conntracks for 0x%X\n", args->ipv4_addr);
 	}
 	else if(family == AF_INET6)
 	{
 		nfct_callback_register(handle, NFCT_T_ALL, v6_conntracks_callback, args->ipv6_addr);
-		IPACMDBG("quering ipv6 conntracks for  0x%08x:%08x:%08x:%08x\n", args->ipv6_addr[0],
+		IPACMDBG("querying ipv6 conntracks for  0x%08x:%08x:%08x:%08x\n", args->ipv6_addr[0],
 						args->ipv6_addr[1], args->ipv6_addr[2],
 						args->ipv6_addr[3]);
 	}
@@ -4278,4 +4252,48 @@ bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
 
 	IPACMDBG_H("return\n");
 	return ret;
+}
+
+void IPACM_ConntrackListener::start_query_conntrack_thread(ipa_ip_type iptype, void *ip_addr)
+{
+	if (ipacm_restarted)
+	{
+		struct query_nl_conntrack *query_nl_ct = (struct query_nl_conntrack *)calloc(1, sizeof(struct query_nl_conntrack));
+		if (!query_nl_ct)
+		{
+			IPACMERR("Failed to allocate memory for query_nl_ct\n");
+			return;
+		}
+
+		if (iptype == IPA_IP_v4)
+		{
+			query_nl_ct->is_ipv4 = true;
+			query_nl_ct->ipv4_addr = *(uint32_t *)ip_addr;
+			query_nl_ct->is_ipv6 = false;
+		}
+		else if (iptype == IPA_IP_v6)
+		{
+			query_nl_ct->is_ipv4 = false;
+			query_nl_ct->ipv4_addr = 0;
+			query_nl_ct->is_ipv6 = true;
+			memcpy(query_nl_ct->ipv6_addr, ip_addr, sizeof(query_nl_ct->ipv6_addr));
+		}
+		else
+		{
+			IPACMERR("Invalid IP type\n");
+			free(query_nl_ct);
+			return;
+		}
+
+		pthread_t query_ct_thread;
+		int ret = pthread_create(&query_ct_thread, NULL, query_conntracks, (void *)query_nl_ct);
+		if (ret != 0)
+		{
+			IPACMERR("Failed to create query thread: %d\n", ret);
+			free(query_nl_ct);
+			return;
+		}
+		pthread_detach(query_ct_thread);
+		IPACMDBG("thread detached\n");
+	}
 }

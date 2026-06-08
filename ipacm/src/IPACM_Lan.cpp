@@ -8600,23 +8600,18 @@ int IPACM_Lan::handle_vlan_phys_if_down()
 #endif //FEATURE_SOCKSv5
 
 	/* delete rules once for each iptype */
-	if(is_any_mux_up(IPA_IP_v4))
+
+	if(del_ul_flt_rules(IPA_IP_v4))
 	{
-		if(del_ul_flt_rules(IPA_IP_v4))
-		{
-			return IPACM_FAILURE;
-		}
+		return IPACM_FAILURE;
 	}
 
-	if(is_any_mux_up(IPA_IP_v6))
-	{
-		/* reset usb-client ipv6 rt-rules */
-		handle_lan_client_reset_rt(IPA_IP_v6);
+	/* reset usb-client ipv6 rt-rules */
+	handle_lan_client_reset_rt(IPA_IP_v6);
 
-		if(del_ul_flt_rules(IPA_IP_v6))
-		{
-			return IPACM_FAILURE;
-		}
+	if(del_ul_flt_rules(IPA_IP_v6))
+	{
+		return IPACM_FAILURE;
 	}
 
 	/* notify once per each mux ID per each ip type */

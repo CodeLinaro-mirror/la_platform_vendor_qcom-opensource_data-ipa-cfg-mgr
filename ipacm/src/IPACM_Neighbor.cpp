@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *
 * Changes from Qualcomm Technologies, Inc. are provided under the following license:
 * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
-* SPDX-License-Identifier: BSD-3-Clause-Clear
+* SPDX-License-Identifier: BSD-3-Clause-Clear.
 */
 /*!
 	@file
@@ -1674,6 +1674,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 											IPACMERR("Unable to allocate memory\n");
 											return;
 										}
+										memset(data_vlan, 0, sizeof(ipacm_event_new_neigh_vlan));
 										data_vlan->data_all.iptype = IPA_IP_v4;
 #ifdef IPA_L2TP_TUNNEL_UDP
 										if(IPACM_Iface::ipacmcfg->check_l2tp_iface(neighbor_client[i].iface_name) &&
@@ -1700,12 +1701,13 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 											IPACMERR("Unable to allocate memory\n");
 											return;
 										}
+										memset(data_all, 0, sizeof(ipacm_event_data_all));
 										data_all->iptype = IPA_IP_v4;
 #ifdef IPA_L2TP_TUNNEL_UDP
 										if(IPACM_Iface::ipacmcfg->check_l2tp_iface(neighbor_client[i].iface_name) &&
 											evt_data.event == IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT)
 										{
-											data_vlan->data_all.iptype = IPA_IP_MAX;
+											data_all->iptype = IPA_IP_MAX;
 										}
 #endif
 										data_all->if_index = neighbor_client[i].iface_index;
@@ -1722,6 +1724,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 										IPACMERR("Unable to allocate memory\n");
 										return;
 									}
+									memset(data_all, 0, sizeof(ipacm_event_data_all));
 									data_all->iptype = IPA_IP_v4;
 									data_all->if_index = neighbor_client[i].iface_index;
 									data_all->ipv4_addr = neighbor_client[i].v4_addr; //use previous ipv4 address

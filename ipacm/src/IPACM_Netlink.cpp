@@ -2022,8 +2022,9 @@ static int ipa_nl_decode_nlmsg
 #ifdef IPA_L2TP_TUNNEL_UDP
 								if(config->check_l2tp_iface(data_all->iface_name))
 								{
+									vlan_bridge_data.vlan_id = DUMMY_VLAN_ID_BASE+ msg_ptr->nl_neigh_info.master_interface_index;
 									config->add_l2tp_dummy_vlan_mapping(master_dev_name, data_all->iface_name,
-											msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
+											msg_ptr->nl_neigh_info.master_interface_index);
 									config->add_bridge_vlan_mapping(&vlan_bridge_data);
 									vlan_bridge_data.status = 1;
 									config->add_bridge_vlan_mapping(&vlan_bridge_data);

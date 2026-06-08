@@ -1492,7 +1492,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 		memset(&new_mapping, 0, sizeof(new_mapping));
 		new_mapping.bridge_associated_VID = data->vlan_id;
 		new_mapping.bridge_if_index = data->master_if_index;
-		new_mapping.status == 0;
+		new_mapping.status = 0;
 
 		ret = ipa_get_if_name(iface_name, data->master_if_index);
 		if(ret == IPACM_SUCCESS)
@@ -1502,25 +1502,21 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 		}
 
 		m_bridge_vlan_mapping.push_front(new_mapping);
+		pthread_mutex_unlock(&vlan_l2tp_lock);
 		bridge = get_vlan_bridge(data->bridge_name);
-		if(bridge &&!is_dummy_VID(data->vlan_id))
+		if(bridge &&(!is_dummy_VID(data->vlan_id) || check_l2tp_bridge_vlan_id(data->vlan_id)))
 		{
 			IPACMDBG_H("bridge %s already added, update data\n",
 				data->bridge_name);
 			bridge->associate_VID = data->vlan_id;
 		}
-		new_entry = true;
+		IPACMDBG_H("added partial Entry with master interface index %d, VID %d\n", data->master_if_index, data->vlan_id);
+		IPACMDBG_H("Querying the neighbors for bridge %s\n", data->bridge_name);
+		ipa_nl_query_newneigh(AF_INET, new_mapping.bridge_iface_name);
+		return;
 	}
-
-	IPACMDBG_H("added partial Entry with master interface index %d, VID %d\n", data->master_if_index, data->vlan_id);
 bail:
 	pthread_mutex_unlock(&vlan_l2tp_lock);
-	if(new_entry)
-	{
-		IPACMDBG_H("Querying the neighbors fo bridge %s\n",
-				data->bridge_name);
-		ipa_nl_query_newneigh(AF_INET, new_mapping.bridge_iface_name);
-	}
 	return;
 }
 

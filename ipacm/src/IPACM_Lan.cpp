@@ -2625,9 +2625,21 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		handle_eth_hdr_init(data->mac_addr, NULL, vlan_id, true, priority);
 	}
 
+	eth_index = get_eth_client_index(data->mac_addr, vlan_id);
+
 #ifdef IPA_L2TP_TUNNEL_UDP
 	if(!IPACM_Iface::ipacmcfg->check_l2tp_iface(data->iface_name))
 	{
+		/* If the interface is of type L2TP then get_eth_client_index
+		 * return INVALID is expected, For other vlan interface it is
+		 * not expected so at that time need to return IPACM failure
+		 */
+		if (eth_index == IPACM_INVALID_INDEX)
+		{
+			IPACMERR("eth client not found/attached \n");
+			return IPACM_FAILURE;
+		}
+
 		if(data_vlan->data_all.iptype == IPA_IP_v4)
 		{
 			IPACMDBG_H("construct ETH header and route rules \n");
@@ -2639,12 +2651,6 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		}
 		else
 		{
-			eth_index = get_eth_client_index(data->mac_addr, vlan_id);
-			if (eth_index == IPACM_INVALID_INDEX)
-			{
-				IPACMERR("eth client not found/attached \n");
-				return IPACM_FAILURE;
-			}
 			if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
 			   (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
 			   !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr)||
@@ -2667,6 +2673,17 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		}
 	}
 #else
+	/* In case on non L2TP if get_eth_client_index return
+	 * invalid then return failure
+	 * Moving the check here to avoid code duplicate
+	 * for both V4 and V6 scenario
+	 */
+	if (eth_index == IPACM_INVALID_INDEX)
+	{
+		IPACMERR("eth client not found/attached \n");
+		return IPACM_FAILURE;
+	}
+
 	if(data_vlan->data_all.iptype == IPA_IP_v4)
 	{
 		IPACMDBG_H("construct ETH header and route rules \n");
@@ -2678,12 +2695,6 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	}
 	else
 	{
-		eth_index = get_eth_client_index(data->mac_addr, vlan_id);
-		if (eth_index == IPACM_INVALID_INDEX)
-		{
-			IPACMERR("eth client not found/attached \n");
-			return IPACM_FAILURE;
-		}
 		if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
 			  (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
 			  !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr)||

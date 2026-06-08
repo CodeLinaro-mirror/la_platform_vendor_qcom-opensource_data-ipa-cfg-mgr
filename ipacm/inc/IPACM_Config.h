@@ -28,6 +28,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 	@file
@@ -407,6 +411,8 @@ public:
 	void del_l2tp_tunnel_info(uint32_t data);
 
 	void add_l2tp_mtu_info(uint16_t mtu , char * iface_name);
+
+	void remove_l2tp_vlan_pdn_mapping();
 #endif //#ifdef IPA_L2TP_TUNNEL_UDP
 #endif //#ifdef FEATURE_L2TP
 #endif //defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)

@@ -410,6 +410,7 @@ public:
 	/* Store private subnet configuration from XML file */
 	ipa_private_subnet private_subnet_table[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
 
+
 #ifdef FEATURE_DUAL_BACKHAUL
 	/* Store the second backhaul info. Fetch gateway,enabled, and netdev details from XML file */
 	ipa_dual_backhaul_info second_backhaul_info;
@@ -577,6 +578,8 @@ public:
 	uint32_t ipacm_static_policy_dscp_mark_mode;
 #endif
 	uint32_t rgip_ip;
+	/* Persistent RGIP address for IPPT use-case; never cleared on RGIP down. */
+	uint32_t rgip_ip_ippt;
 	char rgip_iface_name[IPA_IFACE_NAME_LEN];
 	/* Indicates whether PPPOE mode is enabled on WAN interface */
 	bool eth_wan_pppoe_enable;
@@ -637,9 +640,9 @@ public:
 	bool rt_tbl_inter_l2l_v4_set;
 	bool rt_tbl_inter_l2l_v6_set;
 
-	uint32_t ipv6_blackhole_prefix[4];
-	uint32_t ipv6_blackhole_len;
-	bool blackhole_valid;
+	uint32_t ipv6_delegate_prefix[4];
+	uint32_t ipv6_delegate_prefix_len;
+	bool delegate_prefix_valid;
 	/* Indicates current number of client ipv6 */
 	int ipa_num_clients_ipv6;
 
@@ -745,6 +748,7 @@ public:
 	uint16_t pppoe_get_session_id(const char *pppoe_dev_name);
 	void get_pppoe_session_info(const char *pppoe_dev_name, const char *phy_dev_name = NULL, uint16_t vlan_id = 0);
 	void update_pppoe_session_info(const char *pppoe_dev_name, char *params[MAX_PPPOE_PARAM_CNT]);
+	int get_pppoe_vlan_pcp( uint16_t *vlan_id, uint8_t *pcp);
 	int get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id);
 	int get_pppoe_indx(char *pppoe_dev_name);
 	int get_phy_name_from_bridge_iface(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN]);
@@ -1500,7 +1504,7 @@ public:
 			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0])
 				&& (prefix[1] == ipa_ipv6_prefixes[i].addr[1])
 				&& (vlan_id == ipa_ipv6_prefixes[i].vlan_id)
-			    && (is_bridge == ipa_ipv6_prefixes[i].is_bridge))
+			    && ((multi_vlan_bridge_config_enable) ? (is_bridge == ipa_ipv6_prefixes[i].is_bridge) : true))
 			{
 				IPACMDBG_H("prefix 0x[%X][%X] already exists vlan_id inp %d saved %d\n is_bridge %d",
 					prefix[0], prefix[1], vlan_id, ipa_ipv6_prefixes[i].vlan_id, ipa_ipv6_prefixes[i].is_bridge);
@@ -1652,14 +1656,14 @@ public:
 				IPACMDBG("no match with [%X][%X]\n", ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
 			}
 		}
-		int len  = ipv6_blackhole_len;
-		if(blackhole_valid == true)
+		int len  = ipv6_delegate_prefix_len;
+		if(delegate_prefix_valid == true)
 		{
 			for (int i = 0; i < 4; ++i) {
 				/* Note: Assuming incoming prefix =  2001:0db8:85a3:0099:1111:2222:3333:4444
 				 * prefix[0] = 0x20010db8
 				 * prefix[1] = 0x85a30099
-				 * and Blackhole Prefix: 2001:0db8:85a3:0000::/56
+				 * and delegate_prefix Prefix: 2001:0db8:85a3:0000::/56
 				 * example len = 56
 				 * If no bits left to check, it's a match
 				 * ITERATION 1 (i=0): len is 56. (Skip)
@@ -1695,15 +1699,15 @@ public:
 				/* Compare the masked values
 				 * ITERATION 1 (i=0):
 				 * prefix[0] & mask: 0x20010db8 & 0xFFFFFFFF = 0x20010db8
-				 * ipv6_blackhole_prefix[0] & mask:     0x20010db8 & 0xFFFFFFFF = 0x20010db8
+				 * ipv6_delegate_prefix[0] & mask:     0x20010db8 & 0xFFFFFFFF = 0x20010db8
 				 * They match! Continue loop.
 				 *
 				 * ITERATION 2 (i=1):
 				 * prefix[1] & mask: 0x85a30099 & 0xFFFFFF00 = 0x85a30000
-				 * ipv6_blackhole_prefix[1] & mask:     0x85a30000 & 0xFFFFFF00 = 0x85a30000
+				 * ipv6_delegate_prefix[1] & mask:     0x85a30000 & 0xFFFFFF00 = 0x85a30000
 				 * They match! Continue loop.
 				 */
-				if ((prefix[i] & mask) != (ipv6_blackhole_prefix[i] & mask)) {
+				if ((prefix[i] & mask) != (ipv6_delegate_prefix[i] & mask)) {
 					return false;
 				}
 

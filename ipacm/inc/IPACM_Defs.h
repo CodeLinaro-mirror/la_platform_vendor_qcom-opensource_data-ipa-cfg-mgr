@@ -388,6 +388,7 @@ typedef enum
 	IPA_IP_COLLISION_UPDATE_EVENT,            /* ipacm_ip_collision_pdn_info */
 	IPA_IP_PASS_UPDATE_EVENT,                 /* ipacm_ip_pass_pdn_info */
 	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, /* Handle ip pass pdn info update.*/
+	IPA_RGIP_PASS_UPDATE_EVENT,               /* ipacm_event_rgip_pass_info */
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	IPA_PKT_THRESHOLD_UPDATE_EVENT,           /* ipa_set_pkt_threshold */
 #endif
@@ -650,6 +651,13 @@ typedef struct
 	int if_index;
 }ipacm_event_ip_pass_pdn_info;
 
+/* Event data for RGIP passthrough enable/disable notification */
+typedef struct
+{
+	uint8_t enable;
+	uint32_t rgip_addr;
+}ipacm_event_rgip_pass_info;
+
 typedef struct
 {
 	uint8_t enable;
@@ -738,6 +746,7 @@ struct vlan_iface_info
 	uint8_t vlan_client_mac[6];
 	uint32_t vlan_client_ipv6_addr[4];
 	uint16_t vlan_interface_index;
+	uint8_t priority;
 };
 
 struct l2tp_vlan_mapping_info

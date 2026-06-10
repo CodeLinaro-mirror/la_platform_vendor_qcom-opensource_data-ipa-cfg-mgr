@@ -292,6 +292,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 				IPACM_Wlan::total_num_wifi_clients = (IPACM_Wlan::total_num_wifi_clients) - \
                                                                      (num_wifi_client);
+				IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].is_wlan_if_vlan = false;
 
 				return;
 			}
@@ -930,6 +931,16 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			return;
 		}
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
+#ifdef FEATURE_VLAN_MPDN
+		/* VLAN IFACES don't care about default route */
+		if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) &&
+			(IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled == TRUE ||
+			IPACM_Wan::isVlanWanUP()))
+		{
+			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN\n", dev_name);
+			return;
+		}
+#endif
 		if (rx_prop != NULL)
 		{
 			if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
@@ -11770,6 +11781,10 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, 1);
 		IPACMDBG_H("Deleted TCP syn v4 filter rules successfully.\n");
+
+		/* Delete the modem UL rules on Non-vlan pipe
+		   Will be installed later on Vlan pipe using HANDLE_VLAN_PDN_UP event */
+		handle_wan_down(false);
 	}
 
 	/* Delete v6 filtering rules */

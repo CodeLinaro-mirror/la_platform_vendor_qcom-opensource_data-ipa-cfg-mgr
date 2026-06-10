@@ -276,11 +276,12 @@ IPACM_Config::IPACM_Config()
 	eth_vlan_wan_enable = false;
 	rt_tbl_inter_l2l_v4_set = false;
 	rt_tbl_inter_l2l_v6_set = false;
-	blackhole_valid = false;
+	delegate_prefix_valid = false;
 	memset(&rt_tbl_inter_l2l_v4, 0, sizeof(rt_tbl_inter_l2l_v4));
 	memset(&rt_tbl_inter_l2l_v6, 0, sizeof(rt_tbl_inter_l2l_v6));
 
-	memset(ipv6_blackhole_prefix, 0, sizeof(ipv6_blackhole_prefix));
+	memset(ipv6_delegate_prefix, 0, sizeof(ipv6_delegate_prefix));
+	ipv6_delegate_prefix_len = 0;
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));
 	memset(&rt_tbl_wan_v4, 0, sizeof(rt_tbl_wan_v4));
@@ -312,6 +313,7 @@ IPACM_Config::IPACM_Config()
 	num_no_offload_ipv6_prefix = 0;
 	memset(rgip_iface_name, 0, sizeof(rgip_iface_name));
 	rgip_ip = 0;
+	rgip_ip_ippt = 0;
 	memset(ipa_ipv6_prefixes, 0, sizeof(ipa_ipv6_prefixes));
 	memset(ipa_no_offload_ipv6_prefixes, 0, sizeof(ipa_no_offload_ipv6_prefixes));
 	memset(vlan_bridges, 0, IPA_MAX_NUM_BRIDGES * sizeof(vlan_bridges[0]));
@@ -1126,6 +1128,7 @@ skip_fnr_alloc:
 	IPACMDBG_H(" depend MAP-6 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ETHERNET_PROD, IPA_RM_RESOURCE_Q6_CONS);
 	IPACMDBG_H(" depend MAP-7 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ETHERNET_PROD, IPA_RM_RESOURCE_USB_CONS);
 	IPACMDBG_H(" depend MAP-8 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_ETHERNET_CONS);
+
 
 fail:
 	if (cfg != NULL)
@@ -2022,7 +2025,8 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	{
 		if(it_vlan->vlan_interface_index == data->vlan_interface_index)
 		{
-			IPACMERR("The vlan iface was added before with id %d\n", it_vlan->vlan_id);
+			it_vlan->priority = data->priority;
+			IPACMERR("The vlan iface was added before with id %d and pcp %d\n", it_vlan->vlan_id, it_vlan->priority);
 			pthread_mutex_unlock(&vlan_l2tp_lock);
 			return;
 		}
@@ -2057,6 +2061,8 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	memset(&new_vlan_info, 0, sizeof(new_vlan_info));
 	strlcpy(new_vlan_info.vlan_iface_name, data->name, sizeof(new_vlan_info.vlan_iface_name));
 	new_vlan_info.vlan_id = data->vlan_id;
+
+	new_vlan_info.priority = data->priority;
 	new_vlan_info.vlan_interface_index = data->vlan_interface_index;
 	m_vlan_iface.push_front(new_vlan_info);
 	pthread_mutex_unlock(&vlan_l2tp_lock);
@@ -2097,6 +2103,13 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 #endif
+	/* Sending Getneigh to receive missing neighbor in case if missed early */
+	IPACMDBG_H("Query Getneigh for vlan ifaces\n");
+	ipa_nl_query_newneigh(AF_BRIDGE);
+	IPACMDBG_H("Query Getneigh for v4\n");
+	ipa_nl_query_newneigh(AF_INET);
+	IPACMDBG_H("Query Getneigh for v6\n");
+	ipa_nl_query_newneigh(AF_INET6);
 	return;
 }
 
@@ -5434,6 +5447,33 @@ int IPACM_Config::get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id)
 	}
 
 	pthread_mutex_unlock(&pppoe_map_lock);
+
+	return ret;
+}
+
+int IPACM_Config::get_pppoe_vlan_pcp( uint16_t *vlan_id, uint8_t *pcp)
+{
+	list<vlan_iface_info>::iterator it_vlan;
+	int ret = IPACM_FAILURE;
+
+	if (pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+
+	for (it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if (it_vlan->vlan_id == *vlan_id)
+		{
+			*pcp = it_vlan->priority;
+			IPACMDBG_H("Found vlan iface %s vlan_id=%d pcp=%d\n",
+				it_vlan->vlan_iface_name, *vlan_id, *pcp);
+			ret = IPACM_SUCCESS;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&vlan_l2tp_lock);
 
 	return ret;
 }

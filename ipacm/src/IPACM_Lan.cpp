@@ -753,6 +753,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									if(IPACM_Wan::backhaul_is_sta_mode == false)
 									{
 										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
+										IPACMDBG_H("Install rule for V4 PDN\n");
 										handle_wan_up_ex(ext_prop, IPA_IP_v4,
 											IPACM_Wan::getXlat_Mux_Id());
 									}
@@ -812,6 +813,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									if(IPACM_Wan::backhaul_is_sta_mode == false)
 									{
 										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
+										IPACMDBG_H("SOCKSv5 Install rule for V4 PDN\n");
 										handle_wan_up_ex(ext_prop, IPA_IP_v4,
 											IPACM_Wan::getXlat_Mux_Id());
 									}
@@ -922,7 +924,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									if(IPACM_Wan::backhaul_is_sta_mode == false)
 									{
 										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
-										handle_wan_up_ex(ext_prop, IPA_IP_v6, 0);
+										IPACMDBG_H("Install rule for V6 PDN\n");
+										handle_wan_up_ex(ext_prop, IPA_IP_v6, IPACM_Wan::getXlat_Mux_Id());
 									}
 									else
 									{
@@ -988,7 +991,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 									if(IPACM_Wan::backhaul_is_sta_mode == false)
 									{
 										ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
-										handle_wan_up_ex(ext_prop, IPA_IP_v6, 0);
+										IPACMDBG_H("SOCKSv5 Install rule for V6 PDN\n");
+										handle_wan_up_ex(ext_prop, IPA_IP_v6, IPACM_Wan::getXlat_Mux_Id());
 									}
 									else
 									{
@@ -1112,7 +1116,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						gre_up(true);
 					}
 #endif
-#ifdef FEATURE_IPOGRE
+#ifdef FEATURE_IPoGRE
 					if(IPACM_Iface::ipacmcfg->ipogre_enabled)
 					{
 						IPACMDBG_H(
@@ -1132,6 +1136,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						handle_software_routing_enable();
 					}
 				}
+				/* Sending Getneigh to receive missing neighbor in case if missed early */
+				IPACMDBG_H("Query Getneigh for physical ifaces\n");
+				ipa_nl_query_newneigh(AF_BRIDGE);
+				IPACMDBG_H("Query Getneigh for v4\n");
+				ipa_nl_query_newneigh(AF_INET);
+				IPACMDBG_H("Query Getneigh for v6\n");
+				ipa_nl_query_newneigh(AF_INET6);
 			}
 		}
 		break;
@@ -2369,12 +2380,13 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Received IPA_NOTIFY_VLAN_UP\n");
 			if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 			{
-				if(IPACM_Wan::isVlanWanUP() && !modem_ul_v4_set[0])
+				if(IPACM_Wan::isVlanWanUP())
+
 				{
 					IPACMDBG_H("Check any missed v4 VLAN handling in v4 new ADDR\n");
 					check_vlan_PDNUp(IPA_IP_v4);
 				}
-				if (IPACM_Wan::isVlanWanUP_V6() && !modem_ul_v6_set[0])
+				if (IPACM_Wan::isVlanWanUP_V6())
 				{
 					IPACMDBG_H("Check any missed v6 VLAN handling in v6 new ADDR\n");
 					check_vlan_PDNUp(IPA_IP_v6);
@@ -3983,7 +3995,6 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 				{
 					if (IPACM_Wan::is_xlat_by_vid(Ids[i]))
 						vlan_data.is_xlat = true;
-					vlan_data.mux_id = 0;
 				}
 				IPACMDBG_H("Push ipv4 handle_vlan_pdn_up mux:%d, VlanID:%d is_xlat: %d\n",
 					vlan_data.mux_id, vlan_data.VlanID, vlan_data.is_xlat);
@@ -4042,10 +4053,6 @@ int IPACM_Lan::check_vlan_PDNUp(enum ipa_ip_type iptype)
 				if (IPACM_Wan::is_xlat_by_vid(Ids[i]))
 					vlan_data.is_xlat = true;
 
-				if(IPACM_Wan::backhaul_is_sta_mode == false)
-				{
-					vlan_data.mux_id = 0;
-				}
 				IPACMDBG_H("Push ipv6 handle_vlan_pdn_up mux:%d, VlanID:%d is_xlat: %d\n",
 					vlan_data.mux_id, vlan_data.VlanID, vlan_data.is_xlat);
 
@@ -14696,7 +14703,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 		return IPACM_SUCCESS;
 	}
 
-#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6)
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 
 	ipa_ipgre_info ipgre_info;
 	bool compatible_gre;
@@ -14872,13 +14879,21 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 		if (iptype == IPA_IP_v4) {
 			bool wan_odu_bridge = (ipa_if_cate == ODU_IF && IPACM_Wan::isWan_Bridge_Mode());
+			/* When IPoGRE is enabled with v6 iptype, v4 rules are for outside-tunnel traffic.
+			 * These must use IPA_PASS_TO_ROUTING since NAT is handled in the first pass. */
+#ifdef FEATURE_IPoGRE
+			bool ipogre_v6_tunnel = (is_ipogre && IPACM_Iface::ipacmcfg->ipogre_enabled && ipgre_info.iptype == IPA_IP_v6);
+#else
+			bool ipogre_v6_tunnel = false;
+#endif
 
-			if (wan_odu_bridge || compatible_gre || IPACM_Iface::ipacmcfg->is_public_ip_support_enabled) {
+			if (wan_odu_bridge || compatible_gre || IPACM_Iface::ipacmcfg->is_public_ip_support_enabled || ipogre_v6_tunnel) {
 				IPACMDBG_H(
-					"%s%s%s\n",
+					"%s%s%s%s\n",
 					(wan_odu_bridge) ? "[WAN, ODU are in bridge mode] " : "",
 					(compatible_gre) ? "[EoGRE enabled]"                : "",
-					(IPACM_Iface::ipacmcfg->is_public_ip_support_enabled) ? "[Public IP enabled]" : "");
+					(IPACM_Iface::ipacmcfg->is_public_ip_support_enabled) ? "[Public IP enabled]" : "",
+					(ipogre_v6_tunnel) ? "[IPoGRE v6 tunnel, v4 outside traffic uses IPA_PASS_TO_ROUTING]" : "");
 				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 			} else {
 				flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
@@ -15014,7 +15029,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			}
 #endif
 
-#ifdef FEATURE_EoGRE  || defined(FEATURE_PMIPV6)
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 			if (compatible_gre)
 			{
 				ipa_ioc_generate_flt_eq flt_eq;
@@ -18973,8 +18988,8 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 			IPACMDBG_H("total %d MTU rules are needed\n", mtu_rule_cnt);
 		}
 
-#ifdef FEATURE_EoGRE  || defined(FEATURE_PMIPV6)
-		IPACMDBG("pmipv6 = %d\n", IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled);	
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
+		IPACMDBG("pmipv6 = %d\n", IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled);
 		/* if in GRE mode, also query MTU since WanUP flag is false but WAN is up */
 		if (IPACM_Iface::ipacmcfg->eogre_enabled || IPACM_Iface::ipacmcfg->ipogre_enabled) {
 			/* re-calculate the ipv4 mtu based on GRE tunnel type*/
@@ -19136,7 +19151,7 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 			}
 		}
 
-#ifdef FEATURE_EoGRE || defined(FEATURE_PMIPV6)
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 		//Case where eogre is enabled for opposite iptype. Need to install MTU rule with no subnets
 		if (IPACM_Iface::ipacmcfg->ipa_num_private_subnet == 0 && IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v6) {
 			if (construct_mtu_rule(&flt_rule.rule, IPA_IP_v4, mtu[0])) IPACMERR("Failed to modify MTU filtering rule.\n");
@@ -19342,7 +19357,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 	}
 #endif
 
-#ifdef FEATURE_EoGRE || defined(FEATURE_PMIPV6)
+#ifdef FEATURE_EoGRE || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 		/* if in GRE mode, also query MTU since WANup_v6 flag is false but WANv6 is up*/
 		if (IPACM_Iface::ipacmcfg->eogre_enabled || IPACM_Iface::ipacmcfg->ipogre_enabled)
 		{
@@ -19535,7 +19550,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 		}
 
-#ifdef FEATURE_EoGRE | defined(FEATURE_PMIPV6)
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 		//Case where eogre is enabled for opposite iptype. Need to install MTU rule with no prefixes
 		if (IPACM_Iface::ipacmcfg->num_ipv6_prefixes == 0 && IPACM_Iface::ipacmcfg->eogre_enabled && IPACM_Iface::ipacmcfg->eogre_info.iptype == IPA_IP_v4) {
 			memcpy(
@@ -24698,7 +24713,7 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 
 		if ( ret == IPACM_SUCCESS )
 		{
-			IPACM_Iface::ipacmcfg->SetQmapId(muxid);
+			IPACM_Iface::ipacmcfg->SetQmapId(muxid );;
 		}
 		else
 		{
@@ -24727,7 +24742,14 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 
 		memset(&mux, 0, sizeof(mux));
 
-		mux.qmap_id = muxid;
+		if(ipogre_enabled == true)
+		{
+			mux.qmap_id = 0xFF;
+		}
+		else
+		{   
+			mux.qmap_id = muxid;
+		}
 		mux.client  = rx_prop->rx[0].src_pipe;
 
 		IPACMDBG_H(
@@ -24821,11 +24843,22 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 		"Embellishing existing filter rules for eogre iptype(%d)\n",
 		iptype);
 
-if(isPmipv6 || ipogre_enabled){/*PMIPV6 needs to take care of WAN up before GRE UP scenario */
-	if(IPACM_Wan::isWanUP(ipa_if_num)){
-		del_ul_flt_rules(iptype);
+	if(isPmipv6 || ipogre_enabled){/*PMIPV6 needs to take care of WAN up before GRE UP scenario */
+		if(IPACM_Wan::isWanUP(ipa_if_num)){
+			del_ul_flt_rules(iptype);
+		}
 	}
-}
+
+	bool hdr_retain = isPmipv6 || ipogre_enabled;
+	/* In ipogre enabled case, add catchall rule above the uplink modem filtering rules */
+	if (ipogre_enabled)
+	{
+		if ( gre_add_catchup_rule(iptype,hdr_retain) != 0 )
+		{
+			IPACMERR("gre_add_catchup_rule failed\n");
+			return;
+		}
+	}
 
 #ifdef FEATURE_VLAN_MPDN
 	handle_uplink_filter_rule(
@@ -24840,15 +24873,41 @@ if(isPmipv6 || ipogre_enabled){/*PMIPV6 needs to take care of WAN up before GRE 
 		iptype,
 		IPACM_Iface::ipacmcfg->GetQmapId(), false, isPmipv6);
 #endif
-	/*
-	 * Need to add the one final rule, which is the eogre catchup
-	 * rule...
-	 */
-	bool hdr_retain = isPmipv6 || ipogre_enabled;
-	if ( gre_add_catchup_rule(iptype,hdr_retain) != 0 )
+
+	/* When IPoGRE is enabled for v6 iptype, the v4 catchall rule is installed via
+	* update_complementary_table inside gre_add_catchup_rule. We must also install
+	* the modem uplink filter rules for v4 iptype below that catchall rule.
+	* These v4 rules use IPA_PASS_TO_ROUTING (not IPA_PASS_TO_SRC_NAT) since
+	* NAT is handled in the first pass for IPoGRE with v6 tunnel type. */
+	if (ipogre_enabled && iptype == IPA_IP_v6 && IPACM_Wan::isWanUP(ipa_if_num))
 	{
-		IPACMERR("gre_add_catchup_rule failed\n");
-		return;
+		IPACMDBG_H("IPoGRE v6: installing modem UL filter rules for v4 iptype with IPA_PASS_TO_ROUTING\n");
+#ifdef FEATURE_VLAN_MPDN
+		handle_uplink_filter_rule(
+			IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
+			IPA_IP_v4,
+			IPACM_Iface::ipacmcfg->GetQmapId(),
+			false,
+			false, false, false, isPmipv6, ipogre_enabled);
+#else
+		handle_uplink_filter_rule(
+			IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
+			IPA_IP_v4,
+			IPACM_Iface::ipacmcfg->GetQmapId(), false, isPmipv6, ipogre_enabled);
+#endif
+	}
+
+	/*
+	* Need to add the one final rule, which is the eogre catchup
+	* rule...
+	*/
+	if (!ipogre_enabled)
+	{
+		if ( gre_add_catchup_rule(iptype,hdr_retain) != 0 )
+		{
+			IPACMERR("gre_add_catchup_rule failed\n");
+			return;
+		}
 	}
 
 	//need to add mtu rules when eogre is enabled
@@ -25243,6 +25302,54 @@ int IPACM_Lan::gre_add_catchup_rule(
 		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 	}
 	flt_rule_entry.rule.rt_tbl_hdl          = gre_get_rt_tbl_hdl(iptype,isPmipv6);
+	IPACMERR("DEBUG route handle %d\n",flt_rule_entry.rule.rt_tbl_hdl);
+
+	/* Query and set rt_tbl_idx for the catchup rule.
+	* For IPA_PASS_TO_SRC_NAT (IPoGRE case), the IPA hardware uses rt_tbl_idx
+	* directly for post-NAT routing, so it must be explicitly set here.
+	* rt_tbl_hdl alone is not sufficient for NAT actions.
+	*/
+	ipa_ioc_get_rt_tbl_indx rt_tbl_idx_query;
+	memset(&rt_tbl_idx_query, 0, sizeof(rt_tbl_idx_query));
+	rt_tbl_idx_query.ip = iptype;
+#ifdef FEATURE_PMIPV6
+	if (isPmipv6) {
+		snprintf(rt_tbl_idx_query.name, IPA_RESOURCE_NAME_MAX, "%s",
+		(iptype == IPA_IP_v4) ? "GREV4RT" : "GREV6RT");
+	} else
+#endif
+	{
+		strlcpy(rt_tbl_idx_query.name,
+			(iptype == IPA_IP_v4) ?
+			IPACM_Iface::ipacmcfg->rt_tbl_lan_v4.name :
+			IPACM_Iface::ipacmcfg->rt_tbl_v6.name,
+			IPA_RESOURCE_NAME_MAX);
+	}
+	rt_tbl_idx_query.name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+
+	int fd_rt = open(IPA_DEVICE_NAME, O_RDWR);
+	if (fd_rt < 0)
+	{
+		IPACMERR("Failed opening %s for rt_tbl_idx query in catchup rule\n",
+		IPA_DEVICE_NAME);
+	}
+	else
+	{
+		if (0 != ioctl(fd_rt, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx_query))
+		{
+			IPACMERR("Failed to get routing table index for catchup rule (table: %s)\n",
+				rt_tbl_idx_query.name);
+		}
+		else
+		{
+			flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx_query.idx;
+			IPACMDBG_H("Catchup rule: routing table %s has index %d\n",
+				rt_tbl_idx_query.name, rt_tbl_idx_query.idx);
+		}
+		close(fd_rt);
+	}
+
+
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 
 	if(isPmipv6){
@@ -25252,9 +25359,52 @@ int IPACM_Lan::gre_add_catchup_rule(
 		flt_rule_entry.rule.retain_hdr          = 1;
 	}
 
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_META_DATA;
 #ifdef FEATURE_IPA_V3
 	flt_rule_entry.rule.hashable = true;
 #endif
+
+	/* Add metadata check similar to handle_uplink_filter_rule:
+	* same metadata equation, no protocol check, dst address (0.0.0.0) check only.
+	* Use IPA_IOC_GENERATE_FLT_EQ to convert the DST addr attrib to eq form,
+	* then append the metadata equation on top. */
+	if (rx_prop != NULL)
+	{
+		int fd_eq = open(IPA_DEVICE_NAME, O_RDWR);
+		if (fd_eq < 0)
+		{
+			IPACMERR("Failed opening %s for eq generation.\n", IPA_DEVICE_NAME);
+		}
+		else
+		{
+			ipa_ioc_generate_flt_eq flt_eq;
+			memset(&flt_eq, 0, sizeof(flt_eq));
+			flt_eq.ip = iptype;
+			memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
+
+			if (0 != ioctl(fd_eq, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
+			{
+				IPACMERR("Failed to get eq_attrib for catchup rule\n");
+			}
+			else
+			{
+				flt_rule_entry.rule.eq_attrib_type = 1;
+				memcpy(&flt_rule_entry.rule.eq_attrib, &flt_eq.eq_attrib,
+					sizeof(flt_eq.eq_attrib));
+
+				/* Add metadata equation (same as in handle_uplink_filter_rule) */
+				//flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 9);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value = (0xFF & 0xFF) << 16;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask = 0x00FF0000;;
+				IPACMDBG_H("catchup rule: metadata eq value 0x%x mask 0x%x\n",
+					rx_prop->rx[0].attrib.meta_data,
+					rx_prop->rx[0].attrib.meta_data_mask);
+			}
+			close(fd_eq);
+		}
+	}
 
 	memcpy(pFilteringTable->rules,
 		   &flt_rule_entry,
@@ -25360,6 +25510,51 @@ int IPACM_Lan::update_complementary_table(
 			sizeof(ipa_flt_rule_add));
 
 		flt_rule->rules[0].rule.rt_tbl_hdl = gre_get_rt_tbl_hdl(iptype,isPmipv6);
+
+		/* Query and set rt_tbl_idx for the complementary rule.
+		* For IPA_PASS_TO_SRC_NAT (IPoGRE case), the IPA hardware uses rt_tbl_idx
+		* directly for post-NAT routing, so it must be explicitly set here.
+		* rt_tbl_hdl alone is not sufficient for NAT actions.
+		*/
+		ipa_ioc_get_rt_tbl_indx rt_tbl_idx_query;
+		memset(&rt_tbl_idx_query, 0, sizeof(rt_tbl_idx_query));
+		rt_tbl_idx_query.ip = iptype;
+#ifdef FEATURE_PMIPV6
+		if (isPmipv6) {
+			snprintf(rt_tbl_idx_query.name, IPA_RESOURCE_NAME_MAX, "%s",
+			(iptype == IPA_IP_v4) ? "GREV4RT" : "GREV6RT");
+		} else
+#endif
+		{
+			strlcpy(rt_tbl_idx_query.name,
+				(iptype == IPA_IP_v4) ?
+				IPACM_Iface::ipacmcfg->rt_tbl_lan_v4.name :
+				IPACM_Iface::ipacmcfg->rt_tbl_v6.name,
+				IPA_RESOURCE_NAME_MAX);
+		}
+		rt_tbl_idx_query.name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+
+		int fd_rt = open(IPA_DEVICE_NAME, O_RDWR);
+		if (fd_rt < 0)
+		{
+			IPACMERR("Failed opening %s for rt_tbl_idx query in complementary rule\n",
+				IPA_DEVICE_NAME);
+		}
+		else
+		{
+			if (0 != ioctl(fd_rt, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx_query))
+			{
+				IPACMERR("Failed to get routing table index for complementary rule (table: %s)\n",
+					rt_tbl_idx_query.name);
+			}
+			else
+			{
+				flt_rule->rules[0].rule.rt_tbl_idx = rt_tbl_idx_query.idx;
+				IPACMDBG_H("Complementary rule: routing table %s has index %d\n",
+					rt_tbl_idx_query.name, rt_tbl_idx_query.idx);
+			}
+			close(fd_rt);
+		}
 
 		if ( m_filtering.AddFilteringRule(flt_rule) == true )
 		{

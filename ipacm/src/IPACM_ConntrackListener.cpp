@@ -67,6 +67,8 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 ip_pass_enable_default_pdn = 0;
 	 ip_pass_dummy_ip_default_pdn = 0;
 	 ip_pass_skip_nat_default_pdn = 0;
+	 rgip_pass_enable = 0;
+	 IPACM_Iface::ipacmcfg->rgip_ip_ippt = 0;
 
 	 nat_inst = NatApp::GetInstance();
 
@@ -118,6 +120,7 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, this);
 	 IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT, this);
 	 IPACM_EvtDispatcher::registr(IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, this);
+	 IPACM_EvtDispatcher::registr(IPA_RGIP_PASS_UPDATE_EVENT, this);
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	 IPACM_EvtDispatcher::registr(IPA_PKT_THRESHOLD_UPDATE_EVENT, this);
 #endif
@@ -240,8 +243,13 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			if(IPACM_Iface::ipacmcfg->rgip_ip)
 			{
 				rgip_addr = IPACM_Iface::ipacmcfg->rgip_ip;
+				/* Persist the RGIP address for IPPT use-case; not cleared on RGIP down. */
+				IPACM_Iface::ipacmcfg->rgip_ip_ippt = IPACM_Iface::ipacmcfg->rgip_ip;
+				/* Enable NAT for RGIP PDN when RGIP passthrough is active, so that
+				 * no-op dummy NAT entries (private_ip == public_ip == rgip_addr)
+				 * can be installed for RGIP client traffic. */
 				nat_inst->AddPdn(rgip_addr, muxid, false,
-					(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn));
+					(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn) || rgip_pass_enable);
 			}
 #endif
 			break;
@@ -324,6 +332,27 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			IPACMDBG_H("Received IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT event\n");
 			HandleIPPassPDNInfoUpdate(data);
 			break;
+
+	 case IPA_RGIP_PASS_UPDATE_EVENT:
+		{
+			/* RGIP passthrough: the RGIP v4 address is assigned to the tethered client.
+			 * The modem keeps its own WAN IP. Traffic from the RGIP client gets a
+			 * no-op dummy NAT entry (private_ip == public_ip == rgip_addr). */
+			ipacm_event_rgip_pass_info *rgip_pass_data =
+				(ipacm_event_rgip_pass_info *)data;
+			IPACMDBG_H("Received IPA_RGIP_PASS_UPDATE_EVENT: enable=%d rgip=0x%x\n",
+				rgip_pass_data->enable, rgip_pass_data->rgip_addr);
+			rgip_pass_enable = rgip_pass_data->enable;
+			if (rgip_pass_enable && rgip_addr)
+			{
+				/* Flush any stale dummy entries for the RGIP so fresh ones
+				 * are installed with the correct no-op public_ip. */
+				nat_inst->DelDummyNatEntries(rgip_addr);
+				query_conntracks(AF_INET, rgip_addr, 0);
+			}
+			break;
+		}
+
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	 case IPA_PKT_THRESHOLD_UPDATE_EVENT:
 			IPACMDBG_H("Received IPA_PKT_THRESHOLD_UPDATE_EVENT event\n");
@@ -466,8 +495,13 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			IPACMDBG("Received IPA_HANDLE_RGIP_UP event\n");
 			uint32_t *rgip_data = (uint32_t *)data;
 			rgip_addr = *rgip_data;
+			/* Persist the RGIP address for IPPT use-case; not cleared on RGIP down. */
+			IPACM_Iface::ipacmcfg->rgip_ip_ippt = *rgip_data;
+			/* Enable NAT for RGIP PDN when RGIP passthrough is active, so that
+			 * no-op dummy NAT entries (private_ip == public_ip == rgip_addr)
+			 * can be installed for RGIP client traffic. */
 			nat_inst->AddPdn(rgip_addr, muxid, false,
-				(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn));
+				(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn) || rgip_pass_enable);
 			break;
 		}
 
@@ -1579,8 +1613,15 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 #ifndef FEATURE_SOCKSv5
 	if (!wan_ipaddr_v6.Valid())
 	{
-		IPACMERR("Invalid WAN address,ignoring WAN UP event\n");
-		return;
+		if (IPACM_Iface::ipacmcfg->delegate_prefix_valid)
+		{
+			IPACMDBG_H("Invalid WAN address but delegate prefix is valid, proceeding with WAN UP event\n");
+		}
+		else
+		{
+			IPACMERR("Invalid WAN address,ignoring WAN UP event\n");
+			return;
+		}
 	}
 #endif
 	IPACMDBG_H("Recevied below information during wanup\n");
@@ -3845,26 +3886,32 @@ int IPACM_ConntrackListener::DetermineSrcorDstNAT(
 	 {
 		 IPACMDBG_H("Neither Destination nor Source nat flag Set\n");
 
-		if(orig_src_ip == wan_ipaddr)
+		if(orig_src_ip == wan_ipaddr || orig_src_ip == rgip_addr)
 		{
 			IPACMDBG_H("orig src ip:0x%x equal to wan ip\n",orig_src_ip);
 			params->status = IPS_SRC_NAT;
 #ifdef FEATURE_VLAN_MPDN
-			/* For IPPT case, need check if it's vlan on default pdn */
-			params->public_ip = wan_ipaddr;
+			/* For RGIP passthrough: public_ip = rgip_addr so private_ip == public_ip (no-op NAT).
+			 * For regular IPPT or embedded WAN: public_ip = wan_ipaddr. */
+			params->public_ip = (orig_src_ip == rgip_addr && rgip_pass_enable) ? rgip_addr : wan_ipaddr;
+			if (orig_src_ip == rgip_addr && rgip_pass_enable)
+				params->ip_pass_enable = 1;
 			params->embedded_vlan = true;
 			nat_entry->isVlan = IsVlanIPv4(orig_src_ip, &params->VlanID);
 			if (nat_entry->isVlan)
 				nat_entry->IsVlanUp = true;
 #endif
 		}
-		else if(orig_dst_ip == wan_ipaddr)
+		else if(orig_dst_ip == wan_ipaddr || orig_dst_ip == rgip_addr)
 		{
 			IPACMDBG_H("orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
 			params->status = IPS_DST_NAT;
 #ifdef FEATURE_VLAN_MPDN
-			/* For IPPT case, need check if it's vlan on default pdn */
-			params->public_ip = wan_ipaddr;
+			/* For RGIP passthrough: public_ip = rgip_addr so private_ip == public_ip (no-op NAT).
+			 * For regular IPPT or embedded WAN: public_ip = wan_ipaddr. */
+			params->public_ip = (orig_dst_ip == rgip_addr && rgip_pass_enable) ? rgip_addr : wan_ipaddr;
+			if (orig_dst_ip == rgip_addr && rgip_pass_enable)
+				params->ip_pass_enable = 1;
 			params->embedded_vlan = true;
 			nat_entry->isVlan = IsVlanIPv4(orig_dst_ip, &params->VlanID);
 			if (nat_entry->isVlan)
@@ -4096,8 +4143,11 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			IPACMDBG_H("orig src ip:0x%x equal to wan ip\n",orig_src_ip);
 			status = IPS_SRC_NAT;
 #ifdef FEATURE_VLAN_MPDN
-			/* For IPPT case, need check if it's vlan on default pdn */
-			public_ip = wan_ipaddr;
+			/* For RGIP passthrough: public_ip = rgip_addr so private_ip == public_ip (no-op NAT).
+			 * For regular IPPT or embedded WAN: public_ip = wan_ipaddr. */
+			public_ip = (orig_src_ip == rgip_addr && rgip_pass_enable) ? rgip_addr : wan_ipaddr;
+			if (orig_src_ip == rgip_addr && rgip_pass_enable)
+				ip_pass_enable = 1;
 			embedded_vlan = true;
 			nat_entry.isVlan = IsVlanIPv4(orig_src_ip, &VlanID);
 			if (nat_entry.isVlan)
@@ -4121,8 +4171,11 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			IPACMDBG_H("orig Dst IP:0x%x equal to wan ip\n",orig_dst_ip);
 			status = IPS_DST_NAT;
 #ifdef FEATURE_VLAN_MPDN
-			/* For IPPT case, need check if it's vlan on default pdn */
-			public_ip = wan_ipaddr;
+			/* For RGIP passthrough: public_ip = rgip_addr so private_ip == public_ip (no-op NAT).
+			 * For regular IPPT or embedded WAN: public_ip = wan_ipaddr. */
+			public_ip = (orig_dst_ip == rgip_addr && rgip_pass_enable) ? rgip_addr : wan_ipaddr;
+			if (orig_dst_ip == rgip_addr && rgip_pass_enable)
+				ip_pass_enable = 1;
 			embedded_vlan = true;
 			nat_entry.isVlan = IsVlanIPv4(orig_dst_ip, &VlanID);
 			if (nat_entry.isVlan)
@@ -5100,13 +5153,17 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 	Ipv6ctEntry& entry) const
 {
 	IPACMDBG_H("\n");
-	struct nfct_attr_grp_ipv6 orig_params, host_params;
+	struct nfct_attr_grp_ipv6 orig_params, host_params, repl_params;
 	nfct_get_attr_grp(evt_data->ct, ATTR_GRP_ORIG_IPV6, (void *)&orig_params);
 	const Ipv6IpAddress srcAddr(orig_params.src, true), dstAddr(orig_params.dst, true);
+	nfct_get_attr_grp(evt_data->ct, ATTR_GRP_REPL_IPV6, (void *)&repl_params);
+	const Ipv6IpAddress srcAddr_repl(repl_params.src, true), dstAddr_repl(repl_params.dst, true);
 	for(int i=0; i<4; i++)
 	{
 		host_params.src[i] = ntohl(orig_params.src[i]);
 		host_params.dst[i] = ntohl(orig_params.dst[i]);
+		repl_params.src[i] = ntohl(repl_params.src[i]);
+		repl_params.dst[i] = ntohl(repl_params.dst[i]);
 	}
 
 	uint16_t srcPort = nfct_get_attr_u16(evt_data->ct, ATTR_ORIG_PORT_SRC);
@@ -5136,7 +5193,22 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 		IPACMDBG("addresses aren't global, bail\n");
 		goto bail;
 	}
-
+#ifdef FEATURE_IPoGRE
+	/*
+	 *  If either the source or the destination address shares
+	 * the same /64 subnet as wan_ipaddr_v6 (the rmnet_data v6 address), this
+	 * session does not belong to the WAN interface and must be ignored – do not
+	 * add a CT entry for it.
+	 */
+	if (wan_ipaddr_v6.Valid() && IPACM_Iface::ipacmcfg->ipogre_enabled == true)
+	{
+		if (wan_ipaddr_v6.IsSameSubnet(srcAddr) || wan_ipaddr_v6.IsSameSubnet(dstAddr) || wan_ipaddr_v6.IsSameSubnet(srcAddr_repl) || wan_ipaddr_v6.IsSameSubnet(dstAddr_repl))
+		{
+			IPACMDBG_H("v6 conntrack src/dst in rmnet_data v6 subnet, ignoring session\n");
+			goto bail;
+		}
+	}
+#endif
 	if (nat_iface_ipv6_addr.Find(srcAddr) != NULL)
 	{
 		entry.m_direction = NatEntryBase::DirectionOutbound;
@@ -5262,13 +5334,13 @@ bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
 		ret = ip.IsSameSubnet(wan_ipaddr_v6);
 	}
 
-	if(pConfig->blackhole_valid == true)
+	if(pConfig->delegate_prefix_valid == true)
 	{
-		int len =  pConfig->ipv6_blackhole_len;
+		int len =  pConfig->ipv6_delegate_prefix_len;
 		const Ipv6IpAddress& ipv6 = static_cast<const Ipv6IpAddress&>(ip);
 		uint32_t v6_address[4];
 		/* Note: Assuming incoming ipv6 =  2001:0db8:85a3:0099:1111:2222:3333:4444
-		 * and Blackhole Prefix: 2001:0db8:85a3:0000::/56
+		 * and delegate_prefix Prefix: 2001:0db8:85a3:0000::/56
 		 * Assuming they are correctly populated into four 32-bit blocks for example:
 		 * v6_address[0] = 0x20010db8
 		 * v6_address[1] = 0x85a30099
@@ -5322,7 +5394,7 @@ bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
 			 * prefix[1] & mask:     0x85a30000 & 0xFFFFFF00 = 0x85a30000
 			 * They match! Continue loop.
 			 */
-			if ((v6_address[i] & mask) != (pConfig->ipv6_blackhole_prefix[i] & mask)) {
+			if ((v6_address[i] & mask) != (pConfig->ipv6_delegate_prefix[i] & mask)) {
 				return false;
 			}
 

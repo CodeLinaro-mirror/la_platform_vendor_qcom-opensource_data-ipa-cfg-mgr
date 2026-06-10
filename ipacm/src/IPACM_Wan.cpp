@@ -365,6 +365,8 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	sta_ipv6_pdn_index = -1;
 	sta_ipv4_pdn_index = -1;
 	sta_vlan_id = 0;
+	sta_vlan_pcp = 0;
+
 #ifdef FEATURE_VLAN_MPDN
 	associated_VID = 0;
 #endif
@@ -2503,8 +2505,27 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					if(ipv6_prefix[0] == 0 && ipv6_prefix[1] == 0)
 					{
-						IPACMDBG_H("IPv6 default route comes earlier than global IP, ignore.\n");
-						return;
+						//Type-1 prefix delegation
+						//No v6 global address assigned at wan interface
+						if(IPACM_Iface::ipacmcfg->delegate_prefix_valid == true &&
+						   IPACM_Iface::ipacmcfg->ipv6_delegate_prefix_len <= 128)
+						{
+							IPACMDBG_H("Stored delegate_prefix prefix 0x%08x%08x%08x%08x length: %d\n",
+									IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[0],
+									IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[1],
+									IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[2],
+									IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[3],
+									IPACM_Iface::ipacmcfg->ipv6_delegate_prefix_len);
+							ipv6_prefix[0] = IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[0];
+							ipv6_prefix[1] = IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[1];
+							/* Note: ipv6_prefix array size is 2 in IPACM_Wan class */
+							IPACMDBG_H("IPv6 default route comes earlier than global IP, process.\n");
+						}
+						else
+						{
+							IPACMDBG_H("IPv6 default route comes earlier than global IP, ignore.\n");
+							return;
+						}
 					}
 					IPACMDBG_H("\n get default v6 route (dst:00.00.00.00)\n");
 
@@ -3421,6 +3442,46 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		IPACMDBG_H("Received and will process an IPA_HANDLE_GRE_DOWN\n");
 		gre_down();
 		break;
+
+	case IPA_HANDLE_RGIP_UP:
+	{
+		/*
+		 * If IPoGRE WAN is not yet up, ipgre_do_rt_work() will call
+		 * ipgre_add_rgip_rt_rule() with the correct rgip_ip when IPoGRE UP
+		 * is processed. Only act here if IPoGRE WAN is already up, meaning
+		 * the RGIP rule was previously installed before rgip_ip was assigned.
+		 */
+		if (!IPACM_Iface::ipacmcfg->pmip_details.pmipv6_up_wan)
+		{
+			IPACMDBG_H("IPA_HANDLE_RGIP_UP: IPoGRE not yet up, RGIP rule deferred to IPoGRE UP\n");
+			break;
+		}
+
+		ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->ipgre_info;
+
+		IPACMDBG_H("IPA_HANDLE_RGIP_UP after IPoGRE UP: reinstalling RGIP src route rule (rgip_ip 0x%x)\n",
+			IPACM_Iface::ipacmcfg->rgip_ip);
+
+		/* Remove stale RGIP proc_ctx and rt_rule installed during IPoGRE UP (when rgip_ip was 0) */
+		if (IPACM_Wan::ipgre_route_data[ipgre_info.iptype].rt_gre_add_hdl_rgip)
+		{
+			m_routing.DeleteRoutingHdl(
+				IPACM_Wan::ipgre_route_data[ipgre_info.iptype].rt_gre_add_hdl_rgip,
+				IPA_IP_v4);
+			IPACM_Wan::ipgre_route_data[ipgre_info.iptype].rt_gre_add_hdl_rgip = 0;
+		}
+		if (IPACM_Wan::ipgre_route_data[ipgre_info.iptype].proc_ctx_gre_add_hdl_rgip)
+		{
+			m_header.DeleteHeaderProcCtx(
+				IPACM_Wan::ipgre_route_data[ipgre_info.iptype].proc_ctx_gre_add_hdl_rgip);
+			IPACM_Wan::ipgre_route_data[ipgre_info.iptype].proc_ctx_gre_add_hdl_rgip = 0;
+		}
+
+		ipgre_info.iptype = IPA_IP_v4;
+		if (ipgre_add_rgip_rt_rule(ipgre_info) != IPACM_SUCCESS)
+			IPACMERR("IPA_HANDLE_RGIP_UP: ipgre_add_rgip_rt_rule failed\n");
+		break;
+	}
 #endif
 
 #ifdef FEATURE_IPA_IPSEC
@@ -6453,16 +6514,16 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 				flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0x00000000;
 				flt_rule_entry.rule.attrib.u.v4.dst_addr = 0x00000000;
+				if (sta_vlan_id > 0 && !is_ppp_iface)
+				{
+					flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+					flt_rule_entry.rule.attrib.vlan_id = sta_vlan_id;
+				}
 				if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
 					IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 					strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 					IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v4] && (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 				{
-					if(!is_ppp_iface)
-					{
-						flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
-						flt_rule_entry.rule.attrib.vlan_id = sta_vlan_id;
-					}
 					memcpy(&(m_pFilteringTableafter->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 					if (false == m_filtering.AddFilteringRuleAfter(m_pFilteringTableafter))
 					{
@@ -6575,16 +6636,16 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 					sizeof(struct ipa_rule_attrib));
 				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
 				flt_rule_entry.rule.attrib.u.v6.next_hdr = (uint8_t)IPACM_FIREWALL_IPPROTO_ICMP6;
+				if (sta_vlan_id > 0 && !is_ppp_iface)
+				{
+					flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+					flt_rule_entry.rule.attrib.vlan_id = sta_vlan_id;
+				}
 				if(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->get_eth_vlan_wan_up(ipa_if_num) == IPACM_SUCCESS &&
 					IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
 					strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name, sizeof(dev_name)) == 0 &&
 					(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == false))
 				{
-					if(!is_ppp_iface)
-					{
-						flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
-						flt_rule_entry.rule.attrib.vlan_id = sta_vlan_id;
-					}
 					memcpy(&(m_pFilteringTableafter->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 					if (false == m_filtering.AddFilteringRuleAfter(m_pFilteringTableafter))
 					{
@@ -9754,7 +9815,7 @@ int IPACM_Wan::handle_down_evt_ex()
 	mtu_v6 = DEFAULT_MTU_SIZE;
 	mtu_v6_set = false;
 #endif
-#ifdef FEATURE_IPOGRE
+#ifdef FEATURE_IPoGRE
 	if(IPACM_Iface::ipacmcfg->ipogre_enabled == true)
 	{
 		gre_down();
@@ -11736,7 +11797,12 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 											sCopyHeader.hdr_len = 18;
 											/* VLAN ID is 12 bits. So update accordingly. */
 											pHeaderDescriptor->hdr[0].hdr[15] = (uint8_t)sta_vlan_id & 0xFF;
-											pHeaderDescriptor->hdr[0].hdr[14] = (uint8_t)(sta_vlan_id >> 8) & 0x0F;
+
+											if(IPACM_Iface::ipacmcfg->get_pppoe_vlan_pcp(&sta_vlan_id, &sta_vlan_pcp) != IPACM_SUCCESS)
+												IPACMDBG_H("Failed to fetch PPPoE VLAN PCP for vlan-id %d", sta_vlan_id);
+
+											pHeaderDescriptor->hdr[0].hdr[14] = ((uint8_t)(sta_vlan_id >> 8) & 0x0F) | ((sta_vlan_pcp & 0x07) << 5);
+
 											pHeaderDescriptor->hdr[0].hdr[13] = 0x00;
 											pHeaderDescriptor->hdr[0].hdr[12] = 0x81;
 											/* Update Ether Type to 0x800.*/
@@ -11899,7 +11965,11 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 						sCopyHeader.hdr_len = 18;
 						/* VLAN ID is 12 bits. So update accordingly. */
 						pHeaderDescriptor->hdr[0].hdr[15] = (uint8_t)sta_vlan_id & 0xFF;
-						pHeaderDescriptor->hdr[0].hdr[14] = (uint8_t)(sta_vlan_id >> 8) & 0x0F;
+						if(IPACM_Iface::ipacmcfg->get_pppoe_vlan_pcp(&sta_vlan_id, &sta_vlan_pcp) != IPACM_SUCCESS)
+							IPACMDBG_H("Failed to fetch PPPoE VLAN PCP for vlan-id %d", sta_vlan_id);
+
+						pHeaderDescriptor->hdr[0].hdr[14] = ((uint8_t)(sta_vlan_id >> 8) & 0x0F) | ((sta_vlan_pcp & 0x07) << 5);
+
 						pHeaderDescriptor->hdr[0].hdr[13] = 0x00;
 						pHeaderDescriptor->hdr[0].hdr[12] = 0x81;
 						/* Update Ether Type to 0x86dd.*/
@@ -12547,12 +12617,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					else
 #endif
 					{
-						if (IPACM_Iface::ipacmcfg->mape_enable
-							&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)) {
-							rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
-							IPACMDBG_H("mape v6 rt_rule_entry->rule.hdr_proc_ctx_hdl %x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
-						}
-						else if(get_client_memptr(wan_client, wan_index)->sta_hdr_proc_ctx_set == true)
+						if(get_client_memptr(wan_client, wan_index)->sta_hdr_proc_ctx_set == true)
 						{
 							rt_rule_entry->rule.hdr_proc_ctx_hdl =
 								get_client_memptr(wan_client, wan_index)->sta_hdr_proc_hdl_v6;
@@ -12567,7 +12632,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 					rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
-					if(active_v6)
+					if(active_v6 && m_ipv6_addr[0])
 					{
 						rt_rule_entry->rule.attrib.u.v6.src_addr[0] = m_ipv6_addr[0];
 						rt_rule_entry->rule.attrib.u.v6.src_addr[1] = m_ipv6_addr[1];
@@ -12581,6 +12646,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					else
 					{
 						IPACMERR("v6 STA WAN s not up yet!!!(%d)\n", active_v6);
+						IPACMERR(" m_ipv6_addr 0x%x 0x%x \n",m_ipv6_addr[0],m_ipv6_addr[1]);
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -16310,6 +16376,8 @@ int IPACM_Wan::ipgre_make_hdr_add_ctx(
 		procCtx->type         = IPA_HDR_PROC_IPOGRE_HEADER_ADD;
 		procCtx->ipogre_params.hdr_add_param.input_ip_version = iptype;
 		procCtx->ipogre_params.hdr_add_param.output_ip_version =IPACM_Iface::ipacmcfg->ipgre_info.iptype;
+		procCtx->ipogre_params.hdr_add_param.Mux_Id = ext_prop->ext[0].mux_id;
+		procCtx->ipogre_params.hdr_add_param.non_ipogre = 0;
 	}
 	else
 	{
@@ -16424,63 +16492,331 @@ int IPACM_Wan::ipgre_make_header_add_rt_rule(
 		return IPACM_FAILURE;
 	}
 
-	/*
-	 * Make "header add" route rule...
-	 */
+	if ( iptype == IPA_IP_v4 )
+	{
+		/*
+		* For v4: install 1 rule matching rmnet data v4 src IP via dedicated API.
+		* The rgip src-based rule is installed separately via ipgre_add_rgip_rt_rule().
+		*/
+
+		/* Install the wan_v4_addr src-based route rule via dedicated API */
+		if ( ipgre_add_wan_v4_addr_rt_rule(ipgre_info) != IPACM_SUCCESS )
+		{
+			IPACMERR("ipgre_add_wan_v4_addr_rt_rule failed\n");
+			return IPACM_FAILURE;
+		}
+
+		/* Install the rgip src-based route rule via dedicated API */
+		if ( ipgre_add_rgip_rt_rule(ipgre_info) != IPACM_SUCCESS )
+		{
+			IPACMERR("ipgre_add_rgip_rt_rule failed\n");
+			return IPACM_FAILURE;
+		}
+	}
+	else
+	{
+		/*
+		* Make "header add" route rule for v6...
+		*/
+		static const int NUM_RT_RULE = 1;
+
+		uint8_t buf[
+			sizeof(struct ipa_ioc_add_rt_rule) +
+			(NUM_RT_RULE * sizeof(struct ipa_rt_rule_add)) ];
+
+		memset(buf, 0, sizeof(buf));
+
+		struct ipa_ioc_add_rt_rule* rt_table =
+			(struct ipa_ioc_add_rt_rule*) buf;
+
+		struct ipa_rt_rule_add* rt_rule_entry = &(rt_table->rules[0]);
+
+		rt_table->commit    = true;
+		rt_table->num_rules = NUM_RT_RULE;
+		rt_table->ip        = iptype;
+
+		snprintf(
+			rt_table->rt_tbl_name,
+			sizeof(rt_table->rt_tbl_name),
+			"%s",
+			"GREV6RT");
+
+		rt_rule_entry->at_rear                 = true;
+		rt_rule_entry->rule.dst                = IPA_CLIENT_DUMMY_CONS;
+		rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR;
+		rt_rule_entry->rule.hdr_proc_ctx_hdl   = ctx_2use;
+
+#ifdef FEATURE_IPA_V3
+		rt_rule_entry->rule.hashable           = true;
+#endif
+		rt_rule_entry->rule.retain_hdr         = 0;
+		/*
+		* Addresses need to be zero, hence..
+		*/
+		memset(
+			&rt_rule_entry->rule.attrib.u,
+			0,
+			sizeof(rt_rule_entry->rule.attrib.u));
+
+		if ( m_routing.AddRoutingRule(rt_table) == true )
+		{
+			IPACMDBG_H(
+				"GRE route rule for \"header add\" successfully installed in %s\n",
+				rt_table->rt_tbl_name);
+			IPACM_Wan::ipgre_route_data[iptype].rt_gre_add_hdl = rt_rule_entry->rt_rule_hdl;
+		}
+		else
+		{
+			IPACMERR("AddRoutingRule failed\n");
+			return IPACM_FAILURE;
+		}
+	}
+
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Wan::ipgre_add_wan_v4_addr_rt_rule(
+	ipa_ipgre_info& ipgre_info)
+{
+	enum ipa_ip_type iptype = ipgre_info.iptype;
+
+	IPACMDBG_H(
+		"Attempting to add wan_v4_addr src-based route rule for iptype(%d)\n",
+		iptype);
+
+	/* This rule is only applicable for IPv4 tunnels */
+	if ( iptype != IPA_IP_v4 )
+	{
+		IPACMDBG_H("wan_v4_addr route rule is only applicable for IPv4, skipping\n");
+		return IPACM_SUCCESS;
+	}
+
+	uint32_t hdr_2use = IPACM_Wan::ipgre_route_data[iptype].ul_header_hdl;
+
+	/* Create a dedicated proc ctx for the wan_v4_addr rule */
+	static const int NUM_OF_PROC_CTX = 1;
+
+	uint8_t ctx_buf[
+		sizeof(struct ipa_ioc_add_hdr_proc_ctx) +
+		(NUM_OF_PROC_CTX * sizeof(struct ipa_hdr_proc_ctx_add)) ];
+
+	memset(ctx_buf, 0, sizeof(ctx_buf));
+
+	struct ipa_ioc_add_hdr_proc_ctx *procCtxTable =
+		(struct ipa_ioc_add_hdr_proc_ctx *) ctx_buf;
+
+	struct ipa_hdr_proc_ctx_add *procCtx = &(procCtxTable->proc_ctx[0]);
+
+	procCtxTable->commit        = true;
+	procCtxTable->num_proc_ctxs = NUM_OF_PROC_CTX;
+	procCtx->proc_ctx_hdl       = -1; /* return value */
+	procCtx->status             = -1; /* return parameter */
+	procCtx->hdr_hdl            = hdr_2use;
+
+	if ( IPACM_Iface::ipacmcfg->ipogre_enabled )
+	{
+		procCtx->type = IPA_HDR_PROC_IPOGRE_HEADER_ADD;
+		procCtx->ipogre_params.hdr_add_param.input_ip_version  = iptype;
+
+		procCtx->ipogre_params.hdr_add_param.Mux_Id = ext_prop->ext[0].mux_id;
+		procCtx->ipogre_params.hdr_add_param.non_ipogre = 1;
+	}
+	else
+        {
+		procCtx->type = IPA_HDR_PROC_GRE_HEADER_ADD;
+		procCtx->gre_params.hdr_add_param.eth_hdr_retained    = 0;
+		procCtx->gre_params.hdr_add_param.input_ip_version    = iptype;
+		procCtx->gre_params.hdr_add_param.output_ip_version   =
+			IPACM_Iface::ipacmcfg->ipgre_info.iptype;
+		procCtx->gre_params.hdr_add_param.second_pass         = 1;
+	}
+
+	if ( m_header.AddHeaderProcCtx(procCtxTable) == false )
+	{
+		IPACMERR("AddHeaderProcCtx for wan_v4_addr proc ctx failed\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACM_Wan::ipgre_route_data[iptype].proc_ctx_gre_add_hdl_wan_v4_addr =
+		procCtx->proc_ctx_hdl;
+
+	IPACMDBG_H(
+		"wan_v4_addr proc ctx successfully installed, hdl 0x%x\n",
+		IPACM_Wan::ipgre_route_data[iptype].proc_ctx_gre_add_hdl_wan_v4_addr);
+
+	/* Now install the wan_v4_addr src-based route rule */
 	static const int NUM_RT_RULE = 1;
 
-	uint8_t buf[
+	uint8_t rt_buf[
 		sizeof(struct ipa_ioc_add_rt_rule) +
 		(NUM_RT_RULE * sizeof(struct ipa_rt_rule_add)) ];
 
-	memset(buf, 0, sizeof(buf));
+	memset(rt_buf, 0, sizeof(rt_buf));
 
-	struct ipa_ioc_add_rt_rule* rt_table =
-		(struct ipa_ioc_add_rt_rule*) buf;
-
-	struct ipa_rt_rule_add* rt_rule_entry = &(rt_table->rules[0]);
+	struct ipa_ioc_add_rt_rule *rt_table =
+		(struct ipa_ioc_add_rt_rule *) rt_buf;
 
 	rt_table->commit    = true;
 	rt_table->num_rules = NUM_RT_RULE;
 	rt_table->ip        = iptype;
 
-	snprintf(
-		rt_table->rt_tbl_name,
-		sizeof(rt_table->rt_tbl_name),
-		"%s",
-		( iptype == IPA_IP_v4 )                   ?
-		"GREV4RT" :
-		"GREV6RT");
+	snprintf(rt_table->rt_tbl_name, sizeof(rt_table->rt_tbl_name),
+		"%s", "GREV4RT");
 
-	rt_rule_entry->at_rear                 = true;
-	rt_rule_entry->rule.dst                = IPA_CLIENT_DUMMY_CONS;
-	rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR;
-	rt_rule_entry->rule.hdr_proc_ctx_hdl   = ctx_2use;
-
+	struct ipa_rt_rule_add *rt_rule_entry = &(rt_table->rules[0]);
+	rt_rule_entry->at_rear                          = true;
+	rt_rule_entry->rule.dst                         = IPA_CLIENT_DUMMY_CONS;
+	rt_rule_entry->rule.attrib.attrib_mask          = IPA_FLT_SRC_ADDR;
+	rt_rule_entry->rule.attrib.u.v4.src_addr        = wan_v4_addr;
+	rt_rule_entry->rule.attrib.u.v4.src_addr_mask   = 0xFFFFFFFF;
+	rt_rule_entry->rule.hdr_proc_ctx_hdl            =
+		IPACM_Wan::ipgre_route_data[iptype].proc_ctx_gre_add_hdl_wan_v4_addr;
 #ifdef FEATURE_IPA_V3
-	rt_rule_entry->rule.hashable           = true;
+	rt_rule_entry->rule.hashable                    = true;
 #endif
-	rt_rule_entry->rule.retain_hdr         = 0;
-	/*
-	 * Addresses need to be zero, hence..
-	 */
-	memset(
-		&rt_rule_entry->rule.attrib.u,
-		0,
-		sizeof(rt_rule_entry->rule.attrib.u));
+	rt_rule_entry->rule.retain_hdr                  = 0;
 
-	if ( m_routing.AddRoutingRule(rt_table) == true )
+	IPACMDBG_H("Adding wan_v4_addr route rule with src_addr 0x%x\n", wan_v4_addr);
+
+	if ( m_routing.AddRoutingRule(rt_table) == false )
 	{
-		IPACMDBG_H(
-			"GRE route rule for \"header add\" successfully installed in %s\n",
-			rt_table->rt_tbl_name);
-		IPACM_Wan::ipgre_route_data[iptype].rt_gre_add_hdl =rt_rule_entry->rt_rule_hdl;
+		IPACMERR("AddRoutingRule for wan_v4_addr failed\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACM_Wan::ipgre_route_data[iptype].rt_gre_add_hdl =
+		rt_rule_entry->rt_rule_hdl;
+
+	IPACMDBG_H(
+		"wan_v4_addr route rule successfully installed in %s, hdl 0x%x\n",
+		rt_table->rt_tbl_name,
+		IPACM_Wan::ipgre_route_data[iptype].rt_gre_add_hdl);
+
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Wan::ipgre_add_rgip_rt_rule(
+        ipa_ipgre_info& ipgre_info)
+{
+	enum ipa_ip_type iptype = ipgre_info.iptype;
+
+	IPACMDBG_H(
+		"Attempting to add rgip src-based route rule for iptype(%d)\n",
+		iptype);
+
+	/* This rule is only applicable for IPv4 tunnels */
+	if ( iptype != IPA_IP_v4 )
+	{
+		IPACMDBG_H("rgip route rule is only applicable for IPv4, skipping\n");
+		return IPACM_SUCCESS;
+	}
+	if ( IPACM_Iface::ipacmcfg->rgip_ip == 0)
+	{
+		IPACMDBG_H("RGIP not assigned yet, not installing route rule\n");
+		return IPACM_SUCCESS;
+	}
+	uint32_t hdr_2use = IPACM_Wan::ipgre_route_data[IPA_IP_v6].ul_header_hdl_c;
+
+
+	/* Create a dedicated proc ctx for the rgip rule (mirrors ipgre_make_hdr_add_ctx) */
+	static const int NUM_OF_PROC_CTX = 1;
+
+	uint8_t ctx_buf[
+		sizeof(struct ipa_ioc_add_hdr_proc_ctx) +
+		(NUM_OF_PROC_CTX * sizeof(struct ipa_hdr_proc_ctx_add)) ];
+
+	memset(ctx_buf, 0, sizeof(ctx_buf));
+
+	struct ipa_ioc_add_hdr_proc_ctx *procCtxTable =
+		(struct ipa_ioc_add_hdr_proc_ctx *) ctx_buf;
+
+	struct ipa_hdr_proc_ctx_add *procCtx = &(procCtxTable->proc_ctx[0]);
+
+	procCtxTable->commit        = true;
+	procCtxTable->num_proc_ctxs = NUM_OF_PROC_CTX;
+	procCtx->proc_ctx_hdl       = -1; /* return value */
+	procCtx->status             = -1; /* return parameter */
+	procCtx->hdr_hdl            = hdr_2use;
+
+	if ( IPACM_Iface::ipacmcfg->ipogre_enabled )
+	{
+		procCtx->type = IPA_HDR_PROC_IPOGRE_HEADER_ADD;
+		procCtx->ipogre_params.hdr_add_param.input_ip_version  = iptype;
+		procCtx->ipogre_params.hdr_add_param.output_ip_version =
+			IPACM_Iface::ipacmcfg->ipgre_info.iptype;
+		procCtx->ipogre_params.hdr_add_param.non_ipogre = 0;
 	}
 	else
 	{
-		IPACMERR("AddRoutingRule failed\n");
+		procCtx->type = IPA_HDR_PROC_GRE_HEADER_ADD;
+		procCtx->gre_params.hdr_add_param.eth_hdr_retained    = 0;
+		procCtx->gre_params.hdr_add_param.input_ip_version    = iptype;
+		procCtx->gre_params.hdr_add_param.output_ip_version   =
+			IPACM_Iface::ipacmcfg->ipgre_info.iptype;
+		procCtx->gre_params.hdr_add_param.second_pass         = 1;
+	}
+
+	if ( m_header.AddHeaderProcCtx(procCtxTable) == false )
+	{
+		IPACMERR("AddHeaderProcCtx for rgip proc ctx failed\n");
 		return IPACM_FAILURE;
 	}
+
+	IPACM_Wan::ipgre_route_data[iptype].proc_ctx_gre_add_hdl_rgip =
+		procCtx->proc_ctx_hdl;
+
+	IPACMDBG_H(
+		"rgip proc ctx successfully installed, hdl 0x%x\n",
+		IPACM_Wan::ipgre_route_data[iptype].proc_ctx_gre_add_hdl_rgip);
+
+	/* Now install the rgip src-based route rule */
+	static const int NUM_RT_RULE = 1;
+
+	uint8_t rt_buf[
+		sizeof(struct ipa_ioc_add_rt_rule) +
+		(NUM_RT_RULE * sizeof(struct ipa_rt_rule_add)) ];
+
+	memset(rt_buf, 0, sizeof(rt_buf));
+
+	struct ipa_ioc_add_rt_rule *rt_table =
+		(struct ipa_ioc_add_rt_rule *) rt_buf;
+
+	rt_table->commit    = true;
+	rt_table->num_rules = NUM_RT_RULE;
+	rt_table->ip        = iptype;
+
+	snprintf(rt_table->rt_tbl_name, sizeof(rt_table->rt_tbl_name),
+		"%s", "GREV4RT");
+
+	struct ipa_rt_rule_add *rt_rule_entry = &(rt_table->rules[0]);
+	rt_rule_entry->at_rear                          = true;
+	rt_rule_entry->rule.dst                         = IPA_CLIENT_DUMMY_CONS;
+	rt_rule_entry->rule.attrib.attrib_mask          = IPA_FLT_SRC_ADDR;
+	rt_rule_entry->rule.attrib.u.v4.src_addr        = IPACM_Iface::ipacmcfg->rgip_ip;
+	rt_rule_entry->rule.attrib.u.v4.src_addr_mask   = 0xFFFFFFFF;
+	rt_rule_entry->rule.hdr_proc_ctx_hdl            =
+		IPACM_Wan::ipgre_route_data[iptype].proc_ctx_gre_add_hdl_rgip;
+#ifdef FEATURE_IPA_V3
+	rt_rule_entry->rule.hashable                    = true;
+#endif
+	rt_rule_entry->rule.retain_hdr                  = 0;
+
+	IPACMDBG_H("Adding rgip route rule with src_addr 0x%x\n",
+		IPACM_Iface::ipacmcfg->rgip_ip);
+
+	if ( m_routing.AddRoutingRule(rt_table) == false )
+	{
+		IPACMERR("AddRoutingRule for rgip failed\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACM_Wan::ipgre_route_data[iptype].rt_gre_add_hdl_rgip =
+		rt_rule_entry->rt_rule_hdl;
+
+	IPACMDBG_H(
+		"rgip route rule successfully installed in %s, hdl 0x%x\n",
+		rt_table->rt_tbl_name,
+		IPACM_Wan::ipgre_route_data[iptype].rt_gre_add_hdl_rgip);
 
 	return IPACM_SUCCESS;
 }
@@ -16607,6 +16943,18 @@ void IPACM_Wan::ipgre_clear_route_data(
 				IPACM_Wan::ipgre_route_data[iptype].proc_ctx_gre_add_hdl);
 		}
 
+		if ( IPACM_Wan::ipgre_route_data[iptype].proc_ctx_gre_add_hdl_rgip )
+		{
+			m_header.DeleteHeaderProcCtx(
+				IPACM_Wan::ipgre_route_data[iptype].proc_ctx_gre_add_hdl_rgip);
+		}
+
+		if ( IPACM_Wan::ipgre_route_data[iptype].proc_ctx_gre_add_hdl_wan_v4_addr )
+		{
+			m_header.DeleteHeaderProcCtx(
+				IPACM_Wan::ipgre_route_data[iptype].proc_ctx_gre_add_hdl_wan_v4_addr);
+		}
+
 		if ( IPACM_Wan::ipgre_route_data[iptype].proc_ctx_gre_rmv_hdl )
 		{
 			m_header.DeleteHeaderProcCtx(
@@ -16617,6 +16965,12 @@ void IPACM_Wan::ipgre_clear_route_data(
 		{
 			m_routing.DeleteRoutingHdl(
 				IPACM_Wan::ipgre_route_data[iptype].rt_gre_add_hdl, iptype);
+		}
+
+		if ( IPACM_Wan::ipgre_route_data[iptype].rt_gre_add_hdl_rgip )
+		{
+			m_routing.DeleteRoutingHdl(
+				IPACM_Wan::ipgre_route_data[iptype].rt_gre_add_hdl_rgip, iptype);
 		}
 
 		if ( IPACM_Wan::ipgre_route_data[iptype].rt_gre_rmv_hdl )

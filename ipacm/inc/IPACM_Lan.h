@@ -411,7 +411,7 @@ public:
 
 	static bool odu_up;
 
-#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPOGRE)
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 	/*
 	 * The following is for keeping eogre route rule state...
 	 *
@@ -1535,7 +1535,7 @@ private:
 		return IPACM_INVALID_INDEX;
 	}
 
-	inline int get_eth_client_ip4_addr(uint8_t *mac_addr, uint32_t &ip_addr, uint8_t vlan_id = 0)
+	inline int get_eth_client_ip4_addr(uint8_t *mac_addr, uint32_t &ip_addr, uint16_t vlan_id = 0)
 	{
 		int clnt_indx;
 

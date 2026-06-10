@@ -727,6 +727,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #ifdef FEATURE_IPoGRE
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_IPOGRE_UP,w);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_IPOGRE_DOWN,w);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_RGIP_UP, w);
 #endif
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, w);
 #ifdef FEATURE_IPA_ANDROID

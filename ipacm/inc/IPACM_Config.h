@@ -385,6 +385,14 @@ struct qos_delete_param_info {
 	qos_client_info qos_client_list[];
 };
 
+#ifdef IPA_HW_FNR_STATS
+typedef enum {
+	IPA_LAN_STATS_MODE_0 = 0,
+	IPA_LAN_STATS_MODE_1 = 1,
+	IPA_LAN_STATS_MODE_2 = 2,
+} ipa_lan_stats_mode_t;
+#endif /* IPA_HW_FNR_STATS */
+
 /* iface */
 class IPACM_Config
 {
@@ -496,23 +504,33 @@ public:
 		uint8_t mac[IPA_MAC_ADDR_SIZE];
 		/* IPACM interface id */
 		int ipa_if_num;
+		uint16_t vlan_id;
+		int      ref_count;
 	} ipa_lan_client_idx;
 
 	bool ipacm_lan_stats_enable;
 	bool ipacm_lan_stats_enable_set;
 	bool ipacm_lan2lan_stats_enable;
 	bool ipacm_lan2lan_stats_enable_set;
+
 	/* Clients which take HW path/ stats V2. */
 	bool lan_stats_inited;
 	static ipa_lan_client_idx active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS_V2];
 	/* Clients which take SW path. This will be used as a place holder to move clients back to HW path. */
 	static ipa_lan_client_idx inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS_V2];
 #ifdef IPA_HW_FNR_STATS
+	uint8_t lan_stats_mode;
 	struct ipa_ioc_flt_rt_counter_alloc fnr_counters;
 	/* Setting an index to 1 would mean that it is under use and 0, unused*/
 	struct cnt_idx cnt_idx[IPA_MAX_FLT_RT_CLIENTS_V2];
 	pthread_mutex_t cnt_idx_lock;
 	bool hw_fnr_stats_support;
+
+	struct ipacm_vlan_counter_entry {
+		uint8_t wan_cnt_idx; /* shared HW FNR counter index for this VLAN */
+		int     ref_count;   /* number of clients currently using this counter */
+	};
+	std::map<uint16_t, ipacm_vlan_counter_entry> vlan_counter_map;
 #endif //IPA_HW_FNR_STATS
 #endif
 	bool ipacm_msgflt_enable;
@@ -795,6 +813,10 @@ public:
 	int reset_cnt_idx(int index, bool reset_all);
 	int get_free_cnt_idx(void);
 	int ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint8_t end_id);
+
+	int  get_vlan_counter(uint16_t vlan_id, uint8_t *cnt_idx);
+	void register_vlan_counter(uint16_t vlan_id, uint8_t cnt_idx);
+	void release_vlan_counter(uint16_t vlan_id);
 #endif
 
 	inline int get_free_ip_pass_pdn_index(char *dev_name)

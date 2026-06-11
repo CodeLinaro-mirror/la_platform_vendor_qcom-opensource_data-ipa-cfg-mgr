@@ -510,6 +510,40 @@ int IPACM_Config::reset_cnt_idx(int index, bool reset_all)
 	return IPACM_SUCCESS;
 }
 
+int IPACM_Config::get_vlan_counter(uint16_t vlan_id, uint8_t *cnt_idx_out)
+{
+	auto it = vlan_counter_map.find(vlan_id);
+	if (it != vlan_counter_map.end()) {
+		*cnt_idx_out = it->second.wan_cnt_idx;
+		it->second.ref_count++;
+		return 0;
+	}
+	return -1;
+}
+
+/* Register a new counter for a VLAN (first client on this VLAN across all ifaces). */
+void IPACM_Config::register_vlan_counter(uint16_t vlan_id, uint8_t cnt_idx_in)
+{
+	ipacm_vlan_counter_entry entry;
+	entry.wan_cnt_idx = cnt_idx_in;
+	entry.ref_count   = 1;
+	vlan_counter_map[vlan_id] = entry;
+}
+
+/* Decrement ref_count for a VLAN counter. Frees the counter when last client disconnects. */
+void IPACM_Config::release_vlan_counter(uint16_t vlan_id)
+{
+	auto it = vlan_counter_map.find(vlan_id);
+	if (it == vlan_counter_map.end()) {
+		return;
+	}
+	it->second.ref_count--;
+	if (it->second.ref_count <= 0) {
+		reset_cnt_idx(it->second.wan_cnt_idx, false);
+		vlan_counter_map.erase(it);
+	}
+}
+
 int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters)
 
 {
@@ -873,8 +907,9 @@ reread:
 	{
 		/* Read the configuration only once. */
 		ipacm_lan_stats_enable = cfg->lan_stats_enable;
+		lan_stats_mode = cfg->lan_stats_mode;
 		ipacm_lan_stats_enable_set = true;
-		IPACMDBG_H("ipacm_lan_stats_enable %d. \n", ipacm_lan_stats_enable);
+		IPACMDBG_H("ipacm_lan_stats_enable %d mode %d. \n", ipacm_lan_stats_enable, lan_stats_mode);
 	}
 	if (!ipacm_lan2lan_stats_enable_set)
 	{
@@ -942,6 +977,12 @@ skip_fnr_alloc:
 			memset(active_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
 			inactive_lan_client_index[i].lan_stats_idx = -1;
 			memset(inactive_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
+#ifdef IPA_HW_FNR_STATS
+			active_lan_client_index[i].vlan_id    = 0;
+			active_lan_client_index[i].ref_count   = 0;
+			inactive_lan_client_index[i].vlan_id   = 0;
+			inactive_lan_client_index[i].ref_count  = 0;
+#endif
 		}
 		lan_stats_inited = true;
 	}

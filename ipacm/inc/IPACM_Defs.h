@@ -604,6 +604,7 @@ typedef struct _ipacm_event_data_mac
 	int ipa_if_cate;
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 	char iface_name[IPA_IFACE_NAME_LEN];
+	uint16_t vlan_id;
 } ipacm_event_data_mac;
 
 typedef struct

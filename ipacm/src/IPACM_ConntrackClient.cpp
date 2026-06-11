@@ -127,7 +127,11 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	IPACMDBG("Event callback called with msgtype is :%d\n",type);
 
 	/*Avoiding processing of tcp conntracks if state is not established, if not fin_wait, if msg type is not destroy*/
-	if((protocol == IPPROTO_TCP) && ((tcp_state != TCP_CONNTRACK_ESTABLISHED) && (tcp_state != TCP_CONNTRACK_FIN_WAIT) && (NFCT_T_DESTROY != type)))
+	if((protocol == IPPROTO_TCP) &&
+		((tcp_state != TCP_CONNTRACK_ESTABLISHED) &&
+		(tcp_state != TCP_CONNTRACK_FIN_WAIT) &&
+		(NFCT_T_DESTROY != type) &&
+		!(type == NFCT_T_UPDATE && nfct_attr_is_set(ct, ATTR_MARK))))
 	{
 		IPACMDBG("unexpected conntracks recieving protocol = %d  msg_type = %d\n", protocol,  type);
 		goto IGNORE;
@@ -411,6 +415,30 @@ void IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Local_Iface_v6(struct n
 	}
 }
 
+void IPACM_ConntrackClient::IPA_Conntrack_Filters_Accept_Local_Iface_v6(struct nfct_filter *filter,
+	struct nfct_handle *handle, ipacm_event_iface_up *data)
+{
+	if (handle == NULL)
+	{
+		return;
+	}
+	const struct nfct_filter_ipv6 filter_ipv6_addr =
+	{
+		{data->ipv6_addr[0], data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]},
+		{0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff},
+	};
+	IPA_Conntrack_Filters_Ipv6_Add_Src_Dst_Attr(filter, filter_ipv6_addr, ACCEPT_CT);
+
+	IPACMDBG("attaching the filter to the handle\n");
+	int ret = nfct_filter_attach(nfct_fd(handle), filter);
+	if (ret)
+	{
+		PERROR("unable to attach the filter to the handle\n");
+		IPACMERR("The handle:%pK, fd:%d Error: %d\n", handle, nfct_fd(handle), ret);
+		return;
+	}
+}
+
 /* Function which sets up filters to ignore
 		 connections to and from local interfaces */
 int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Local_Addrs
@@ -482,13 +510,17 @@ void IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Ipv6_Addresses(struct n
 }
 
 void IPACM_ConntrackClient::IPA_Conntrack_Filters_Ipv6_Add_Src_Dst_Attr(struct nfct_filter *filter,
-	const struct nfct_filter_ipv6 &attr)
+	const struct nfct_filter_ipv6 &attr, verdict ver)
 {
-	nfct_filter_set_logic(filter, NFCT_FILTER_DST_IPV6, NFCT_FILTER_LOGIC_NEGATIVE);
+
+	enum nfct_filter_logic filter_logic;
+	filter_logic = (ver == ACCEPT_CT) ?  NFCT_FILTER_LOGIC_POSITIVE : NFCT_FILTER_LOGIC_NEGATIVE;
+	nfct_filter_set_logic(filter, NFCT_FILTER_DST_IPV6, filter_logic);
 	nfct_filter_add_attr(filter, NFCT_FILTER_DST_IPV6, &attr);
 
-	nfct_filter_set_logic(filter, NFCT_FILTER_SRC_IPV6, NFCT_FILTER_LOGIC_NEGATIVE);
+	nfct_filter_set_logic(filter, NFCT_FILTER_SRC_IPV6, filter_logic);
 	nfct_filter_add_attr(filter, NFCT_FILTER_SRC_IPV6, &attr);
+
 }
 
 /* Initialize TCP Filter */
@@ -1153,7 +1185,7 @@ void IPACM_ConntrackClient::UpdateTCPFilters(void *param, bool isWan)
   return;
 }
 
-void IPACM_ConntrackClient::UpdateFilters_v6(ipacm_event_iface_up* data)
+void IPACM_ConntrackClient::UpdateFilters_v6(ipacm_event_iface_up* data, verdict ver)
 {
 	IPACM_ConntrackClient* client = IPACM_ConntrackClient::GetInstance();
 	if (client == NULL)
@@ -1161,8 +1193,15 @@ void IPACM_ConntrackClient::UpdateFilters_v6(ipacm_event_iface_up* data)
 		IPACMERR("unable to retrieve conntrack client instance\n");
 		return;
 	}
-
-	IPA_Conntrack_Filters_Ignore_Local_Iface_v6(client->udp_filter, client->udp_hdl, data);
-	IPA_Conntrack_Filters_Ignore_Local_Iface_v6(client->tcp_filter, client->tcp_hdl, data);
+	if (ver == ACCEPT_CT)
+	{
+		IPA_Conntrack_Filters_Accept_Local_Iface_v6(client->udp_filter, client->udp_hdl, data);
+		IPA_Conntrack_Filters_Accept_Local_Iface_v6(client->tcp_filter, client->tcp_hdl, data);
+	}
+	else
+	{
+		IPA_Conntrack_Filters_Ignore_Local_Iface_v6(client->udp_filter, client->udp_hdl, data);
+		IPA_Conntrack_Filters_Ignore_Local_Iface_v6(client->tcp_filter, client->tcp_hdl, data);
+	}
 }
 

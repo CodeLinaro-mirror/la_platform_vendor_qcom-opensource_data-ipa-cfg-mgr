@@ -279,8 +279,8 @@ void IPACM_LanToLan::event_callback(ipa_cm_event_id event, void* param)
 		default:
 			break;
 	}
-
-	print_data_structure_info();
+	if (g_ipacm_logs_enabled)
+		print_data_structure_info();
 	return;
 }
 
@@ -1323,7 +1323,7 @@ void IPACM_LanToLan::print_data_structure_info()
 	for(it_event = m_cached_client_add_event.begin(); it_event != m_cached_client_add_event.end(); it_event++)
 	{
 		IPACMDBG_H("Client %d MAC: 0x%02x%02x%02x%02x%02x%02x, interface: %s\n", i, it_event->mac_addr[0], it_event->mac_addr[1], it_event->mac_addr[2],
-			it_event->mac_addr[3], it_event->mac_addr[4], it_event->mac_addr[5], it_event->p_iface->dev_name);
+			it_event->mac_addr[3], it_event->mac_addr[4], it_event->mac_addr[5], it_event->iface_name);
 		i++;
 	}
 
@@ -3221,7 +3221,7 @@ void IPACM_LanToLan_Iface::handle_down_event()
 			for(it_other_iface_peer_info = other_iface->m_peer_iface_info.begin();
 				it_other_iface_peer_info != other_iface->m_peer_iface_info.end();)
 			{
-				if(it_other_iface_peer_info->peer == this)	//found myself in other iface's peer info list
+				if(it_other_iface_peer_info->peer && it_other_iface_peer_info->peer == this)	//found myself in other iface's peer info list
 				{
 					IPACMDBG_H("Found the right peer info on other iface.\n");
 
@@ -5182,10 +5182,27 @@ void IPACM_LanToLan_Iface::add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type)
 
 void IPACM_LanToLan_Iface::del_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type)
 {
+	uint32_t hdr_proc_ctx_hdl;
+
+	if ((peer_l2_type >= IPA_HDR_L2_MAX) || (peer_l2_type < 0))
+	{
+		IPACMDBG_H("Invalid peer_l2_type: %d\n", peer_l2_type);
+		return;
+	}
+
 	if(ref_cnt_peer_l2_hdr_type[peer_l2_type] == 0)
 	{
-		m_p_iface->eth_bridge_del_hdr_proc_ctx(hdr_proc_ctx_for_inter_interface[peer_l2_type]);
-		IPACMDBG_H("Hdr proc ctx with hdl %d is deleted.\n", hdr_proc_ctx_for_inter_interface[peer_l2_type]);
+		hdr_proc_ctx_hdl = hdr_proc_ctx_for_inter_interface[peer_l2_type];
+		if (hdr_proc_ctx_hdl == 0)
+		{
+			IPACMDBG_H("Hdr proc ctx already cleared for peer l2 type %s.\n",
+				ipa_l2_hdr_type[peer_l2_type]);
+			return;
+		}
+
+		m_p_iface->eth_bridge_del_hdr_proc_ctx(hdr_proc_ctx_hdl);
+		hdr_proc_ctx_for_inter_interface[peer_l2_type] = 0;
+		IPACMDBG_H("Hdr proc ctx with hdl %d is deleted.\n", hdr_proc_ctx_hdl);
 	}
 	return;
 }
@@ -5221,6 +5238,8 @@ void IPACM_LanToLan_Iface::print_data_structure_info()
 	list<client_info>::iterator it_client;
 	int i, j, k;
 
+	if (g_ipacm_logs_enabled)
+		return;
 	if(IPACM_Iface::ipacmcfg->inter_bridge_lantolan_config_enable == true)
 	{
 				IPACMDBG_H("\n");
@@ -5533,6 +5552,8 @@ void IPACM_LanToLan_Iface::print_peer_info(peer_iface_info *peer_info , bool int
 		return;
 	}
 
+	if (g_ipacm_logs_enabled)
+		return;
 	IPACMDBG_H("Printing peer info for iface %s:\n", peer_info->peer->m_p_iface->dev_name);
 
 	IPACMDBG_H("There are %zu flt info in total.\n", peer_info->flt_rule.size());

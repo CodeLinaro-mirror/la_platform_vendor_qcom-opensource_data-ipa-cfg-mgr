@@ -68,6 +68,14 @@ int max_filesize = 0;
 int log_init_done = 0;
 pthread_mutex_t file_lock;
 
+extern "C" {
+int g_ipacm_logs_enabled = 1;
+void ipacm_set_log_enabled(int enable)
+{
+    g_ipacm_logs_enabled = enable ? 1 : 0;
+}
+}
+
 #define FILE_LOCK()   \
     do \
     { \
@@ -147,6 +155,10 @@ int create_socket(unsigned int *sockfd)
 
 void ipacm_log_send( void * user_data)
 {
+	if (!g_ipacm_logs_enabled) {
+		return;
+	}
+
 	ipacm_log_buffer_t ipacm_log_buffer;
 	int numBytes=0, len;
 	struct sockaddr_un ipacmlog_socket;
@@ -177,7 +189,7 @@ void ipacm_log_send( void * user_data)
 	return;
 }
 
-/* IPACM logging initilation*/
+/* IPACM logging initialization*/
 int log_init(int file_size) {
         int ret = 0;
         int trunc_ret = -1;
@@ -200,11 +212,13 @@ int log_init(int file_size) {
             if(0 == max_filesize)
             {
                 printf("Logging disabled\n");
-                return 0; // means disable logging
+                g_ipacm_logs_enabled = 0;
+                return 0; // disable logging
             }
         }
         else
         {
+            /* no change */
             return 0;
         }
 
@@ -240,12 +254,13 @@ int log_init(int file_size) {
 
 	/* Now log init is complete */
 	log_init_done = 1;
+        g_ipacm_logs_enabled = 1;
         return 0;
 }
 void ipacm_log_dump(char* ipacm_log_data)
 {
         int input_len = 0;
-	if(!log_init_done)
+	if(!log_init_done || !g_ipacm_logs_enabled)
 	{
 		return;
 	}

@@ -292,6 +292,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 				IPACM_Wlan::total_num_wifi_clients = (IPACM_Wlan::total_num_wifi_clients) - \
                                                                      (num_wifi_client);
+				IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].is_wlan_if_vlan = false;
 
 				return;
 			}
@@ -489,8 +490,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						if(data->iptype == IPA_IP_v6)
 						{
 							memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
-							delete_ipv6_prefix_flt_rule();
-							install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
+							modify_ipv6_prefix_flt_rule();
 #ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
@@ -564,6 +564,16 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						handle_software_routing_enable();
 					}
 				}
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
+					if ( IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled || IPACM_Iface::ipacmcfg->ipogre_enabled == true)
+					{
+						IPACMDBG_H(
+							"A previous ipogre enable needs to be undone, then redone. "
+							"Need to call gre_down followed by an gre_up\n");
+						gre_down(false,true);
+						gre_up(false,true);
+					}
+#endif
 			}
 		}
 		break;
@@ -614,7 +624,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 			{
 				memcpy(ipv6_prefix, data_wan_tether->ipv6_prefix, sizeof(ipv6_prefix));
-				install_ipv6_prefix_flt_rule(data_wan_tether->ipv6_prefix);
+				modify_ipv6_prefix_flt_rule();
 				if(data_wan_tether->is_sta == false)
 				{
 					ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
@@ -823,8 +833,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 		{
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));
-			delete_ipv6_prefix_flt_rule();
-			install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
+			modify_ipv6_prefix_flt_rule();
 #ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 			IPACM_Wan::read_firewall_filter_rules_ul();
@@ -922,6 +931,16 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			return;
 		}
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
+#ifdef FEATURE_VLAN_MPDN
+		/* VLAN IFACES don't care about default route */
+		if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) &&
+			(IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled == TRUE ||
+			IPACM_Wan::isVlanWanUP()))
+		{
+			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN\n", dev_name);
+			return;
+		}
+#endif
 		if (rx_prop != NULL)
 		{
 			if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
@@ -2952,6 +2971,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				{
 					IPACMERR("Got invalid cnt_idx. Abort\n");
 					res = IPACM_FAILURE;
+					free(client_info);
 					goto fail;
 				}
 
@@ -5921,6 +5941,7 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 			{
 				IPACMERR("Got invalid cnt_idx. Abort\n");
 				res = IPACM_FAILURE;
+				free(client_info);
 				goto fail;
 			}
 			client_info->wan_cnt_idx = cnt_idx;
@@ -6299,6 +6320,9 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 				if (false == m_routing.AddRoutingRuleExt(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
+					if (rt_rule->rules) {
+						free((void *)rt_rule->rules);
+					}
 					free(rt_rule);
 					return IPACM_FAILURE;
 				}
@@ -6541,6 +6565,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 			free(rt_rule);
 			return IPACM_FAILURE;
 		}
+		void *rules_ptr = (void *)rt_rule->rules;
 		rt_rule->rule_add_ext_size = sizeof(struct ipa_rt_rule_add_ext_v2);
 		rt_rule->commit = 1;
 		rt_rule->num_rules = (uint8_t)NUM;
@@ -6618,7 +6643,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 				if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
-					free((void *)rt_rule->rules);
+					free(rules_ptr);
 					free(rt_rule);
 					return IPACM_FAILURE;
 				}
@@ -6680,7 +6705,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
-						free((void *)rt_rule->rules);
+						free(rules_ptr);
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -6761,6 +6786,9 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 				get_client_memptr(wlan_client, wlan_index)->route_rule_set_v6 = get_client_memptr(wlan_client, wlan_index)->ipv6_set;
 			}/* end of for loop */
 		} /* end of tx loop */
+		if (rules_ptr) {
+			free(rules_ptr);
+		}
 		free(rt_rule);
 	}
 
@@ -8455,6 +8483,12 @@ end:
 		wlan_client = NULL;
 	}
 
+	if(wlan_primary_client != NULL)
+	{
+		free(wlan_primary_client);
+		wlan_primary_client = NULL;
+	}
+
 	is_active = false;
 	post_del_self_evt();
 
@@ -9896,6 +9930,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 
 	for(cnt=0; cnt < prop->num_ext_props && index < total_rules; cnt++)
 	{
+		SET_FLT_RULE_PRIORITY(flt_rule_entry, total_rules, index);
 		if (isFirewall)
 		{
 			memcpy(&flt_rule_entry.rule.eq_attrib,
@@ -10044,7 +10079,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 		if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
 			prop->prop[cnt].action != IPA_PASS_TO_EXCEPTION)
 		{
-			//duplicate the old rule to new index
+			// duplicate the old rule to new index and update the priority
+			SET_FLT_RULE_PRIORITY(flt_rule_entry, total_rules, index);
 			memcpy((void *)pFilteringTable->rules + (index * sizeof(struct ipa_flt_rule_add_v2)),
 				&flt_rule_entry, sizeof(flt_rule_entry));
 
@@ -10080,7 +10116,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 
 			flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
 
-			//overwrite the old rule and increment the rule count
+			// overwrite the old rule and increment the rule count and update the priority to one less than original rule
+			SET_FLT_RULE_PRIORITY(flt_rule_entry, total_rules, index - 1);
 			memcpy((void *)pFilteringTable->rules + ((index -1) * sizeof(struct ipa_flt_rule_add_v2)),
 				&flt_rule_entry, sizeof(flt_rule_entry));
 			index++;
@@ -11744,6 +11781,10 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, 1);
 		IPACMDBG_H("Deleted TCP syn v4 filter rules successfully.\n");
+
+		/* Delete the modem UL rules on Non-vlan pipe
+		   Will be installed later on Vlan pipe using HANDLE_VLAN_PDN_UP event */
+		handle_wan_down(false);
 	}
 
 	/* Delete v6 filtering rules */
@@ -12416,6 +12457,9 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 					if (false == m_routing.AddRoutingRule(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
+						if (rt_rule->rules) {
+							free((void *)rt_rule->rules);
+						}
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -12738,6 +12782,9 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 					IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp marking failed: %d\n",
 						hdr_proc_ctx_table->proc_ctx[0].status);
 					free(hdr_proc_ctx_table);
+					if (rt_rule->rules) {
+						free((void *)rt_rule->rules);
+					}
 					free(rt_rule);
 					return IPACM_FAILURE;
 				}
@@ -12748,6 +12795,9 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 				if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
+					if (rt_rule->rules) {
+						free((void *)rt_rule->rules);
+					}
 					free(rt_rule);
 					return IPACM_FAILURE;
 				}
@@ -12941,6 +12991,9 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 						IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp marking failed: %d\n",
 							hdr_proc_ctx_table->proc_ctx[0].status);
 						free(hdr_proc_ctx_table);
+						if (rt_rule->rules) {
+							free((void *)rt_rule->rules);
+						}
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -12951,6 +13004,9 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
+						if (rt_rule->rules) {
+							free((void *)rt_rule->rules);
+						}
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -12984,6 +13040,9 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 
 		} /* end of for loop */
 
+		if (rt_rule->rules) {
+			free((void *)rt_rule->rules);
+		}
 		free(rt_rule);
 	}
 	return IPACM_SUCCESS;
@@ -13891,6 +13950,7 @@ int IPACM_Wlan::handle_wan_up_v2(ipa_ip_type ip_type, uint16_t vlan_id, uint8_t 
 			{
 				IPACMERR("Failed to get routing table index from name\n");
 				close(fd);
+				free(m_pFilteringTable);
 				return IPACM_FAILURE;
 			}
 			close(fd);

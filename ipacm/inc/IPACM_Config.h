@@ -236,6 +236,7 @@ typedef struct {
 struct ipa_prefix_info {
 	uint32_t addr[2];
 	uint16_t vlan_id;
+	bool     is_bridge;
 };
 
 #ifdef FEATURE_IPA_IPSEC
@@ -409,6 +410,7 @@ public:
 	/* Store private subnet configuration from XML file */
 	ipa_private_subnet private_subnet_table[IPA_MAX_PRIVATE_SUBNET_ENTRIES + IPA_MAX_MTU_ENTRIES];
 
+
 #ifdef FEATURE_DUAL_BACKHAUL
 	/* Store the second backhaul info. Fetch gateway,enabled, and netdev details from XML file */
 	ipa_dual_backhaul_info second_backhaul_info;
@@ -440,6 +442,12 @@ public:
 
 	/* ETH WAN iface indices */
 	int eth_wan_iface_table_idx[MAX_NUM_PPPOE_MPDN];
+
+	/*MAPE iface index */
+	int mape_wan_iface_table_index;
+	bool mape_enable;
+	/* MAPE iface name */
+	const char* mape_wan_iface_name;
 
 	/* Store the number of interface IPACM read from XML file */
 	int ipa_num_ipa_interfaces;
@@ -569,7 +577,10 @@ public:
          * Mode 1 - uc uses proc params */
 	uint32_t ipacm_static_policy_dscp_mark_mode;
 #endif
-
+	uint32_t rgip_ip;
+	/* Persistent RGIP address for IPPT use-case; never cleared on RGIP down. */
+	uint32_t rgip_ip_ippt;
+	char rgip_iface_name[IPA_IFACE_NAME_LEN];
 	/* Indicates whether PPPOE mode is enabled on WAN interface */
 	bool eth_wan_pppoe_enable;
 	/* Indicates whether Eth VLAN mode is enabled on WAN interface */
@@ -588,8 +599,28 @@ public:
 	char eogre_tunnel_name[IPA_IFACE_NAME_LEN];
 	bool v6options_enabled;
 #endif
+	ipa_ipgre_info ipgre_info;
+	typedef struct pmipv6_status
+	{
+		char tunnel_name[IPA_IFACE_NAME_LEN];
+		bool pmipv6_enabled;
+		bool pmipv6_up;
+		bool pmipv6_tunnel_setup;
+		bool pmipv6_gre_event_posted;
+		bool pmipv6_up_wan;
+	}pmipv6_status;
+	pmipv6_status pmip_details;
 
+	bool ipogre_enabled;
 	bool eth_pdu_enabled;
+	typedef struct ipgre_tunnel_id_info {
+		bool ipogre_enabled;
+		bool ipogre_up;
+		bool ipogre_tunnel_setup;
+		bool ipogre_gre_event_posted;
+		bool ipogre_up_wan;
+	}ipgre_tunnel_id_info;
+	ipgre_tunnel_id_info ipogre_details;
 
 #ifdef FEATURE_VLAN_MPDN
 	bool vlan_firewall_change_handle;
@@ -602,18 +633,22 @@ public:
 	int flt_rule_count_v6[IPA_CLIENT_MAX];
 
 	/* IPACM routing table name for v4/v6 */
-	struct ipa_ioc_get_rt_tbl rt_tbl_lan_v4, rt_tbl_wan_v4, rt_tbl_default_v4, rt_tbl_v6, rt_tbl_wan_v6;
+	struct ipa_ioc_get_rt_tbl rt_tbl_lan_v4, rt_tbl_wan_v4, rt_tbl_default_v4, rt_tbl_v6, rt_tbl_wan_v6, rt_tbl_lan_v6;
 	struct ipa_ioc_get_rt_tbl rt_tbl_wan_dl, rt_tbl_default_v6;
 	struct ipa_ioc_get_rt_tbl rt_tbl_odu_v4, rt_tbl_odu_v6;
 	struct ipa_ioc_get_rt_tbl rt_tbl_inter_l2l_v4, rt_tbl_inter_l2l_v6;
 	bool rt_tbl_inter_l2l_v4_set;
 	bool rt_tbl_inter_l2l_v6_set;
 
+	uint32_t ipv6_blackhole_prefix[4];
+	uint32_t ipv6_blackhole_len;
+	bool blackhole_valid;
 	/* Indicates current number of client ipv6 */
 	int ipa_num_clients_ipv6;
 
 	bool isMCC_Mode;
 	pthread_mutex_t mac_flt_info_lock;
+
 	/* map to store whitelisted and blacklisted unique mac adrrs */
 	std::map<std::array<uint8_t, 6>, mac_flt_type *> mac_flt_lists;
 #ifdef IPA_IOC_SET_MAC_FLT
@@ -713,6 +748,7 @@ public:
 	uint16_t pppoe_get_session_id(const char *pppoe_dev_name);
 	void get_pppoe_session_info(const char *pppoe_dev_name, const char *phy_dev_name = NULL, uint16_t vlan_id = 0);
 	void update_pppoe_session_info(const char *pppoe_dev_name, char *params[MAX_PPPOE_PARAM_CNT]);
+	int get_pppoe_vlan_pcp( uint16_t *vlan_id, uint8_t *pcp);
 	int get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id);
 	int get_pppoe_indx(char *pppoe_dev_name);
 	int get_phy_name_from_bridge_iface(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN]);
@@ -1186,7 +1222,7 @@ public:
 	{
 		return qmap_id;
 	}
-
+	int Load_tunnel_xml_details();
 	int SetExtProp(ipa_ioc_query_intf_ext_props *prop);
 
 	ipacm_ext_prop* GetExtProp(ipa_ip_type ip_type);
@@ -1448,7 +1484,7 @@ public:
 	}
 
 	/* add to prefixes list if needed and notify LAN objects to modify rules*/
-	inline bool add_vlan_ipv6_prefix(uint32_t *prefix, int ipa_if_num, uint16_t vlan_id)
+	inline bool add_vlan_ipv6_prefix(uint32_t *prefix, int ipa_if_num, uint16_t vlan_id, bool is_bridge = false)
 	{
 		int i = 0;
 		int no_offload_temp = num_no_offload_ipv6_prefix;
@@ -1467,10 +1503,11 @@ public:
 		{
 			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0])
 				&& (prefix[1] == ipa_ipv6_prefixes[i].addr[1])
-				&& (vlan_id == ipa_ipv6_prefixes[i].vlan_id))
+				&& (vlan_id == ipa_ipv6_prefixes[i].vlan_id)
+			    && (is_bridge == ipa_ipv6_prefixes[i].is_bridge))
 			{
-				IPACMDBG_H("prefix 0x[%X][%X] already exists vlan_id inp %d saved %d\n",
-					prefix[0], prefix[1], vlan_id, ipa_ipv6_prefixes[i].vlan_id);
+				IPACMDBG_H("prefix 0x[%X][%X] already exists vlan_id inp %d saved %d\n is_bridge %d",
+					prefix[0], prefix[1], vlan_id, ipa_ipv6_prefixes[i].vlan_id, ipa_ipv6_prefixes[i].is_bridge);
 				return false;
 			}
 		}
@@ -1509,7 +1546,8 @@ public:
 			}
 			else if ((prefix[0] == ipa_ipv6_prefixes[i].addr[0])
 				&& (prefix[1] == ipa_ipv6_prefixes[i].addr[1])
-				&& (ipa_ipv6_prefixes[i].vlan_id ==0)) {
+				&& (ipa_ipv6_prefixes[i].vlan_id ==0)
+				&& (ipa_ipv6_prefixes[i].is_bridge == is_bridge)) {
 				/* Update the vlan id if prefix already saved but vlan id not associated
 				 * e.g Wlan for default pdn reserves a slot with vlan id 0, then eth vlan
 				 * for default pdn associates with vlan id */
@@ -1529,8 +1567,9 @@ public:
 			ipa_ipv6_prefixes[num_ipv6_prefixes].addr[0] = prefix[0];
 			ipa_ipv6_prefixes[num_ipv6_prefixes].addr[1] = prefix[1];
 			ipa_ipv6_prefixes[num_ipv6_prefixes].vlan_id = vlan_id;
+			ipa_ipv6_prefixes[num_ipv6_prefixes].is_bridge = is_bridge;
 			num_ipv6_prefixes++;
-			IPACMDBG("added v6 prefix 0x[%X][%X] for vlan id %d\n", prefix[0], prefix[1], ipa_ipv6_prefixes[i].vlan_id);
+			IPACMDBG("added v6 prefix 0x[%X][%X] for vlan id %d is_bridge: %d\n", prefix[0], prefix[1], ipa_ipv6_prefixes[i].vlan_id, ipa_ipv6_prefixes[i].is_bridge);
 		}
 
 		/* tell other LAN interfaces that we have a change in v6 prefixes */
@@ -1539,7 +1578,7 @@ public:
 	}
 
 	/* remove from prefixes list if needed and notify LAN objects to modify rules*/
-	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num, bool reserve_slot = false)
+	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num, bool reserve_slot = false, bool is_bridge = false)
 	{
 		int i = 0;
 
@@ -1553,20 +1592,23 @@ public:
 
 		for(i = 0; i < num_ipv6_prefixes; i++)
 		{
-			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1]))
+			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1])
+				&& is_bridge == ipa_ipv6_prefixes[i].is_bridge)
 			{
 				if (reserve_slot) {
 					IPACMDBG_H("Reserve slot for ipa_if_num %d\n", ipa_if_num);
 					ipa_ipv6_prefixes[i].addr[0] = IPA_DUMMY_PREFIX;
 					ipa_ipv6_prefixes[i].addr[1] = IPA_DUMMY_PREFIX;
+					ipa_ipv6_prefixes[i].is_bridge = is_bridge;
 				}
 				else {
+					IPACMDBG_H("prefix installed by is_bridge %d 0x[%X][%X] will be removed\n", is_bridge, prefix[0], prefix[1]);
 					for(; i < (num_ipv6_prefixes - 1); i++)
 					{
-						IPACMDBG_H("prefix 0x[%X][%X] will be removed\n", prefix[0], prefix[1]);
 						ipa_ipv6_prefixes[i].addr[0] = ipa_ipv6_prefixes[i + 1].addr[0];
 						ipa_ipv6_prefixes[i].addr[1] = ipa_ipv6_prefixes[i + 1].addr[1];
 						ipa_ipv6_prefixes[i].vlan_id = ipa_ipv6_prefixes[i + 1].vlan_id;
+						ipa_ipv6_prefixes[i].is_bridge = ipa_ipv6_prefixes[i + 1].is_bridge;
 					}
 					num_ipv6_prefixes--;
 				}
@@ -1613,6 +1655,69 @@ public:
 			{
 				IPACMDBG("no match with [%X][%X]\n", ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
 			}
+		}
+		int len  = ipv6_blackhole_len;
+		if(blackhole_valid == true)
+		{
+			for (int i = 0; i < 4; ++i) {
+				/* Note: Assuming incoming prefix =  2001:0db8:85a3:0099:1111:2222:3333:4444
+				 * prefix[0] = 0x20010db8
+				 * prefix[1] = 0x85a30099
+				 * and Blackhole Prefix: 2001:0db8:85a3:0000::/56
+				 * example len = 56
+				 * If no bits left to check, it's a match
+				 * ITERATION 1 (i=0): len is 56. (Skip)
+				 * ITERATION 2 (i=1): len is 24. (Skip)
+				 * ITERATION 3 (i=2): len is 0. Condition met! Returns true.
+				 */
+				if (len == 0) {
+					return true;
+				}
+
+				/* Determine how many bits to check in this specific 32-bit block
+				 * ITERATION 1 (i=0): len (56) >= 32, so check_bits = 32
+				 * ITERATION 2 (i=1): len (24) < 32, so check_bits = 24
+				 */
+				int check_bits = (len >= 32) ? 32 : len;
+
+				/* Create mask */
+				uint32_t mask;
+				if (check_bits == 32) {
+					mask = 0xFFFFFFFFU;
+				} else {
+					/* ITERATION 1 (i=0): We need the full block. 
+					 * mask = 0xFFFFFFFF
+					 */
+					mask = ~(0xFFFFFFFFU >> check_bits);
+					/* ITERATION 2 (i=1): check_bits is 24.
+					 * 0xFFFFFFFFU >> 24 = 0x000000FF.
+					 * Bitwise NOT (~) flips it to 0xFFFFFF00.
+					 * mask = 0xFFFFFF00
+					 */
+				}
+
+				/* Compare the masked values
+				 * ITERATION 1 (i=0):
+				 * prefix[0] & mask: 0x20010db8 & 0xFFFFFFFF = 0x20010db8
+				 * ipv6_blackhole_prefix[0] & mask:     0x20010db8 & 0xFFFFFFFF = 0x20010db8
+				 * They match! Continue loop.
+				 *
+				 * ITERATION 2 (i=1):
+				 * prefix[1] & mask: 0x85a30099 & 0xFFFFFF00 = 0x85a30000
+				 * ipv6_blackhole_prefix[1] & mask:     0x85a30000 & 0xFFFFFF00 = 0x85a30000
+				 * They match! Continue loop.
+				 */
+				if ((prefix[i] & mask) != (ipv6_blackhole_prefix[i] & mask)) {
+					return false;
+				}
+
+				/* Decrement length by the bits we just checked (max 32)
+				 * ITERATION 1 (i=0): len = 56 - 32 = 24
+				 * ITERATION 2 (i=1): len = 24 - 24 = 0
+				 */
+				len -= check_bits;
+			}
+			return true;
 		}
 		return false;
 	}
@@ -1864,6 +1969,10 @@ private:
 				{
 					return nullptr;
 				}
+			}
+			if (iface_table[i].netlink_interface_index == interfaceIndex &&
+					i == mape_wan_iface_table_index ){
+				return nullptr;
 			}
 		}
 

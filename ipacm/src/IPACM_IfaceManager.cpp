@@ -333,6 +333,14 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, lan);
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, lan);
 				IPACM_EvtDispatcher::registr(IPA_MAC_ADD_DEL_FLT_EVENT, lan);
+#ifdef FEATURE_PMIPV6
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, lan);
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_DOWN, lan);
+#endif
+#ifdef FEATURE_IPoGRE
+				IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_UP, lan);
+				IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_DOWN, lan);
+#endif
 #ifdef FEATURE_IPA_ANDROID
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_TETHER, lan);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP_V6_TETHER, lan);
@@ -460,6 +468,14 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_UP, odu);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_DOWN, odu);
 #endif
+#ifdef FEATURE_PMIPV6
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, odu);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_DOWN, odu);
+#endif
+#ifdef FEATURE_IPoGRE
+					IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_UP, odu);
+					IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_DOWN, odu);
+#endif
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, odu);
 					/*lan2lan ipa offload with static IP*/
 					IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, odu);
@@ -565,6 +581,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					return IPACM_FAILURE;
 				}
 				IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, wl);
+				IPACM_EvtDispatcher::registr(IPA_PREFIX_CHANGE_EVENT, wl);
 #ifdef FEATURE_IPv6CT_DISABLED
 				IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, wl);			// register for Firewall change event
 #endif //FEATURE_IPACM_UL_FIREWALL
@@ -608,6 +625,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 #endif
 #ifdef IPA_MTU_EVENT_MAX
 				IPACM_EvtDispatcher::registr(IPA_MTU_UPDATE, wl);
+#endif
+#ifdef FEATURE_PMIPV6
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, wl);
+				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_DOWN, wl);
 #endif
 				if (IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled == true) {
 					IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_VLAN_MODE, wl);
@@ -661,6 +682,9 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						if (w->rx_prop == NULL && w->tx_prop == NULL)
 						{
 							/* close the netdev instance if IPA not support*/
+							if (strcmp(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,MAPE_IFACE_NAME) == 0){
+								IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].ifi_flags = 0;
+							}
 							w->delete_iface();
 							return IPACM_FAILURE;
 						}
@@ -688,6 +712,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_EoGRE_UP, w);
 					IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_EoGRE_DOWN, w);
 #endif
+
 #ifdef FEATURE_DUAL_BACKHAUL
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_DOWN, w);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_WAN_UP, w);
@@ -695,6 +720,15 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_QOS_RULE_ADD_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_QOS_RULE_DEL_EVENT, w);
 
+#ifdef FEATURE_PMIPV6
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, w);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_DOWN, w);
+#endif
+#ifdef FEATURE_IPoGRE
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_IPOGRE_UP,w);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_IPOGRE_DOWN,w);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_RGIP_UP, w);
+#endif
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, w);
 #ifdef FEATURE_IPA_ANDROID
 					IPACM_EvtDispatcher::registr(IPA_WAN_UPSTREAM_ROUTE_ADD_EVENT, w);
@@ -771,6 +805,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					else
 					{
 						IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, w);
+					}
+					if(is_sta_mode == ECM_WAN) {
+						IPACM_EvtDispatcher::registr(IPA_MAPE_ADD_FMR_RULE, w);
+						IPACM_EvtDispatcher::registr(IPA_MAPE_DEL_FMR_RULE, w);
 					}
 
 					IPACMDBG_H("ipa_WAN (%s):ipa_index (%d) instance open/registr ok\n", w->dev_name, w->ipa_if_num);

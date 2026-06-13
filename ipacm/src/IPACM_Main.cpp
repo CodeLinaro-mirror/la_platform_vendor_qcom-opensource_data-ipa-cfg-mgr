@@ -267,7 +267,7 @@ void* ipa_driver_msg_notifier(void *param)
 #ifdef FEATURE_IPACM_RESTART
 	FILE *fp = NULL;
 #endif
-	char buffer[IPA_DRIVER_WLAN_BUF_LEN];
+	char buffer[IPA_DRIVER_WLAN_META_MSG + IPA_DRIVER_WLAN_BUF_LEN];
 	struct ipa_msg_meta event_hdr;
 	struct ipa_ecm_msg event_ecm;
 	struct ipa_wan_msg event_wan;
@@ -351,7 +351,7 @@ void* ipa_driver_msg_notifier(void *param)
 		data_tethering_stats = NULL;
 		data_network_stats = NULL;
 
-		length = read(fd, buffer, IPA_DRIVER_WLAN_BUF_LEN);
+		length = read(fd, buffer, IPA_DRIVER_WLAN_META_MSG + IPA_DRIVER_WLAN_BUF_LEN);
 		if (length < 0)
 		{
 			PERROR("didn't read IPA_driver correctly");

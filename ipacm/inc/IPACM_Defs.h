@@ -336,6 +336,8 @@ typedef enum
 	IPA_LAN_CLIENT_DISCONNECT_EVENT,          /* ipacm_event_data_mac */
 	IPA_LAN_CLIENT_UPDATE_EVENT,              /* ipacm_event_data_mac */
 #endif
+	IPA_IP_PASS_UPDATE_EVENT,                 /* ipacm_ip_pass_pdn_info */
+	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, /* Handle ip pass pdn info update.*/
 	IPA_EXTERNAL_EVENT_MAX,
 
 	IPA_HANDLE_WAN_UP,                        /* ipacm_event_iface_up  */
@@ -386,8 +388,6 @@ typedef enum
 #endif
 	IPA_MAC_ADD_DEL_FLT_EVENT,                /* NULL */
 	IPA_IP_COLLISION_UPDATE_EVENT,            /* ipacm_ip_collision_pdn_info */
-	IPA_IP_PASS_UPDATE_EVENT,                 /* ipacm_ip_pass_pdn_info */
-	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, /* Handle ip pass pdn info update.*/
 	IPA_RGIP_PASS_UPDATE_EVENT,               /* ipacm_event_rgip_pass_info */
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	IPA_PKT_THRESHOLD_UPDATE_EVENT,           /* ipa_set_pkt_threshold */

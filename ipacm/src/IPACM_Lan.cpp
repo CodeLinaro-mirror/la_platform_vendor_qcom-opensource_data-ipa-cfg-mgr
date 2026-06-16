@@ -4892,6 +4892,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 {
 	struct ipa_flt_rule_add flt_rule_entry;
 	int len = 0, i = 0, j, idx = 0;
+	int wlan_pipe_index = MAX_SUPPORTED_WLAN_PIPES;
 	bool vlan_set = false;
 	ipa_bridge_vlan_mapping_info mapping_info;
 	uint32_t v6_prefix[2] = {0};
@@ -4924,6 +4925,20 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 		} else {
 			idx = j * 2;
 			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
+
+		if (ipa_if_cate == WLAN_IF)
+		{
+			for (wlan_pipe_index = 0; wlan_pipe_index < MAX_SUPPORTED_WLAN_PIPES; wlan_pipe_index++)
+			{
+				if (IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].src_pipe == rx_prop->rx[idx].src_pipe)
+					break;
+			}
+			if (wlan_pipe_index >= MAX_SUPPORTED_WLAN_PIPES)
+			{
+				IPACMERR("wlan_pipe_index not found for src_pipe %d\n", rx_prop->rx[idx].src_pipe);
+				return IPACM_FAILURE;
+			}
 		}
 
 		if (ip_type == IPA_IP_v4)
@@ -4962,7 +4977,10 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 			m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
 			m_pFilteringTable->ip = IPA_IP_v4;
 			m_pFilteringTable->num_rules = (uint8_t)1;
-			m_pFilteringTable->add_after_hdl = private_fl_rule_hdl[j][num_wan_subnet_rules[j] - 1];
+			if (ipa_if_cate == WLAN_IF)
+				m_pFilteringTable->add_after_hdl = IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].private_flt_rule_hdl[j][num_wan_subnet_rules[j] - 1];
+			else
+				m_pFilteringTable->add_after_hdl = private_fl_rule_hdl[j][num_wan_subnet_rules[j] - 1];
 
 			IPACMDBG_H("Retrieving routing handle for table: %s\n",
 					   IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.name);
@@ -5107,7 +5125,10 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 			m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
 			m_pFilteringTable->ip = IPA_IP_v6;
 			m_pFilteringTable->num_rules = (uint8_t)1;
-			m_pFilteringTable->add_after_hdl = ipv6_prefix_flt_rule_hdl[j][num_wan_prefix_rules[j] - 1];
+			if (ipa_if_cate == WLAN_IF)
+				m_pFilteringTable->add_after_hdl = IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].ipv6_prefix_flt_rule_hdl[j][num_wan_prefix_rules[j] - 1];
+			else
+				m_pFilteringTable->add_after_hdl = ipv6_prefix_flt_rule_hdl[j][num_wan_prefix_rules[j] - 1];
 
 			if (false == m_routing.GetRoutingTable(&IPACM_Iface::ipacmcfg->rt_tbl_v6))
 			{

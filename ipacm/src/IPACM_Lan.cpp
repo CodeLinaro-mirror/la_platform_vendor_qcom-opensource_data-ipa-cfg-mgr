@@ -16663,12 +16663,14 @@ int IPACM_Lan::uninstall_l2tp_rules(ipacm_event_data_all *data)
 				IPACMERR("Failed to delete first pass hdr proc ctx.\n");
 				return IPACM_FAILURE;
 			}
+			get_client_memptr(eth_client, index)->dl_first_pass_hdr_proc_ctx_hdl[IPA_IP_v4] = 0;
 			if(get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl[IPA_IP_v4] &&
 				m_header.DeleteHeaderHdl(get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl[IPA_IP_v4]) == false)
 			{
 				IPACMERR("Failed to delete first pass hdr.\n");
 				return IPACM_FAILURE;
 			}
+			get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl[IPA_IP_v4] = 0;
 			get_client_memptr(eth_client, index)->ipv4_header_set = false;
 			IPACMDBG("client index: %d, ipv4_ul_first_pass_rules_set: %d, ipv4_header_set: %d, route_rule_set_v4: %d\n", index,
 				get_client_memptr(eth_client, index)->ul_first_pass_rules_set, get_client_memptr(eth_client, index)->ipv4_header_set,
@@ -16692,12 +16694,14 @@ int IPACM_Lan::uninstall_l2tp_rules(ipacm_event_data_all *data)
 					IPACMERR("Failed to delete first pass hdr proc ctx.\n");
 					return IPACM_FAILURE;
 				}
+				get_client_memptr(eth_client, index)->dl_first_pass_hdr_proc_ctx_hdl[IPA_IP_v6] = 0;
 				if(get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl[IPA_IP_v6] &&
 					m_header.DeleteHeaderHdl(get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl[IPA_IP_v6]) == false)
 				{
 					IPACMERR("Failed to delete first pass hdr.\n");
 					return IPACM_FAILURE;
 				}
+				get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl[IPA_IP_v6] = 0;
 				get_client_memptr(eth_client, index)->ipv6_header_set = false;
 				IPACMDBG("client index: %d, ipv6_ul_first_pass_rules_set: %d, ipv6_header_set: %d, route_rule_set_v6: %d\n", index,
 					get_client_memptr(eth_client, index)->ul_first_pass_rules_set, get_client_memptr(eth_client, index)->ipv6_header_set,
@@ -16726,12 +16730,14 @@ int IPACM_Lan::uninstall_l2tp_rules(ipacm_event_data_all *data)
 				IPACMERR("Failed to delete first pass hdr proc ctx.\n");
 				return IPACM_FAILURE;
 			}
+			get_client_memptr(eth_client, index)->dl_first_pass_hdr_proc_ctx_hdl[IPA_IP_v4] = 0;
 			if(get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl[IPA_IP_v4] &&
 				m_header.DeleteHeaderHdl(get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl[IPA_IP_v4]) == false)
 			{
 				IPACMERR("Failed to delete first pass hdr.\n");
 				return IPACM_FAILURE;
 			}
+			get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl[IPA_IP_v4] = 0;
 			get_client_memptr(eth_client, index)->ipv4_header_set = false;
 			IPACMDBG("client index: %d, ipv4_ul_first_pass_rules_set: %d, ipv4_header_set: %d, route_rule_set_v4: %d\n", index,
 				get_client_memptr(eth_client, index)->ul_first_pass_rules_set, get_client_memptr(eth_client, index)->ipv4_header_set,
@@ -16752,12 +16758,14 @@ int IPACM_Lan::uninstall_l2tp_rules(ipacm_event_data_all *data)
 					IPACMERR("Failed to delete first pass hdr proc ctx.\n");
 					return IPACM_FAILURE;
 				}
+				get_client_memptr(eth_client, index)->dl_first_pass_hdr_proc_ctx_hdl[IPA_IP_v6] = 0;
 				if(get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl[IPA_IP_v6] &&
 					m_header.DeleteHeaderHdl(get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl[IPA_IP_v6]) == false)
 				{
 					IPACMERR("Failed to delete first pass hdr.\n");
 					return IPACM_FAILURE;
 				}
+				get_client_memptr(eth_client, index)->dl_first_pass_hdr_hdl[IPA_IP_v6] = 0;
 				get_client_memptr(eth_client, index)->ipv6_header_set = false;
 				IPACMDBG("client index: %d, ipv6_ul_first_pass_rules_set: %d, ipv6_header_set: %d, route_rule_set_v6: %d\n", index,
 					get_client_memptr(eth_client, index)->ul_first_pass_rules_set, get_client_memptr(eth_client, index)->ipv6_header_set,
@@ -16775,6 +16783,7 @@ int IPACM_Lan::uninstall_l2tp_rules(ipacm_event_data_all *data)
 				IPACMERR("Failed to delete ul flt rule.\n");
 				return IPACM_FAILURE;
 			}
+			get_client_memptr(eth_client, index)->ul_first_pass_flt_rule_hdl = 0;
 			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 
 			if(m_routing.DeleteRoutingHdl(get_client_memptr(eth_client, index)->ul_first_pass_rt_rule_hdl, IPA_IP_v6) == false)
@@ -16782,6 +16791,7 @@ int IPACM_Lan::uninstall_l2tp_rules(ipacm_event_data_all *data)
 				IPACMERR("Failed to delete ul rt rule.\n");
 				return IPACM_FAILURE;
 			}
+			get_client_memptr(eth_client, index)->ul_first_pass_rt_rule_hdl = 0;
 			get_client_memptr(eth_client, index)->ul_first_pass_rules_set = false;
 		}
 		for(; index < num_eth_client-1; index++)

@@ -3185,7 +3185,9 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	ipacm_event_data_all data_all;
 	std::list <ipacm_event_data_all>::iterator it;
 	ipacm_bridge *bridge;
+	tether_client_info client_info;
 	int skip_nat_set = 0;
+	int eth_index =0;
 	IPACMDBG_H("\n");
 
 	if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
@@ -3199,6 +3201,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		return IPACM_FAILURE;
 	}
 
+	memset(&client_info, 0, sizeof(tether_client_info));
 	/* get bridge from vlan id */
 	bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge_from_vid(vlan_id);
 	if (!bridge)
@@ -3207,9 +3210,21 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		return IPACM_FAILURE;
 	}
 
+	client_info.is_vlan = true;
 	IPACMDBG_H("VLAN IF %s got client, vlan id %d \n", data->iface_name, vlan_id);
 	data_vlan = (ipacm_event_new_neigh_vlan *)data;
 
+	if (data->iptype == IPA_IP_v4) {
+		client_info.v4_addr = data->ipv4_addr;
+	} else if  (data->iptype == IPA_IP_v6) {
+		client_info.v4_addr = 0;
+	}
+	memcpy(client_info.iface, dev_name, IPA_IFACE_NAME_LEN);
+	eth_index = get_eth_client_index(data->mac_addr, vlan_id);
+	if(eth_index != IPACM_INVALID_INDEX){
+		IPACMDBG_H(" updating vlan client info to tethering info \n");
+		IPACM_Iface::ipacmcfg->update_client_info(data->mac_addr, &client_info, true);
+	}
 	if((data_vlan->data_all.iptype != ip_type) && (ip_type != IPA_IP_MAX))
 	{
 		IPACMERR("inconsistent iptype. iptype = %d, instance ip_type = %d\n", data_vlan->data_all.iptype,

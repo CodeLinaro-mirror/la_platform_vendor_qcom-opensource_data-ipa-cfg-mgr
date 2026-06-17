@@ -975,6 +975,7 @@ private:
 				{
 					return IPACM_FAILURE;
 				}
+				get_client_memptr(wan_client, clt_indx)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4 = 0 ;
 			}
 		     } /* end of for loop */
 
@@ -982,6 +983,14 @@ private:
 		     if(get_client_memptr(wan_client, clt_indx)->route_rule_set_v4==true) /* for ipv4 */
 		     {
 				get_client_memptr(wan_client, clt_indx)->route_rule_set_v4 = false;
+				/* Clear shared MAP-E v4 handle so it can be reinstalled on next WAN up */
+				if (IPACM_Iface::ipacmcfg->mape_enable &&
+				    (strcmp(dev_name, IPACM_Iface::ipacmcfg->iface_table[
+				            IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0))
+				{
+					IPACMDBG_H("Clearing mape_wan_rt_rule_hdl_v4 on WAN client delete\n");
+					IPACM_Wan::mape_wan_rt_rule_hdl_v4 = 0;
+				}
 		     }
 		}
 
@@ -1022,6 +1031,14 @@ private:
 						get_client_memptr(wan_client, clt_indx)->route_rule_set_v6 = 0;
 					} /* end of for loop */
 				} /* end of for loop */
+			}
+
+			if(mape_wan_rt_rule_hdl_v6 ){
+				if(m_routing.DeleteRoutingHdl(mape_wan_rt_rule_hdl_v6, IPA_IP_v6) == false)
+				{
+					return IPACM_FAILURE;
+				}
+				mape_wan_rt_rule_hdl_v6 = 0;
 			}
 			IPACMDBG_H("Current clnt-index:%d ipv6_set= %d, route_rule_set_v6= %d, update ipa_num_clients_ipv6:%d\n",
 				clt_indx, get_client_memptr(wan_client, clt_indx)->ipv6_set,

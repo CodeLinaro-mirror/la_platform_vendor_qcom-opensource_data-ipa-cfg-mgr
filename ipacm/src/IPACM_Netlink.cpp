@@ -1251,7 +1251,6 @@ static int ipa_nl_decode_nlmsg
 						IPACM_EVENT_COPY_ADDR_v4( data_addr->ipv4_addr, msg_ptr->nl_addr_info.attr_info.prefix_addr);
 						data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
 						prefix_len = ((prefix_len >> (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen)) << (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen));
-						data_addr->ipv4_addr = (data_addr->ipv4_addr & prefix_len);
 						data_addr->ipv4_addr_mask = prefix_len;
 
 					}
@@ -1325,7 +1324,6 @@ static int ipa_nl_decode_nlmsg
 						IPACM_EVENT_COPY_ADDR_v4( data_addr->ipv4_addr, msg_ptr->nl_addr_info.attr_info.prefix_addr);
 						data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
 						prefix_len = ((prefix_len >> (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen)) << (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen));
-						data_addr->ipv4_addr = (data_addr->ipv4_addr & prefix_len);
 						data_addr->ipv4_addr_mask = prefix_len;
 						data_addr->if_index = msg_ptr->nl_addr_info.metainfo.ifa_index;
 						strlcpy(data_addr->iface_name, dev_name, sizeof(data_addr->iface_name));

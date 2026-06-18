@@ -106,6 +106,7 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index, bool ppp_iface)
 				strlcpy(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
 					IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].phy_dev_name,
 					sizeof(IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].phy_dev_name));
+				 IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].iface_index = iface_index ;
 				memcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
 					sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name));
 				break;

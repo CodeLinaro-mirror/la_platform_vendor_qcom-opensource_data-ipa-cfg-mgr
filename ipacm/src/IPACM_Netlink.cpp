@@ -50,6 +50,11 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include <stdlib.h>
 #include <errno.h>
 #include <linux/rtnetlink.h>
+#ifdef FEATURE_PRPLWRT
+#include <linux/netlink.h>
+#include <linux/genetlink.h>
+#include <linux/nl80211.h>
+#endif
 
 #include "IPACM_CmdQueue.h"
 #include "IPACM_Defs.h"
@@ -67,6 +72,402 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 
 int ipa_get_if_name(char *if_name, int if_index);
 int find_mask(int ip_v4_last, int *mask_value);
+
+#ifdef FEATURE_PRPLWRT
+#define IPA_NL80211_FAMILY_NAME "nl80211"
+#define IPA_GENL_RESP_MAX_LEN 8192
+#define IPA_GENL_RECV_TIMEOUT_SEC 1
+
+#define IPA_NLA_DATA(nla) ((void *)((char *)(nla) + NLA_HDRLEN))
+#define IPA_NLA_LEN(nla) ((int)((nla)->nla_len) - NLA_HDRLEN)
+#define IPA_NLA_OK(nla, len) ((len) >= (int)sizeof(struct nlattr) && \
+	(nla)->nla_len >= sizeof(struct nlattr) && (nla)->nla_len <= (len))
+#define IPA_NLA_NEXT(nla, len) ((len) -= NLA_ALIGN((nla)->nla_len), \
+	(struct nlattr *)((char *)(nla) + NLA_ALIGN((nla)->nla_len)))
+
+/* Generic-netlink helpers used by ipa_nl_is_ap_vlan_iftype().
+ */
+static struct nlattr* ipacm_get_nlattr_by_type(struct nlattr *attr, int attr_len, uint16_t target_type)
+{
+	while (IPA_NLA_OK(attr, attr_len)) {
+		if ((attr->nla_type & NLA_TYPE_MASK) == target_type)
+			return attr;
+		attr = IPA_NLA_NEXT(attr, attr_len);
+	}
+	return NULL;
+}
+
+static bool ipacm_add_attr(char *buf, size_t buf_len, int *offset, uint16_t type,
+	const void *value, size_t value_len)
+{
+	struct nlattr *nla;
+	int total_len;
+
+	if (!buf || !offset || !value || value_len == 0)
+		return false;
+
+	total_len = NLA_HDRLEN + value_len;
+	if ((*offset + NLA_ALIGN(total_len)) > (int)buf_len)
+		return false;
+
+	nla = (struct nlattr *)(buf + *offset);
+	nla->nla_type = type;
+	nla->nla_len = total_len;
+	memcpy(IPA_NLA_DATA(nla), value, value_len);
+	*offset += NLA_ALIGN(total_len);
+	return true;
+}
+
+static int ipacm_parse_nlmsg_error(struct nlmsghdr *nlh);
+static bool ipacm_read_attr(struct nlattr *attr, void *value, size_t value_len);
+static int ipacm_send_and_match_genl(int sock_fd, struct nlmsghdr *req, struct nlmsghdr *resp,
+	size_t resp_len, uint16_t expected_type, const char *ctx, struct nlmsghdr **match_nlh);
+
+/* Send a request and return the first payload message with the same sequence number.
+ * ACKs (NLMSG_ERROR with err=0) and NLMSG_DONE are skipped in-place.
+ */
+static int ipacm_send_and_match_genl(int sock_fd, struct nlmsghdr *req, struct nlmsghdr *resp,
+	size_t resp_len, uint16_t expected_type, const char *ctx, struct nlmsghdr **match_nlh)
+{
+	struct sockaddr_nl nladdr;
+	ssize_t send_len;
+	ssize_t recv_len;
+	int retries = 4;
+
+	if (sock_fd < 0 || req == NULL || resp == NULL || ctx == NULL || match_nlh == NULL)
+		return -EINVAL;
+
+	memset(&nladdr, 0, sizeof(nladdr));
+	nladdr.nl_family = AF_NETLINK;
+
+	send_len = sendto(sock_fd, req, req->nlmsg_len, 0,
+		(struct sockaddr *)&nladdr, sizeof(nladdr));
+	if (send_len < 0) {
+		IPACMERR("sendto failed errno=%d\n", errno);
+		return -errno;
+	}
+
+	IPACMDBG_H("genl send seq=%u pid=%u type=%u len=%u\n",
+		req->nlmsg_seq, req->nlmsg_pid, req->nlmsg_type, req->nlmsg_len);
+
+	while (retries-- > 0) {
+		struct nlmsghdr *nlh;
+		int rem;
+
+		recv_len = recv(sock_fd, resp, resp_len, 0);
+		if (recv_len < 0) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+				IPACMERR("recv timeout waiting for generic-netlink response\n");
+			} else if (errno == ECONNREFUSED) {
+				IPACMERR("recv ECONNREFUSED on generic-netlink socket\n");
+			} else {
+				IPACMERR("recv failed errno=%d\n", errno);
+			}
+			return -errno;
+		}
+
+		if ((size_t)recv_len < sizeof(struct nlmsghdr)) {
+			IPACMERR("short netlink response len=%zd\n", recv_len);
+			return -EMSGSIZE;
+		}
+
+		IPACMDBG_H("genl recv len=%zd\n", recv_len);
+
+		for (nlh = resp, rem = recv_len; NLMSG_OK(nlh, rem); nlh = NLMSG_NEXT(nlh, rem)) {
+			IPACMDBG_H("genl msg type=%u seq=%u pid=%u len=%u\n",
+				nlh->nlmsg_type, nlh->nlmsg_seq, nlh->nlmsg_pid, nlh->nlmsg_len);
+			if (nlh->nlmsg_seq != req->nlmsg_seq)
+				continue;
+
+			if (nlh->nlmsg_type == NLMSG_ERROR) {
+				int err = ipacm_parse_nlmsg_error(nlh);
+				if (err == 0)
+					continue;
+				if (err == -ENODEV || err == -ENOENT) {
+					IPACMDBG_H("generic-netlink interface not present err=%d\n", err);
+				} else if (err == -ECONNREFUSED) {
+					IPACMERR("generic-netlink request refused by kernel\n");
+				} else {
+					IPACMERR("generic-netlink returned error %d\n", err);
+				}
+				return err;
+			}
+
+			if (nlh->nlmsg_type == NLMSG_DONE)
+				continue;
+
+			if (expected_type != 0 && nlh->nlmsg_type != expected_type) {
+				IPACMERR("unexpected %s response type=%u expected=%u\n",
+					ctx, nlh->nlmsg_type, expected_type);
+				return -EPROTO;
+			}
+
+			if (nlh->nlmsg_len < NLMSG_LENGTH(GENL_HDRLEN)) {
+				IPACMERR("short %s genl message\n", ctx);
+				return -EMSGSIZE;
+			}
+
+			*match_nlh = nlh;
+			return 0;
+		}
+	}
+
+	IPACMERR("no payload in %s response for seq=%u\n", ctx, req->nlmsg_seq);
+	return -ENOMSG;
+}
+
+static int ipacm_parse_nlmsg_error(struct nlmsghdr *nlh)
+{
+	struct nlmsgerr *nlerr;
+
+	if (!nlh)
+		return -EINVAL;
+
+	if (nlh->nlmsg_type != NLMSG_ERROR)
+		return 0;
+
+	if (NLMSG_PAYLOAD(nlh, 0) < sizeof(struct nlmsgerr))
+		return -EINVAL;
+
+	nlerr = (struct nlmsgerr *)NLMSG_DATA(nlh);
+	return nlerr->error;
+}
+
+static bool ipacm_read_attr(struct nlattr *attr, void *value, size_t value_len)
+{
+	if (!attr || !value || IPA_NLA_LEN(attr) < (int)value_len)
+		return false;
+
+	memcpy(value, IPA_NLA_DATA(attr), value_len);
+	return true;
+}
+
+/* Resolve the numeric family ID assigned by generic-netlink for a family name.
+ * Family IDs are runtime-assigned, so nl80211 cannot be hardcoded.
+ */
+static int ipacm_get_genl_family_id(int sock_fd, uint32_t local_portid, const char *family_name,
+	uint32_t *seq)
+{
+	char req_buf[NLMSG_SPACE(GENL_HDRLEN + NLA_HDRLEN + GENL_NAMSIZ)] = {0};
+	char resp_buf[IPA_GENL_RESP_MAX_LEN] = {0};
+	struct nlmsghdr *nlh = (struct nlmsghdr *)req_buf;
+	struct genlmsghdr *genlh;
+	struct nlmsghdr *resp_nlh = NULL;
+	struct genlmsghdr *resp_genlh;
+	struct nlattr *attr;
+	int attr_len;
+	int req_offset;
+	uint16_t family_id_u16 = 0;
+	int err;
+
+	if (!family_name || !seq)
+		return -1;
+
+	nlh->nlmsg_len = NLMSG_LENGTH(GENL_HDRLEN);
+	nlh->nlmsg_type = GENL_ID_CTRL;
+	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
+	nlh->nlmsg_seq = ++(*seq);
+	nlh->nlmsg_pid = local_portid;
+
+	genlh = (struct genlmsghdr *)NLMSG_DATA(nlh);
+	genlh->cmd = CTRL_CMD_GETFAMILY;
+	genlh->version = 1;
+	genlh->reserved = 0;
+
+	req_offset = nlh->nlmsg_len;
+	if (!ipacm_add_attr(req_buf, sizeof(req_buf), &req_offset,
+			CTRL_ATTR_FAMILY_NAME, family_name, strlen(family_name) + 1)) {
+		IPACMERR("failed to encode family-name attr\n");
+		return -1;
+	}
+	nlh->nlmsg_len = req_offset;
+
+	err = ipacm_send_and_match_genl(sock_fd, nlh, (struct nlmsghdr *)resp_buf, sizeof(resp_buf),
+		GENL_ID_CTRL, "nlctrl", &resp_nlh);
+	if (err != 0) {
+		IPACMERR("nlctrl returned error %d\n", err);
+		return -1;
+	}
+
+	resp_genlh = (struct genlmsghdr *)NLMSG_DATA(resp_nlh);
+	attr = (struct nlattr *)((char *)resp_genlh + GENL_HDRLEN);
+	attr_len = resp_nlh->nlmsg_len - NLMSG_HDRLEN - GENL_HDRLEN;
+	if (attr_len <= 0)
+		return -1;
+
+	attr = ipacm_get_nlattr_by_type(attr, attr_len, CTRL_ATTR_FAMILY_ID);
+	if (!ipacm_read_attr(attr, &family_id_u16, sizeof(family_id_u16))) {
+		IPACMERR("CTRL_ATTR_FAMILY_ID missing\n");
+		return -1;
+	}
+
+	return family_id_u16;
+}
+
+/* Query nl80211 for the interface type of a specific ifindex. */
+static int ipacm_get_nl80211_iftype_by_ifindex(int sock_fd, uint32_t local_portid, int nl80211_family_id,
+	int ifindex, uint32_t *seq)
+{
+	char req_buf[NLMSG_SPACE(GENL_HDRLEN + NLA_HDRLEN + sizeof(uint32_t))] = {0};
+	char resp_buf[IPA_GENL_RESP_MAX_LEN] = {0};
+	struct nlmsghdr *nlh = (struct nlmsghdr *)req_buf;
+	struct genlmsghdr *genlh;
+	struct nlmsghdr *resp_nlh = NULL;
+	struct genlmsghdr *resp_genlh;
+	struct nlattr *attr;
+	int attr_len;
+	int req_offset;
+	uint32_t ifindex_u32 = ifindex;
+	uint32_t iftype_u32 = 0;
+	int err;
+
+	if (!seq)
+		return -1;
+
+	nlh->nlmsg_len = NLMSG_LENGTH(GENL_HDRLEN);
+	nlh->nlmsg_type = nl80211_family_id;
+	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
+	nlh->nlmsg_seq = ++(*seq);
+	nlh->nlmsg_pid = local_portid;
+
+	genlh = (struct genlmsghdr *)NLMSG_DATA(nlh);
+	genlh->cmd = NL80211_CMD_GET_INTERFACE;
+	genlh->version = 0;
+	genlh->reserved = 0;
+
+	req_offset = nlh->nlmsg_len;
+	if (!ipacm_add_attr(req_buf, sizeof(req_buf), &req_offset,
+			NL80211_ATTR_IFINDEX, &ifindex_u32, sizeof(ifindex_u32))) {
+		IPACMERR("failed to encode ifindex attr\n");
+		return -1;
+	}
+	nlh->nlmsg_len = req_offset;
+
+	err = ipacm_send_and_match_genl(sock_fd, nlh, (struct nlmsghdr *)resp_buf, sizeof(resp_buf),
+		nl80211_family_id, "nl80211", &resp_nlh);
+	if (err != 0) {
+		if (err == -ENODEV || err == -ENOENT)
+			return 0;
+		IPACMERR("nl80211 returned error %d\n", err);
+		return -1;
+	}
+
+	resp_genlh = (struct genlmsghdr *)NLMSG_DATA(resp_nlh);
+	attr = (struct nlattr *)((char *)resp_genlh + GENL_HDRLEN);
+	attr_len = resp_nlh->nlmsg_len - NLMSG_HDRLEN - GENL_HDRLEN;
+	if (attr_len <= 0)
+		return -1;
+
+	attr = ipacm_get_nlattr_by_type(attr, attr_len, NL80211_ATTR_IFTYPE);
+	if (!ipacm_read_attr(attr, &iftype_u32, sizeof(iftype_u32))) {
+		IPACMERR("NL80211_ATTR_IFTYPE missing\n");
+		return -1;
+	}
+
+	return iftype_u32;
+}
+
+/*
+ * ipa_nl_is_ap_vlan_iftype - query nl80211 to determine if an interface is AP_VLAN type
+ *
+ * @ifname: null-terminated network interface name (e.g. "wlan0", "wlan0_1").
+ *          Must be the verbatim kernel interface name; no suffix stripping is
+ *          performed by this function.
+ *
+ * Returns:
+ *   1  - interface type is NL80211_IFTYPE_AP_VLAN
+ *   0  - interface exists in nl80211 but is not AP_VLAN, or iftype == 0
+ *        (interface not found by nl80211, treated as non-AP_VLAN)
+ *  -1  - error (null @ifname, ifindex lookup failure, socket error, or
+ *         nl80211 query failure)
+ */
+int ipa_nl_is_ap_vlan_iftype(const char *ifname)
+{
+	int ifindex;
+	int nl_fd = -1;
+	int family_id;
+	int iftype;
+	int rc = -1;
+	struct timeval timeout = { IPA_GENL_RECV_TIMEOUT_SEC, 0 };
+	struct sockaddr_nl local_addr;
+	socklen_t local_addr_len = sizeof(local_addr);
+	uint32_t local_portid = 0;
+	uint32_t req_seq = 0;
+
+	if (!ifname)
+		return -1;
+
+	if (IPACM_Iface::ipa_get_if_index((char *)ifname, &ifindex) != IPACM_SUCCESS) {
+		IPACMERR("ipa_get_if_index failed for %s\n", ifname);
+		return -1;
+	}
+
+	nl_fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_GENERIC);
+	if (nl_fd < 0) {
+		IPACMERR("failed to open NETLINK_GENERIC socket errno=%d\n", errno);
+		return -1;
+	}
+
+	memset(&local_addr, 0, sizeof(local_addr));
+	local_addr.nl_family = AF_NETLINK;
+	if (bind(nl_fd, (struct sockaddr *)&local_addr, sizeof(local_addr)) < 0) {
+		IPACMERR("failed to bind NETLINK_GENERIC socket errno=%d\n", errno);
+		goto done;
+	}
+
+	/* bind() with nl_pid=0 lets the kernel allocate a unique local port ID.
+	 * The request carries that port ID so concurrent callers can match replies
+	 * to the socket that issued them.
+	 */
+	if (getsockname(nl_fd, (struct sockaddr *)&local_addr, &local_addr_len) < 0) {
+		IPACMERR("getsockname on NETLINK_GENERIC socket failed errno=%d\n", errno);
+		goto done;
+	}
+	local_portid = local_addr.nl_pid;
+	req_seq = local_portid;
+	IPACMDBG_H("NETLINK_GENERIC local portid=%u for ifname=%s\n", local_portid, ifname);
+
+	if (setsockopt(nl_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+		IPACMERR("failed to set socket timeout errno=%d\n", errno);
+		goto done;
+	}
+
+	/* Generic-netlink family IDs are stable for the lifetime of the process
+	 * (assigned once at kernel boot when nl80211 registers). Cache it in a
+	 * static so we only pay the CTRL_CMD_GETFAMILY round-trip once.
+	 */
+	static int cached_nl80211_family_id = -1;
+	if (cached_nl80211_family_id < 0) {
+		cached_nl80211_family_id = ipacm_get_genl_family_id(nl_fd, local_portid, IPA_NL80211_FAMILY_NAME, &req_seq);
+		if (cached_nl80211_family_id < 0) {
+			IPACMERR("%s: failed to resolve nl80211 family id\n", ifname);
+			goto done;
+		}
+		IPACMDBG_H("nl80211 family id=%d (cached)\n", cached_nl80211_family_id);
+	}
+	family_id = cached_nl80211_family_id;
+
+	iftype = ipacm_get_nl80211_iftype_by_ifindex(nl_fd, local_portid, family_id, ifindex, &req_seq);
+	if (iftype < 0) {
+		IPACMERR("%s: iftype < 0\n", ifname);
+		goto done;
+	}
+
+	if (iftype == 0) {
+		IPACMDBG_H("%s not found in nl80211 (treated as non-AP_VLAN)\n", ifname);
+		rc = 0;
+		goto done;
+	}
+
+	IPACMDBG_H("%s iftype=%d\n", ifname, iftype);
+	rc = (iftype == NL80211_IFTYPE_AP_VLAN) ? 1 : 0;
+
+done:
+	if (nl_fd >= 0)
+		close(nl_fd);
+	return rc;
+}
+#endif /* FEATURE_PRPLWRT */
 
 #ifdef FEATURE_IPA_ANDROID
 

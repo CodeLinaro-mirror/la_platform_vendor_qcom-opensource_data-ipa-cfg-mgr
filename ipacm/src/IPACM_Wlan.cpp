@@ -10151,6 +10151,40 @@ fail:
 }
 
 void IPACM_Wlan::update_svap_state() {
+#ifdef FEATURE_PRPLWRT
+	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
+	char *char_idx = NULL;
+
+	IPACMDBG_H("dev_name %s\n", dev_name);
+	strlcpy(vlan_iface_name, dev_name, sizeof(vlan_iface_name));
+	if (char_idx = strstr(vlan_iface_name, "_"))
+	{
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated mlo base iface name %s\n", vlan_iface_name);
+	}
+
+	int ap_vlan_rc = ipa_nl_is_ap_vlan_iftype(vlan_iface_name);
+	if (ap_vlan_rc == -1)
+	{
+		/* Transient netlink error – preserve whatever state was already set
+		 * so a momentary socket/query failure does not silently demote a
+		 * previously-recognised SVAP interface to non-SVAP. */
+		IPACMERR("ipa_nl_is_ap_vlan_iftype failed for %s, preserving prior svap state\n",
+			 vlan_iface_name);
+		return;
+	}
+	else if (ap_vlan_rc == 1)
+	{
+		set_svap_iface_mode(true);
+		is_if_svap = true;
+	}
+	else
+	{
+		/* rc == 0: interface was definitively queried and is not AP_VLAN */
+		set_svap_iface_mode(false);
+		is_if_svap = false;
+	}
+#else
 	FILE *fp = NULL;
 	char MapBSSType_row[10] = { 0 }, cmd[200] = { 0 };
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
@@ -10188,6 +10222,7 @@ void IPACM_Wlan::update_svap_state() {
 
 end:
 	fclose(fp);
+#endif
 }
 
 bool IPACM_Wlan::is_svap_iface(){

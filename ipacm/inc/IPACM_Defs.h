@@ -114,6 +114,10 @@ extern "C"
 #define WWAN_QMI_IOCTL_DEVICE_NAME "/dev/wwan_ioctl"
 #define IPA_DEVICE_NAME "/dev/ipa"
 #define MAX_NUM_PROP 2
+#define ETH_INTF "eth0"
+#define ETH1_INTF "eth1"
+#define RNDIS_INTF "rndis0"
+#define ECM_INTF "ecm0"
 
 #ifdef FEATURE_RDKB
 #define DEFAULT_BRIDGE_IFACE_NAME "brlan0"
@@ -388,6 +392,7 @@ typedef enum
 	IPA_QOS_RULE_DEL_EVENT,                   /* ipacm_qos_rule_del_event */
 	IPA_QOS_RULE_FLUSH_EVENT,                 /* ipacm_qos_rule_flush_event */
 	IPA_HANDLE_NEW_NEIGH_EVENT,               /* ipacm_event_data_fid */
+	IPA_WAN_GW_ADDR_ADD_EVENT,                /* ipacm_event_data_addr */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -468,6 +473,7 @@ typedef struct _ipacm_event_data_all
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 	char iface_name[IPA_IFACE_NAME_LEN];
 	bool is_mld_enabled;
+	uint16_t vlanID;
 } ipacm_event_data_all;
 
 typedef struct _ipacm_event_new_neigh_vlan
@@ -541,6 +547,7 @@ typedef struct _ipacm_event_data_addr
 	uint32_t  ipv6_addr[4];
 	uint32_t  ipv6_addr_mask[4];
 	uint32_t  ipv6_addr_gw[4];
+	uint8_t is_default_backhaul_gw;
 } ipacm_event_data_addr;
 
 typedef struct _ipacm_event_data_mac
@@ -569,6 +576,7 @@ typedef struct _ipacm_event_iface_up
 	bool is_sta;
 	uint8_t xlat_mux_id;
 	uint8_t mux_id;
+	uint16_t vlanID;
 }ipacm_event_iface_up;
 
 typedef struct _ipacm_event_iface_up_tether
@@ -647,7 +655,8 @@ typedef enum
 {
 	Q6_WAN = 0,
 	WLAN_WAN,
-	ECM_WAN
+	ECM_WAN,
+	IFACE_MAX
 } ipacm_wan_iface_type;
 
 typedef struct _ipacm_ifacemgr_data

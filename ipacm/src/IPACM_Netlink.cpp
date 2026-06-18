@@ -1520,6 +1520,9 @@ static int ipa_nl_decode_nlmsg
 					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_PPP) {
 						data_fid->is_ppp_iface = true;
 					}
+					else {
+						data_fid->is_ppp_iface = false;
+					}
 					if (msg_ptr->nl_link_info.vlan_id) {
 						memset(&vlan_info, 0, sizeof(ipa_vlan_iface_info));
 						strlcpy(vlan_info.name, msg_ptr->nl_link_info.name, IPA_RESOURCE_NAME_MAX);
@@ -1596,6 +1599,9 @@ static int ipa_nl_decode_nlmsg
 					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_PPP) {
 						data_fid->is_ppp_iface = true;
 					}
+					else {
+						data_fid->is_ppp_iface = false;
+					}
 
 					IPACMDBG("Got a usb link_up event (Interface %s, %d) \n", dev_name,
 						msg_ptr->nl_link_info.metainfo.ifi_index);
@@ -1658,6 +1664,10 @@ static int ipa_nl_decode_nlmsg
 					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_PPP) {
 						data_fid->is_ppp_iface = true;
 					}
+					else {
+						data_fid->is_ppp_iface = false;
+					}
+
 					/*--------------------------------------------------------------------------
 						Post LAN iface (ECM) link down event
 					---------------------------------------------------------------------------*/
@@ -1761,6 +1771,10 @@ static int ipa_nl_decode_nlmsg
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_PPP)
 				{
 					data_fid->is_ppp_iface = true;
+				}
+				else
+				{
+					data_fid->is_ppp_iface = false;
 				}
 				strlcpy(data_fid->iface_name, dev_name, sizeof(data_fid->iface_name));
 
@@ -2120,6 +2134,10 @@ process:
 							{
 								data_fid->is_ppp_iface = true;
 							}
+							else
+							{
+								data_fid->is_ppp_iface = false;
+							}
 							if(!strstr(dev_name, "pppoe"))
 							{
 								strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name,
@@ -2340,6 +2358,11 @@ process_v6:
 						{
 							data_fid->is_ppp_iface = true;
 						}
+						else
+						{
+							data_fid->is_ppp_iface = false;
+						}
+
 						if(!strstr(dev_name, "pppoe"))
 						{
 							strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name,
@@ -3319,6 +3342,10 @@ proces_getroute:
 						{
 							data_fid->is_ppp_iface = true;
 						}
+						else
+						{
+							data_fid->is_ppp_iface = false;
+						}
 						if(!strstr(dev_name, "pppoe"))
 						{
 							strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name,
@@ -3541,6 +3568,10 @@ process_getroute_v6:
 					if(strstr(dev_name, "pppoe"))
 					{
 						data_fid->is_ppp_iface = true;
+					}
+					else
+					{
+						data_fid->is_ppp_iface = false;
 					}
 					if(!strstr(dev_name, "pppoe"))
 					{

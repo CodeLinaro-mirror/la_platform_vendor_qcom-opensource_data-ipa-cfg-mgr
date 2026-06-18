@@ -16645,7 +16645,7 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 				}
 
 				/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
-				if (vid[i])
+				if (vid[i] && !IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable)
 				{
 					flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 					flt_rule.rule.attrib.vlan_id = vid[i];
@@ -16997,7 +16997,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 			flt_rule.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
 			flt_rule.rule.attrib.u.v6.dst_addr_mask[2] = 0x0;
 			flt_rule.rule.attrib.u.v6.dst_addr_mask[3] = 0x0;
-			if(!vid[i])
+			if(!vid[i] || IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable)
 			{
 				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 				flt_rule.rule.attrib.u.v6.src_addr[0] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[0];
@@ -17027,7 +17027,8 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 				}
 
 				/* if Vlan enabled, add vlan id as a parameter of the MTU rule*/
-				if (vid[i]) {
+				if (vid[i] && !IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable)
+				{
 					flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 					flt_rule.rule.attrib.vlan_id = vid[i];
 				}

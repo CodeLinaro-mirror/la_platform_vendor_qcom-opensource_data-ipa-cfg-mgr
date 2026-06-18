@@ -1113,6 +1113,7 @@ static int ipa_nl_decode_rtm_link
 						link_info->link_type = IPA_LINK_TYPE_PPP;
 						IPACMDBG("Received NEW_LINK for ppp type interface with interface index %d\n",
 							link_info->metainfo.ifi_index);
+					}
 				}
 			}
 			if (intf_type && !strcmp(intf_type, "vlan") && device_link_info[IFLA_INFO_DATA]) {

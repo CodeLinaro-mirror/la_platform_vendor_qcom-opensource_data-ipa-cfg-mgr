@@ -2027,6 +2027,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			if(m_header.GetHeaderHandle(&hdr) == false)
 			{
 				IPACMERR("Failed to get QMAP header.\n");
+				free(rt_rule);
 				return IPACM_FAILURE;
 			}
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;

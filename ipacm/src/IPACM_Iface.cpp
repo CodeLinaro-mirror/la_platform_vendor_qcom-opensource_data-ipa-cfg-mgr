@@ -666,7 +666,8 @@ int IPACM_Iface::query_iface_property(void)
 	{
 		PERROR("ioctl IPA_IOC_QUERY_INTF failed\n");
 		/* iface_query memory will free when iface-down*/
-		res = IPACM_FAILURE;
+		close(fd);
+		return IPACM_FAILURE;
 	}
 
 	if(iface_query->num_tx_props > 0)
@@ -678,6 +679,7 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			IPACMERR("Unable to allocate tx_prop memory.\n");
 			close(fd);
+			free(iface_query);
 			return IPACM_FAILURE;
 		}
 		memcpy(tx_prop->name, queried_name, queried_name_size);
@@ -687,7 +689,10 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			PERROR("ioctl IPA_IOC_QUERY_INTF_TX_PROPS failed\n");
 			/* tx_prop memory will free when iface-down*/
-			res = IPACM_FAILURE;
+			close(fd);
+			free(iface_query);
+			free(tx_prop);
+			return IPACM_FAILURE;
 		}
 
 		if (res != IPACM_FAILURE)
@@ -705,6 +710,8 @@ int IPACM_Iface::query_iface_property(void)
 				{
 					IPACMERR("Tx(%d): wrong tx property: dst_pipe: 0.\n", cnt);
 					close(fd);
+					free(iface_query);
+					free(tx_prop);
 					return IPACM_FAILURE;
 				}
 				/* Move the alt_dst_pipe logic to wlan/wan instance */
@@ -722,6 +729,8 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			IPACMERR("Unable to allocate rx_prop memory.\n");
 			close(fd);
+			free(iface_query);
+			free(tx_prop);
 			return IPACM_FAILURE;
 		}
 		memcpy(rx_prop->name, queried_name, queried_name_size);
@@ -731,7 +740,11 @@ int IPACM_Iface::query_iface_property(void)
 		{
 			PERROR("ioctl IPA_IOC_QUERY_INTF_RX_PROPS failed\n");
 			/* rx_prop memory will free when iface-down*/
-			res = IPACM_FAILURE;
+			close(fd);
+			free(iface_query);
+			free(tx_prop);
+			free(rx_prop);
+			return IPACM_FAILURE;
 		}
 
 		if (res != IPACM_FAILURE)
@@ -749,6 +762,10 @@ int IPACM_Iface::query_iface_property(void)
 	{
 		IPACMDBG_H(" Has rx/tx properties registered for iface %s, add for NATTING \n", dev_name);
         IPACM_Iface::ipacmcfg->AddNatIfaces(dev_name);
+		if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+		{
+			IPACM_Iface::ipacmcfg->restore_vlan_nat_ifaces(dev_name);
+		}
 	}
 
 	close(fd);

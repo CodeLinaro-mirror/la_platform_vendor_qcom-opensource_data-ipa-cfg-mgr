@@ -73,6 +73,7 @@ extern "C"
 #define STR_ECM_IFACE "ecm"
 #define STR_ECM0_IFACE "ecm0"
 #define ETH_PHY_IFACE_LEN 5
+#define MAPE_IFACE_NAME "map-mape"
 
 #define IF_NAME_LEN 16
 #define IPA_MAX_FILE_LEN  64
@@ -91,7 +92,10 @@ extern "C"
 #define IPA_ODU_HDR_NAME_v4  "IPACM_ODU_v4"
 #define IPA_ODU_HDR_NAME_v6  "IPACM_ODU_v6"
 #define IPA_IF_SOCKSv5_NAME  "IPACM_SOCKSv5"
-#define IPA_EOGRE_HDR_NAME   "IPACM_EoGRE_v%d"
+#define IPA_EoGRE_HDR_NAME   "IPACM_EoGRE_v%d"
+#define IPA_GRE_HDR_NAME   "IPACM_GRE_v%d"
+#define IPA_GRE_C_HDR_NAME   "IPACM_GRE_C_v%d"
+
 
 #define IPA_MAX_ACTIVE_WLAN_IFACE 72 // 64 wlan (4x16 band support) + 8 extra rdkb supported ifaces
 
@@ -245,6 +249,8 @@ extern "C"
 
 #define IPV6_NUM_ADDR 3
 
+#define IPV6_SIZE 16
+
 /*
  * The following macros allow callers to print the raw bytes making up
  * an address.  No assumptions are made about endianess.
@@ -330,6 +336,8 @@ typedef enum
 	IPA_LAN_CLIENT_DISCONNECT_EVENT,          /* ipacm_event_data_mac */
 	IPA_LAN_CLIENT_UPDATE_EVENT,              /* ipacm_event_data_mac */
 #endif
+	IPA_IP_PASS_UPDATE_EVENT,                 /* ipacm_ip_pass_pdn_info */
+	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, /* Handle ip pass pdn info update.*/
 	IPA_EXTERNAL_EVENT_MAX,
 
 	IPA_HANDLE_WAN_UP,                        /* ipacm_event_iface_up  */
@@ -380,8 +388,7 @@ typedef enum
 #endif
 	IPA_MAC_ADD_DEL_FLT_EVENT,                /* NULL */
 	IPA_IP_COLLISION_UPDATE_EVENT,            /* ipacm_ip_collision_pdn_info */
-	IPA_IP_PASS_UPDATE_EVENT,                 /* ipacm_ip_pass_pdn_info */
-	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, /* Handle ip pass pdn info update.*/
+	IPA_RGIP_PASS_UPDATE_EVENT,               /* ipacm_event_rgip_pass_info */
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	IPA_PKT_THRESHOLD_UPDATE_EVENT,           /* ipa_set_pkt_threshold */
 #endif
@@ -396,6 +403,18 @@ typedef enum
 	IPA_WAN_HANDLE_EoGRE_DOWN,
 #endif
 	IPA_DSCP_PCP_CONFIG_CHANGE_EVENT,         /* ipacm_event_change_dscp_pcp */
+#ifdef FEATURE_PMIPV6
+	IPA_HANDLE_GRE_UP,                      /* ipa_ipgre_info */
+	IPA_HANDLE_GRE_DOWN,                    /* ipa_ipgre_info */
+#endif
+#ifdef FEATURE_IPoGRE
+	IPA_HANDLE_IPOGRE_UP,                      /* ipa_ipgre_info */
+	IPA_HANDLE_IPOGRE_DOWN,                    /* ipa_ipgre_info */
+	IPA_WAN_HANDLE_IPOGRE_UP,
+	IPA_WAN_HANDLE_IPOGRE_DOWN,
+	IPA_HANDLE_RGIP_UP,
+	IPA_HANDLE_RGIP_DEL,
+#endif
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
 	IPA_ADD_BRIDGE_VLAN_PHY_INTF,
@@ -419,6 +438,8 @@ typedef enum
 	IPA_QOS_RULE_FLUSH_EVENT,                 /* ipacm_qos_rule_flush_event */
 	IPA_HANDLE_NEW_NEIGH_EVENT,               /* ipacm_event_data_fid */
 	IPA_WAN_GW_ADDR_ADD_EVENT,                /* ipacm_event_data_addr */
+	IPA_MAPE_ADD_FMR_RULE,                        /* ipacm_event_mape_fmr */
+	IPA_MAPE_DEL_FMR_RULE,                    /* ipacm_event_mape_fmr */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -583,6 +604,7 @@ typedef struct _ipacm_event_data_mac
 	int ipa_if_cate;
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 	char iface_name[IPA_IFACE_NAME_LEN];
+	uint16_t vlan_id;
 } ipacm_event_data_mac;
 
 typedef struct
@@ -629,6 +651,13 @@ typedef struct
 	uint8_t skip_nat;
 	int if_index;
 }ipacm_event_ip_pass_pdn_info;
+
+/* Event data for RGIP passthrough enable/disable notification */
+typedef struct
+{
+	uint8_t enable;
+	uint32_t rgip_addr;
+}ipacm_event_rgip_pass_info;
 
 typedef struct
 {
@@ -718,6 +747,7 @@ struct vlan_iface_info
 	uint8_t vlan_client_mac[6];
 	uint32_t vlan_client_ipv6_addr[4];
 	uint16_t vlan_interface_index;
+	uint8_t priority;
 };
 
 struct l2tp_vlan_mapping_info

@@ -58,8 +58,16 @@ using namespace std;
 #define UDP_TIMEOUT_UPDATE 20
 #define BROADCAST_IPV4_ADDR 0xFFFFFFFF
 
+
 extern int cur_nat_entries;
 extern int cur_ct_entries;
+
+typedef enum
+{
+   ACCEPT_CT,
+   IGNORE_CT,
+   VERDCIT_MAX,
+} verdict;
 
 class IPACM_ConntrackClient
 {
@@ -78,9 +86,11 @@ private:
    static int IPA_Conntrack_Filters_Ignore_Local_Iface(struct nfct_filter *, ipacm_event_iface_up *);
    static void IPA_Conntrack_Filters_Ignore_Local_Iface_v6(struct nfct_filter *filter, struct nfct_handle *handle,
 	   ipacm_event_iface_up *data);
+   static void IPA_Conntrack_Filters_Accept_Local_Iface_v6(struct nfct_filter *filter,  struct nfct_handle *handle,
+      ipacm_event_iface_up *data);
    static void IPA_Conntrack_Filters_Ignore_Ipv6_Addresses(struct nfct_filter *filter);
    static void IPA_Conntrack_Filters_Ipv6_Add_Src_Dst_Attr(struct nfct_filter *filter,
-	   const struct nfct_filter_ipv6 &attr);
+	   const struct nfct_filter_ipv6 &attr, verdict ver = IGNORE_CT);
    IPACM_ConntrackClient();
 
 public:
@@ -98,7 +108,7 @@ public:
 
    static void UpdateUDPFilters(void *, bool);
    static void UpdateTCPFilters(void *, bool);
-   static void UpdateFilters_v6(ipacm_event_iface_up* data);
+   static void UpdateFilters_v6(ipacm_event_iface_up* data, verdict ver = IGNORE_CT);
    static void Read_TcpUdp_Timeout(char *in, int len);
 
    static IPACM_ConntrackClient* GetInstance();

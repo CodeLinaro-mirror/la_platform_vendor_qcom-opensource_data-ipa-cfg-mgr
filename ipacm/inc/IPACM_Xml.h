@@ -232,6 +232,7 @@ if (!(a)) {                                                 \
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 #define LAN_Stats_TAG                        "LANStats"
 #define LAN_Stats_Enable_TAG                 "EnableLANStats"
+#define LAN_Stats_Mode_TAG                   "LANStatsMode"
 #define LAN2LAN_Stats_TAG                    "LAN2LANStats"
 #define LAN2LAN_Stats_Enable_TAG             "EnableLAN2LANStats"
 #endif
@@ -295,6 +296,12 @@ if (!(a)) {                                                 \
 #define Inter_Bridge_LanToLan_Config_TAG     "InterBridgeLanToLanConfig"
 #define Inter_Bridge_LanToLan_Config_Enable  "InterBridgeLanToLanEnable"
 
+#define IPACM_MAPE_TAG                     "IPACMMAPE"
+#define IPACM_MAPE_ENABLE_TAG              "IPACMMAPEEnable"
+#define IPACM_MAPE_IFACE_TAG               "MAPEPhyIface"
+// Tunnel Config entries
+#define PMIPv6_Enabled_TAG                   "PMIPV6Enable"
+#define PMIPv6_TAG                           "PMIPV6"
 
 
 /*---------------------------------------------------------------------------
@@ -354,7 +361,10 @@ typedef struct
 	bool SWAllowed_ex;
 } IPACM_extd_firewall_entry_conf_t;
 
-
+typedef struct
+{
+	uint8_t pmipv6_enable;
+}IPACM_tunnel_conf_t;
 /*---------------------------------------------------------------------------
            Extended FireWall configuration.
 ---------------------------------------------------------------------------*/
@@ -469,6 +479,7 @@ typedef struct  _IPACM_conf_t
 	bool qos_mode;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool lan_stats_enable;
+	uint8_t lan_stats_mode;
 	bool lan2lan_stats_enable;
 #endif
 	int max_file_size;
@@ -498,6 +509,8 @@ typedef struct  _IPACM_conf_t
 	bool multi_vlan_bridge_config_enable;
 	bool msgflt_enable;
 	bool inter_bridge_lantolan_config_enable;
+	bool mape_enable;
+	const char* mape_wan_iface_name;
 } IPACM_conf_t;
 
 typedef struct _IPACM_conf_ext_t
@@ -534,5 +547,6 @@ int IPACM_read_firewall_xml
 	IPACM_firewall_t &firewall_config            /* Mobile AP firewall config data */
 );
 int IPACM_read_firewall_xml(const char *xml_file, IPACM_firewall_conf_t &default_pdn_firewall_config);
+int IPACM_read_tunnel_xml(const char *xml_file, IPACM_tunnel_conf_t* tunnel_cfg);
 
 #endif //IPACM_XML

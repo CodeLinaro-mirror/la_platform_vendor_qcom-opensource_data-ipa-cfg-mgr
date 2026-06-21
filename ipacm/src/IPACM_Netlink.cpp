@@ -54,15 +54,17 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include "IPACM_Log.h"
 #include "IPACM_Iface.h"
 #include "IPACM_Config.h"
+#include "IPACM_ConntrackListener.h"
 
 #ifdef FEATURE_EoGRE
 #include <linux/ip.h>
 #include <linux/if_tunnel.h>
 #endif
 
+#define DUMMY_RGIP_ADDRESS 169
 int ipa_get_if_name(char *if_name, int if_index);
 int find_mask(int ip_v4_last, int *mask_value);
-
+IPACM_Config *pConfig;
 #ifdef FEATURE_IPA_ANDROID
 
 #define IPACM_NL_COPY_ADDR( event_info, element )                                        \
@@ -466,7 +468,7 @@ error:
 	return IPACM_FAILURE;
 }
 
-#ifdef FEATURE_EoGRE
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 static int get_eogre_tunnel_details(struct ifinfomsg* ifi, int len, int type)
 {
 	struct rtattr *attrib[IFLA_MAX + 1];
@@ -642,6 +644,174 @@ static int del_eogre_tunnel(struct ifinfomsg* ifi, int len, int type)
 return IPACM_SUCCESS;
 }
 
+static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
+	struct rtattr *attrib[IFLA_MAX + 1];
+    struct rtattr *linkinfo[IFLA_INFO_MAX+1];
+    struct rtattr *greinfo[IFLA_GRE_MAX + 1];
+	unsigned saddr = 0;
+	unsigned daddr = 0;
+	unsigned link =0;
+	struct in6_addr saddr6;
+	struct in6_addr daddr6;
+	enum ipa_ip_type iptype;
+	pConfig = IPACM_Config::GetInstance();
+	if(type==778){
+		iptype=IPA_IP_v4;
+	}
+	else{
+		iptype=IPA_IP_v6;
+	}
+	IPACMDBG("IFI max: %d IFLA_MAX, %d len\n",IFLA_MAX,len);
+       if(pConfig->mape_enable) {
+               IPACMDBG_H(" MAPE is enabled \n");
+               return IPACM_SUCCESS;
+	}
+	getAttr(attrib, IFLA_MAX, IFLA_RTA(ifi), len,0,false);  // get attributes
+    if (attrib[IFLA_IFNAME]) {  // validation
+        IPACMDBG("ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
+		strlcpy(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), IPA_IFACE_NAME_LEN);
+    }
+	if (!attrib[IFLA_LINKINFO]){
+		IPACMDBG("No Link info\n");
+		return IPACM_FAILURE;
+	}
+	else{
+		parse_gre(linkinfo, IFLA_INFO_MAX, attrib[IFLA_LINKINFO]);
+		IPACMDBG("Nested1\n");
+		if (!linkinfo[IFLA_INFO_DATA]){
+			IPACMDBG("No IFLA_INFO_DATA\n");
+			return IPACM_FAILURE;
+		}
+		else{
+			parse_gre(greinfo, IFLA_GRE_MAX,
+				linkinfo[IFLA_INFO_DATA]);
+			IPACMDBG("Nested2\n");
+
+			ipa_ipgre_info ipgre_info  = pConfig->ipgre_info;
+			ipgre_info.iptype=iptype;
+			if(iptype == IPA_IP_v4){
+				if (greinfo[IFLA_GRE_LOCAL])
+				saddr = *(__u32 *)RTA_DATA(greinfo[IFLA_GRE_LOCAL]);
+
+				if (greinfo[IFLA_GRE_REMOTE])
+					daddr = *(__u32 *)RTA_DATA(greinfo[IFLA_GRE_REMOTE]);
+
+				ipgre_info.ipv4_src=ntohl(saddr);
+				ipgre_info.ipv4_dst=ntohl(daddr);
+				IPACMDBG("GRE info, src addr: %x, dst addr %x, link %d\n", ipgre_info.ipv4_src,ipgre_info.ipv4_dst,link);
+			}
+			else{
+				if (greinfo[IFLA_GRE_LOCAL])
+					memcpy(&saddr6, (struct nlattr  *)RTA_DATA(greinfo[IFLA_GRE_LOCAL]), sizeof(saddr6));
+				if (greinfo[IFLA_GRE_REMOTE])
+					memcpy(&daddr6, (struct nlattr  *)RTA_DATA(greinfo[IFLA_GRE_REMOTE]), sizeof(daddr6));
+
+				memcpy(&ipgre_info.ipv6_src,&saddr6,sizeof(saddr6));
+				memcpy(&ipgre_info.ipv6_dst,&daddr6,sizeof(daddr6));
+
+				IPACM_Iface::addr2host(IPA_IP_v6, &ipgre_info.ipv6_src);
+				IPACM_Iface::addr2host(IPA_IP_v6, &ipgre_info.ipv6_dst);
+
+
+
+				IPACMDBG_H("GRE info v6: src addr:0x%x:%x:%x:%x, dst addr:0x%x:%x:%x:%x \n",
+							saddr6.s6_addr32[0],saddr6.s6_addr32[1],saddr6.s6_addr32[2],saddr6.s6_addr32[3],daddr6.s6_addr32[0],daddr6.s6_addr32[1],daddr6.s6_addr32[2],daddr6.s6_addr32[3]);
+			}
+
+			memcpy(&(pConfig->ipgre_info),&ipgre_info,sizeof(ipa_ipgre_info));
+			IPACMDBG("GRE info, src addr: %x, dst addr %x, link %d\n", ipgre_info.ipv4_src,ipgre_info.ipv4_dst,link);
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
+			if(pConfig->pmip_details.pmipv6_enabled)
+			{
+				/* Send GRE UP event */
+				pConfig->pmip_details.pmipv6_tunnel_setup = true;
+				ipacm_cmd_q_data evt_data;
+				evt_data.event    = IPA_HANDLE_GRE_UP;
+				evt_data.evt_data = 0;
+				if(pConfig->pmip_details.pmipv6_gre_event_posted==false){
+					pConfig->pmip_details.pmipv6_gre_event_posted=true;
+					IPACMDBG_H("Posting usb IPA_HANDLE_GRE_UP \n");
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+			}
+			else {
+				if(pConfig->ipogre_enabled == true)
+				{
+					IPACMDBG_H("IPoGRE Already enabled\n");
+					return IPACM_SUCCESS;
+				}
+				pConfig->ipogre_enabled = true;
+				ipacm_cmd_q_data evt_data;
+				evt_data.event    = IPA_HANDLE_IPOGRE_UP;
+				evt_data.evt_data = 0;
+				IPACMDBG_H("Posting IPA_HANDLE_IPOGRE_UP \n");
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+#endif
+		}
+	}
+return IPACM_SUCCESS;
+}
+
+static int tunnel_delete(struct ifinfomsg* ifi, int len, int type)
+{
+	struct rtattr *attrib[IFLA_MAX + 1];
+    struct rtattr *linkinfo[IFLA_INFO_MAX+1];
+    struct rtattr *greinfo[IFLA_GRE_MAX + 1];
+	unsigned saddr = 0;
+	unsigned daddr = 0;
+	unsigned link =0;
+	struct in6_addr saddr6;
+	struct in6_addr daddr6;
+	enum ipa_ip_type iptype;
+	pConfig = IPACM_Config::GetInstance();
+	if(type==778)
+	{
+		iptype=IPA_IP_v4;
+	}
+	else
+	{
+		iptype=IPA_IP_v6;
+	}
+	if(pConfig->pmip_details.pmipv6_tunnel_setup || pConfig->ipogre_enabled)
+	{
+		IPACMDBG("IFI max: %d IFLA_MAX, %d len\n",IFLA_MAX,len);
+		getAttr(attrib, IFLA_MAX, IFLA_RTA(ifi), len,0,false);
+		if (attrib[IFLA_IFNAME])
+		{
+			IPACMDBG("Tunnel Delete: ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
+			if(strncmp(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), strlen(pConfig->pmip_details.tunnel_name)) == 0)
+			{
+				IPACMDBG("Tunnel name matched, Cleaning up\n");
+				pConfig->pmip_details.tunnel_name[0]='\0';
+				pConfig->pmip_details.pmipv6_tunnel_setup=false;
+				pConfig->pmip_details.pmipv6_gre_event_posted=false;
+				if(pConfig->pmip_details.pmipv6_enabled)
+				{
+					/* Send GRE DOWN event */
+					ipacm_cmd_q_data evt_data;
+					evt_data.event    = IPA_HANDLE_GRE_DOWN;
+					evt_data.evt_data = 0;
+					IPACMDBG_H("Posting IPA_HANDLE_GRE_DOWN \n");
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+				else
+				{
+					pConfig->ipogre_enabled = false;
+					/* Send GRE DOWN event */
+					ipacm_cmd_q_data evt_data;
+					evt_data.event    = IPA_HANDLE_IPOGRE_DOWN;
+					evt_data.evt_data = 0;
+					IPACMDBG_H("Posting IPA_HANDLE_IPOGRE_DOWN \n");
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+			}
+#endif
+		}
+	}
+	return IPACM_SUCCESS;
+}
 #endif
 /* decode the rtm netlink message */
 static int ipa_nl_decode_rtm_link
@@ -964,6 +1134,62 @@ static int get_macsec_lower_interface_name(struct ipa_macsec_map *macsecMap, cha
 	return IPACM_SUCCESS;
 }
 
+/* Get vlan priority */
+static int ipa_nl_get_vlan_priority
+(
+	 ipa_vlan_iface_info   *vlan_info
+	 )
+{
+	char cmd[200] = {0};
+	FILE *fp = NULL;
+	uint32_t priority = 0;
+
+	/* Explicitly default priority to 0; updated only if PCP is configured.
+	 * This ensures the caller always gets a valid priority regardless of
+	 * whether the function succeeds or fails. */
+	vlan_info->priority = 0;
+
+	/* Validate interface name to prevent shell command injection.
+	 * Linux interface names must only contain alphanumeric characters,
+	 * '-', '.', or '_'. Any other character is rejected with an error.
+	 * priority is already set to 0 above, so the caller is safe on failure. */
+	for (int i = 0; vlan_info->name[i] != '\0'; i++)
+	{
+		char c = vlan_info->name[i];
+		if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+		      (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_'))
+		{
+			IPACMERR("Unsafe char in iface name '%s', aborting PCP lookup\n",
+				vlan_info->name);
+			return IPACM_FAILURE;
+		}
+	}
+
+	snprintf(cmd, 200, "ip -d -o link show dev %s | grep \"egress-qos-map\" | sed -n \"s/^.*egress-qos-map { [0-9]:\\s*\\(\\S*\\).*$/\\1/p\" > /tmp/pcp.txt", vlan_info->name);
+	system(cmd);
+	fp = fopen("/tmp/pcp.txt", "r");
+	if (!fp) {
+		IPACMERR("can't open /tmp/pcp.txt\n");
+		return IPACM_FAILURE;
+	}
+
+	if(fscanf(fp, "%d", &priority) > 0)
+	{
+		if(!(priority > 7))
+			vlan_info->priority = (uint8_t)priority;
+	}
+	else {
+		IPACMERR("Failed to read priority from /tmp/pcp.txt\n");
+		fclose(fp); 	// ← must close before returning
+		remove("/tmp/pcp.txt");
+		return IPACM_FAILURE;
+	}
+	IPACMDBG("Vlan ID %d, Priority %d\n", vlan_info->vlan_id, vlan_info->priority);
+	fclose(fp);
+	remove("/tmp/pcp.txt");
+	return IPACM_SUCCESS;
+}
+
 /* decode the ipa nl-message */
 static int ipa_nl_decode_nlmsg
 (
@@ -1023,11 +1249,24 @@ static int ipa_nl_decode_nlmsg
 				 * Android but this should be processed in case of MDM for
 				 * Ehernet interface.
 				 */
-#ifdef FEATURE_EoGRE
+#ifdef FEATURE_EoGRE || FEATURE_PMIPV6
 				// struct nlmsghdr *h;
 				struct ifinfomsg *ifi2;
 				//ifi_type is 1 for gretap2
-				if (msg_ptr->nl_link_info.metainfo.ifi_type == 1)
+			if(msg_ptr->nl_link_info.metainfo.ifi_type == 778 || msg_ptr->nl_link_info.metainfo.ifi_type == 823 || msg_ptr->nl_link_info.metainfo.ifi_type == 769){//GRE tunnel
+					if(IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_flags){
+						ifi2 = (struct ifinfomsg*) NLMSG_DATA(nlh);
+							if(populate_gre_details(ifi2,nlh->nlmsg_len,msg_ptr->nl_link_info.metainfo.ifi_type))
+								{
+									IPACMDBG("Failed to get GRE info\n");
+								}
+							else{
+								IPACMDBG("GRE info populated\n");
+								//post GRE UP event
+								}
+					}
+				}
+				else if (msg_ptr->nl_link_info.metainfo.ifi_type == 1)
 				{
 					//EoGRE tunnel
 					if (IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_flags)
@@ -1060,6 +1299,13 @@ static int ipa_nl_decode_nlmsg
 					strlcpy(vlan_info.name, msg_ptr->nl_link_info.name, sizeof(vlan_info.name));
 					vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
 					vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+
+					if(ipa_nl_get_vlan_priority(&vlan_info) != IPACM_SUCCESS)
+						IPACMDBG_H("Failed to fetch VLAN PCP");
+
+					IPACMDBG("Add vlan<->interface details with vlan: %d interface: %s interface index %d priority %d\n",
+						vlan_info.vlan_id, vlan_info.name, vlan_info.vlan_interface_index, vlan_info.priority);
+					IPACM_Iface::ipacmcfg->add_vlan_iface(&vlan_info);
 				}
 
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
@@ -1116,29 +1362,123 @@ static int ipa_nl_decode_nlmsg
 						evt_data.event = IPA_LINK_UP_EVENT;
 						IPACMDBG_H("Posting IPA_LINK_UP_EVENT with if index: %d\n",
 							msg_ptr->nl_link_info.metainfo.ifi_index);
-					} else {
-						if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC ||
-							IPACM_Iface::ipacmcfg->populateMacsecMap(msg_ptr->nl_link_info.metainfo.ifi_index,
-							&macsec_map)) {
-							if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
-								evt_data.event = IPA_HANDLE_MACSEC_DEL;
-								macsec_map_data = static_cast<decltype(macsec_map_data)>
-									(malloc(sizeof(*macsec_map_data)));
-								if (!macsec_map_data) {
-									IPACMERR("malloc failed\n");
-									return IPACM_FAILURE;
+#ifdef FEATURE_IPoGRE
+						if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name,
+							sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
+						{
+							/* Query the IP address currently assigned to the interface */
+							uint32_t queried_ip = 0;
+							int query_fd = socket(AF_INET, SOCK_DGRAM, 0);
+							if (query_fd >= 0)
+							{
+								struct ifreq ifr_query;
+								memset(&ifr_query, 0, sizeof(ifr_query));
+								strlcpy(ifr_query.ifr_name, dev_name, IFNAMSIZ);
+								if (ioctl(query_fd, SIOCGIFADDR, &ifr_query) == 0)
+								{
+									queried_ip = ntohl(((struct sockaddr_in *)&ifr_query.ifr_addr)->sin_addr.s_addr);
 								}
-								memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
-								evt_data.evt_data = macsec_map_data;
-								IPACM_EvtDispatcher::PostEvt(&evt_data);
+								close(query_fd);
+							}
+							if (queried_ip != 0)
+							{
+								IPACM_Iface::ipacmcfg->rgip_ip = queried_ip;
+								/* Check whether rgip interface has dummy IP assigned, if yes post RGIP ADD with proper stored rgip */
+								if ((IPACM_Iface::ipacmcfg->rgip_ip >> 24) == DUMMY_RGIP_ADDRESS)
+								{
+									IPACMDBG_H("RGIP iface %s link up but stored ip 0x%x is dummy "
+											"(169.x.x.x), skip IPA_HANDLE_RGIP_UP\n",
+											dev_name, IPACM_Iface::ipacmcfg->rgip_ip);
+
+									IPACMDBG_H("RGIP iface %s link up, post IPA_HANDLE_RGIP_UP with stored ip 0x%x\n",
+										dev_name, IPACM_Iface::ipacmcfg->rgip_ip_ippt);
+									ipacm_cmd_q_data rgip_evt_data;
+									uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+									if(rgip_v4 == NULL)
+									{
+										IPACMERR("Memory not assigned to rgip\n");
+									}
+									else
+									{
+										*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+										memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+										rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
+										rgip_evt_data.evt_data = rgip_v4;
+										IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+									}
+								}
+								else
+								{
+									IPACMDBG_H("RGIP iface %s link up, post IPA_HANDLE_RGIP_UP with stored ip 0x%x\n",
+										dev_name, IPACM_Iface::ipacmcfg->rgip_ip);
+									ipacm_cmd_q_data rgip_evt_data;
+									uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+									if(rgip_v4 == NULL)
+									{
+										IPACMERR("Memory not assigned to rgip\n");
+										}
+									else
+									{
+										IPACM_Iface::ipacmcfg->rgip_ip = queried_ip;
+										*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip;
+										memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+										rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
+										rgip_evt_data.evt_data = rgip_v4;
+										IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+									}
+								}
+							}
+							else
+							{
+								IPACMDBG_H("RGIP iface %s link up but no IP assigned yet, skip IPA_HANDLE_RGIP_UP\n",
+									dev_name);
 							}
 						}
-						IPACMDBG_H("Interface %s bring down with IP-family: %d \n", dev_name,
-							msg_ptr->nl_link_info.metainfo.ifi_family);
-						/* post link down to command queue */
-						evt_data.event = IPA_LINK_DOWN_EVENT;
-						IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT with if index: %d\n",
-							data_fid->if_index);
+#endif
+					} else {
+					if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC ||
+						IPACM_Iface::ipacmcfg->populateMacsecMap(msg_ptr->nl_link_info.metainfo.ifi_index,
+						&macsec_map)) {
+						if (IPACM_Iface::ipacmcfg->delMacsecMap(&macsec_map)) {
+							evt_data.event = IPA_HANDLE_MACSEC_DEL;
+							macsec_map_data = static_cast<decltype(macsec_map_data)>
+								(malloc(sizeof(*macsec_map_data)));
+							if (!macsec_map_data) {
+								IPACMERR("malloc failed\n");
+								return IPACM_FAILURE;
+							}
+							memcpy(macsec_map_data, &macsec_map, sizeof(macsec_map));
+							evt_data.evt_data = macsec_map_data;
+							IPACM_EvtDispatcher::PostEvt(&evt_data);
+						}
+					}
+#ifdef FEATURE_IPoGRE
+					if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name,
+						sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
+					{
+						IPACMDBG_H("RGIP iface %s link down, post IPA_HANDLE_RGIP_DEL\n", dev_name);
+						ipacm_cmd_q_data rgip_evt_data;
+						uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+						if(rgip_v4 == NULL)
+						{
+							IPACMERR("Memory not assigned to rgip\n");
+						}
+						else
+						{
+							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+							rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
+							*rgip_v4 = 0;
+							rgip_evt_data.evt_data = rgip_v4;
+							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+						}
+					}
+#endif
+					IPACMDBG_H("Interface %s bring down with IP-family: %d \n", dev_name,
+						msg_ptr->nl_link_info.metainfo.ifi_family);
+					/* post link down to command queue */
+					evt_data.event = IPA_LINK_DOWN_EVENT;
+					IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT with if index: %d\n",
+						data_fid->if_index);
 					}
 					evt_data.evt_data = data_fid;
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1265,6 +1605,27 @@ static int ipa_nl_decode_nlmsg
 					/*--------------------------------------------------------------------------
 						Post LAN iface (ECM) link down event
 					---------------------------------------------------------------------------*/
+#ifdef FEATURE_IPoGRE
+					if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name,
+						sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
+					{
+						IPACMDBG_H("RGIP iface %s link down (lower), post IPA_HANDLE_RGIP_DEL\n", dev_name);
+						ipacm_cmd_q_data rgip_evt_data;
+						uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+						if(rgip_v4 == NULL)
+						{
+							IPACMERR("Memory not assigned to rgip\n");
+						}
+						else
+						{
+							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+							rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
+							*rgip_v4 = 0;
+							rgip_evt_data.evt_data = rgip_v4;
+							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+						}
+					}
+#endif
 					evt_data.event = IPA_LINK_DOWN_EVENT;
 					evt_data.evt_data = data_fid;
 					IPACMDBG_H("Posting usb IPA_LINK_DOWN_EVENT with if index: %d\n", data_fid->if_index);
@@ -1294,13 +1655,47 @@ static int ipa_nl_decode_nlmsg
 				/* RTM_NEWLINK event with AF_BRIDGE family should be ignored in Android
 				 *    but this should be processed in case of MDM for Ehernet interface.
 				 */
-#ifdef FEATURE_EoGRE
 				struct ifinfomsg *ifi2;
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
+				if(msg_ptr->nl_link_info.metainfo.ifi_type == 778 || msg_ptr->nl_link_info.metainfo.ifi_type == 823 || msg_ptr->nl_link_info.metainfo.ifi_type == 769)
+				{//GRE tunnel
+						ifi2 = (struct ifinfomsg*) NLMSG_DATA(nlh);
+						tunnel_delete(ifi2, nlh->nlmsg_len,msg_ptr->nl_link_info.metainfo.ifi_type);
+						IPACMDBG("Tunnel Delete Done\n");
+				}
+#endif
+#ifdef FEATURE_EoGRE
 				if(msg_ptr->nl_link_info.metainfo.ifi_type == 1)
 				{
 					ifi2 = (struct ifinfomsg*) NLMSG_DATA(nlh);
 					del_eogre_tunnel(ifi2, nlh->nlmsg_len,msg_ptr->nl_link_info.metainfo.ifi_type);
 					IPACMDBG("Tunnel Delete Done\n");
+				}
+#endif
+#ifdef FEATURE_IPoGRE
+				struct ifinfomsg *ifi2_rgip = (struct ifinfomsg*) NLMSG_DATA(nlh);
+				struct rtattr *attrib1[IFLA_MAX + 1];
+				getAttr(attrib1, IFLA_MAX, IFLA_RTA(ifi2_rgip), nlh->nlmsg_len, 0, false);
+				if (attrib1[IFLA_IFNAME]) {
+					if (strncmp((char*)RTA_DATA(attrib1[IFLA_IFNAME]), IPACM_Iface::ipacmcfg->rgip_iface_name,
+						sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
+					{
+						IPACMDBG_H("RGIP iface %s link down/delete, post IPA_HANDLE_RGIP_DEL\n", dev_name);
+						ipacm_cmd_q_data rgip_evt_data;
+						uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+						if(rgip_v4 == NULL)
+						{
+							IPACMERR("Memory not assigned to rgip\n");
+						}
+						else
+						{
+							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+							rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
+							*rgip_v4 = 0;
+							rgip_evt_data.evt_data = rgip_v4;
+							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+						}
+					}
 				}
 #endif
 				if (msg_ptr->nl_link_info.metainfo.ifi_family == AF_BRIDGE || msg_ptr->nl_link_info.metainfo.ifi_family == AF_UNSPEC)
@@ -1321,6 +1716,9 @@ static int ipa_nl_decode_nlmsg
 					strlcpy(vlan_info.name, msg_ptr->nl_link_info.name, sizeof(vlan_info.name));
 					vlan_info.vlan_id = msg_ptr->nl_link_info.vlan_id;
 					vlan_info.vlan_interface_index = msg_ptr->nl_link_info.metainfo.ifi_index;
+
+					if(ipa_nl_get_vlan_priority(&vlan_info) != IPACM_SUCCESS)
+						IPACMDBG_H("Failed to fetch VLAN PCP");
 				}
 
 				if (msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_MACSEC) {
@@ -1486,9 +1884,116 @@ static int ipa_nl_decode_nlmsg
 				if(nlh->nlmsg_type == RTM_NEWADDR)
 				{
 					evt_data.event = IPA_ADDR_ADD_EVENT;
+#ifdef FEATURE_IPoGRE
+					if ((data_addr->iptype == IPA_IP_v4) && (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name, sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0))
+					{
+						if (IPACM_Iface::ipacmcfg->rgip_ip != 0)
+						{
+							IPACMDBG_H("RGIP iface %s addr add but rgip_ip 0x%x already "
+								"assigned and non-zero, skip IPA_HANDLE_RGIP_UP\n",
+								dev_name, IPACM_Iface::ipacmcfg->rgip_ip);
+						}
+						else {
+							IPACMDBG_H("RGIP iface %s addr add, post IPA_HANDLE_RGIP_UP\n", dev_name);
+							if((data_addr->ipv4_addr >> 24) == DUMMY_RGIP_ADDRESS)
+							{
+								IPACMDBG_H("RGIP iface %s got dummy IP 0x%x (169.x.x.x), "
+										"skip IPA_HANDLE_RGIP_UP and rgip_ip update\n",
+										dev_name, data_addr->ipv4_addr);
+
+								IPACMDBG_H("RGIP iface %s link up, post IPA_HANDLE_RGIP_UP with stored ip 0x%x\n",
+									dev_name, IPACM_Iface::ipacmcfg->rgip_ip_ippt);
+								ipacm_cmd_q_data rgip_evt_data;
+								uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+								if(rgip_v4 == NULL)
+								{
+									IPACMERR("Memory not assigned to rgip\n");
+								}
+								else
+								{
+									*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+									memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+									rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
+									rgip_evt_data.evt_data = rgip_v4;
+									IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+								}
+							}
+							else
+							{
+								IPACMDBG_H("RGIP iface %s addr add, post IPA_HANDLE_RGIP_UP\n", dev_name);
+								ipacm_cmd_q_data rgip_evt_data;
+								uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+								if(rgip_v4 == NULL)
+								{
+									IPACMERR("Memory not assigned to rgip\n");
+								}
+								else
+								{
+									memcpy(rgip_v4,&data_addr->ipv4_addr,sizeof(rgip_v4));
+									memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+									rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
+									rgip_evt_data.evt_data = rgip_v4;
+									IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+									IPACM_Iface::ipacmcfg->rgip_ip = data_addr->ipv4_addr;
+								}
+							}
+						}
+					}
+					/* The RGIP interface was deleted and a new interface came up with a
+					 * different name but the same IPv4 address as the stored rgip_ip.
+					 * Identify it as the new RGIP interface and re-trigger RGIP UP. */
+					else if ((data_addr->iptype == IPA_IP_v4) &&
+					         (IPACM_Iface::ipacmcfg->rgip_ip != 0) &&
+					         (data_addr->ipv4_addr == IPACM_Iface::ipacmcfg->rgip_ip))
+					{
+						IPACMDBG_H("New iface %s has IP 0x%x matching stored rgip_ip — "
+						           "treating as new RGIP iface (old name: %s)\n",
+						           dev_name, data_addr->ipv4_addr,
+						           IPACM_Iface::ipacmcfg->rgip_iface_name);
+						/* Update rgip_iface_name to the new interface name */
+						strlcpy(IPACM_Iface::ipacmcfg->rgip_iface_name, dev_name,
+						        sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name));
+						ipacm_cmd_q_data rgip_evt_data;
+						uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+						if(rgip_v4 == NULL)
+						{
+							IPACMERR("Memory not assigned to rgip\n");
+						}
+						else
+						{
+							memcpy(rgip_v4, &data_addr->ipv4_addr, sizeof(*rgip_v4));
+							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
+							rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
+							rgip_evt_data.evt_data = rgip_v4;
+							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+							/* Refresh rgip_ip with the confirmed address */
+							IPACM_Iface::ipacmcfg->rgip_ip = data_addr->ipv4_addr;
+						}
+					}
+#endif
 				}
 				else
 				{
+#ifdef FEATURE_IPoGRE
+					if ((data_addr->iptype == IPA_IP_v4) && (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name, sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0))
+					{
+						IPACMDBG_H("RGIP iface %s addr deleted, post IPA_HANDLE_RGIP_DEL\n", dev_name);
+						ipacm_cmd_q_data rgip_evt_del_data;
+						uint32_t *rgip_v4_del = (uint32_t*) malloc(sizeof(uint32_t));
+						if(rgip_v4_del == NULL)
+						{
+							IPACMERR("Memory not assigned to rgip\n");
+						}
+						else
+						{
+							memset(&rgip_evt_del_data, 0, sizeof(rgip_evt_del_data));
+							rgip_evt_del_data.event = IPA_HANDLE_RGIP_DEL;
+							*rgip_v4_del = 0;
+							rgip_evt_del_data.evt_data = rgip_v4_del;
+							IPACM_EvtDispatcher::PostEvt(&rgip_evt_del_data);
+						}
+					}
+#endif
 					evt_data.event = IPA_ADDR_DEL_EVENT;
 				}
 				data_addr->if_index = msg_ptr->nl_addr_info.metainfo.ifa_index;
@@ -1623,14 +2128,17 @@ static int ipa_nl_decode_nlmsg
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN)))
 			{
 				IPACMDBG("\n GOT RTM_NEWROUTE event\n");
-				/* br-wan mode Enable*/
-				if(strstr(dev_name, "br-ethwan")||
-					strstr(dev_name, "br-wanpppoe"))
+				/* br-wan mode Enable with DHCP backhaul */
+				if(strstr(dev_name, "br-ethwan"))
 				{
-					IPACMDBG("GOT RTM_NEWROUTE event, br-wan enabled %d \n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
 					IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable = true;
+					IPACMDBG("GOT RTM_NEWROUTE event, br-wan enabled %d \n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
 				}
 
+				if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+					IPACMDBG_H(" Ignoring route on %s \n",dev_name);
+					return IPACM_SUCCESS;
+				}
 				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
 				{
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
@@ -1835,7 +2343,26 @@ process:
 					}
 				}
 			}
+			/* Check for delegate_prefix route for Prefix Delegation */
+			if((msg_ptr->nl_route_info.metainfo.rtm_family == AF_INET6) &&
+			   (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_BLACKHOLE || msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNREACHABLE) &&
+			   (msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST))
+			{
+				IPACMDBG_H("Got RTM_NEWROUTE for delegate_prefix route with dst_len %d\n", msg_ptr->nl_route_info.metainfo.rtm_dst_len);
 
+				IPACM_EVENT_COPY_ADDR_v6(IPACM_Iface::ipacmcfg->ipv6_delegate_prefix, msg_ptr->nl_route_info.attr_info.dst_addr);
+
+				IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[0] = ntohl(IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[0]);
+				IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[1] = ntohl(IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[1]);
+				IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[2] = ntohl(IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[2]);
+				IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[3] = ntohl(IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[3]);
+				IPACM_Iface::ipacmcfg->delegate_prefix_valid = true;
+				IPACM_Iface::ipacmcfg->ipv6_delegate_prefix_len = msg_ptr->nl_route_info.metainfo.rtm_dst_len;
+
+				IPACMDBG_H("Stored delegate_prefix prefix 0x%08x%08x%08x%08x\n",
+					IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[0], IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[1],
+					IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[2], IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[3]);
+            }
 			/* ipv6 routing table */
 			if((AF_INET6 == msg_ptr->nl_route_info.metainfo.rtm_family) &&
 				(msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
@@ -1856,12 +2383,11 @@ process:
 					IPACMERR("Error while getting interface name\n");
 					return IPACM_FAILURE;
 				}
-				/* br-wan mode Enable*/
-				if(strstr(dev_name, "br-ethwan")||
-					strstr(dev_name, "br-wanpppoe"))
+				/* br-wan mode Enable with DHCP backhaul */
+				if(strstr(dev_name, "br-ethwan"))
 				{
-					IPACMDBG("\n GOT RTM_NEWROUTE event, br-wan enabled %d \n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
 					IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable = true;
+					IPACMDBG("\n GOT v6-RTM_NEWROUTE event, br-wan enabled %d \n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
 				}
 
 				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
@@ -2115,6 +2641,34 @@ process_v6:
 			IPACMDBG("rtm_family: %d\n", msg_ptr->nl_route_info.metainfo.rtm_family);
 			IPACMDBG("param_mask: 0x%x\n", msg_ptr->nl_route_info.attr_info.param_mask);
 
+			/* Check for delegate_prefix route delete for Prefix Delegation */
+			if((msg_ptr->nl_route_info.metainfo.rtm_family == AF_INET6) &&
+			   (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_BLACKHOLE || msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNREACHABLE) &&
+			   (msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST))
+			{
+				uint32_t ipv6_addr[4];
+				IPACMDBG_H("Got RTM_DELROUTE for delegate_prefix route with dst_len %d\n", msg_ptr->nl_route_info.metainfo.rtm_dst_len);
+				IPACM_EVENT_COPY_ADDR_v6(ipv6_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
+
+				ipv6_addr[0] = ntohl(ipv6_addr[0]);
+				ipv6_addr[1] = ntohl(ipv6_addr[1]);
+				ipv6_addr[2] = ntohl(ipv6_addr[2]);
+				ipv6_addr[3] = ntohl(ipv6_addr[3]);
+
+				if(IPACM_Iface::ipacmcfg->delegate_prefix_valid == true &&
+					IPACM_Iface::ipacmcfg->ipv6_delegate_prefix_len == msg_ptr->nl_route_info.metainfo.rtm_dst_len &&
+					IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[0] == ipv6_addr[0] &&
+					IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[1] == ipv6_addr[1] &&
+					IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[2] == ipv6_addr[2] &&
+					IPACM_Iface::ipacmcfg->ipv6_delegate_prefix[3] == ipv6_addr[3])
+				{
+					IPACMDBG_H("Delete delegate_prefix prefix\n");
+					IPACM_Iface::ipacmcfg->delegate_prefix_valid = false;
+					memset(IPACM_Iface::ipacmcfg->ipv6_delegate_prefix, 0, sizeof(IPACM_Iface::ipacmcfg->ipv6_delegate_prefix));
+					IPACM_Iface::ipacmcfg->ipv6_delegate_prefix_len = 0;
+				}
+			}
+
 			/* take care of route delete of default route & uniroute */
 			if((msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNICAST) &&
 				 ((msg_ptr->nl_route_info.metainfo.rtm_protocol == RTPROT_BOOT) ||
@@ -2124,7 +2678,7 @@ process_v6:
 				 (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
 
-				if(msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
+				if(AF_INET == msg_ptr->nl_route_info.metainfo.rtm_family && msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST)
 				{
 					ret_val = ipa_get_if_name(dev_name, msg_ptr->nl_route_info.attr_info.oif_index);
 					if(ret_val != IPACM_SUCCESS)
@@ -2132,6 +2686,11 @@ process_v6:
 						IPACMERR("Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
+					if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+						IPACMDBG_H(" Ignoring route on %s \n",dev_name);
+						return IPACM_SUCCESS;
+					}
+
 					IPACM_NL_REPORT_ADDR( "route del -host ", msg_ptr->nl_route_info.attr_info.dst_addr);
 					IPACM_NL_REPORT_ADDR( " gw ", msg_ptr->nl_route_info.attr_info.gateway_addr);
 					IPACMDBG("dev %s\n", dev_name);
@@ -2168,6 +2727,11 @@ process_v6:
 					{
 						IPACMERR("Error while getting interface name\n");
 						return IPACM_FAILURE;
+					}
+
+					if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+						IPACMDBG_H(" Ignoring route on %s \n",dev_name);
+						return IPACM_SUCCESS;
 					}
 
 					/* insert to command queue */
@@ -2440,18 +3004,66 @@ process_v6:
                                  dev_name,
 								 data_all->if_index);
 			}
-			else
-		    {
-				/* Posting new_neigh events for all LAN/WAN clients */
-				evt_data.event = IPA_NEW_NEIGH_EVENT;
-				IPACMDBG_H("posting IPA_NEW_NEIGH_EVENT (%s):index:%d ip-family: %d\n",
-                                 dev_name, data_all->if_index,
-								 msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
+		else
+	    {
+			/* Posting new_neigh events for all LAN/WAN clients */
+			evt_data.event = IPA_NEW_NEIGH_EVENT;
+			IPACMDBG_H("posting IPA_NEW_NEIGH_EVENT (%s):index:%d ip-family: %d\n",
+                             dev_name, data_all->if_index,
+							 msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
+
+#ifdef FEATURE_IPoGRE
+			/*
+			 * RGIP passthrough: when a LAN client whose IPv4 address equals the
+			 * stored rgip_ip appears in the neighbor table, it means the RGIP
+			 * passthrough client is reachable on the LAN side.  Enable RGIP
+			 * passthrough so ConntrackListener installs no-op NAT entries
+			 * (private_ip == public_ip == rgip_addr) for its conntrack flows.
+			 */
+			if ((data_all->iptype == IPA_IP_v4) &&
+			    (IPACM_Iface::ipacmcfg->rgip_ip != 0) &&
+			    (data_all->ipv4_addr == IPACM_Iface::ipacmcfg->rgip_ip))
+			{
+				ipacm_cmd_q_data rgip_pass_evt;
+				ipacm_event_rgip_pass_info *rgip_pass_data =
+					(ipacm_event_rgip_pass_info *)malloc(sizeof(ipacm_event_rgip_pass_info));
+				if (rgip_pass_data)
+				{
+					rgip_pass_data->enable    = 1;
+					rgip_pass_data->rgip_addr = data_all->ipv4_addr;
+					rgip_pass_evt.event    = IPA_RGIP_PASS_UPDATE_EVENT;
+					rgip_pass_evt.evt_data = rgip_pass_data;
+				IPACMDBG_H("Posting IPA_RGIP_PASS_UPDATE_EVENT: enable, "
+				           "rgip=0x%x (neigh %s)\n",
+				           rgip_pass_data->rgip_addr, dev_name);
+					IPACM_EvtDispatcher::PostEvt(&rgip_pass_evt);
+					/* Also post IPA_HANDLE_RGIP_UP using the persistent
+					 * rgip_ip_ippt so ConntrackListener re-installs the
+					 * RGIP PDN entry whenever the RGIP passthrough client
+					 * reappears in the neighbor table. */
+					if (IPACM_Iface::ipacmcfg->rgip_ip_ippt != 0)
+					{
+						ipacm_cmd_q_data rgip_up_evt;
+						uint32_t *rgip_v4_up = (uint32_t *)malloc(sizeof(uint32_t));
+						if (rgip_v4_up)
+						{
+							*rgip_v4_up = IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+							memset(&rgip_up_evt, 0, sizeof(rgip_up_evt));
+							rgip_up_evt.event = IPA_HANDLE_RGIP_UP;
+							rgip_up_evt.evt_data = rgip_v4_up;
+							IPACMDBG_H("Posting IPA_HANDLE_RGIP_UP with "
+							           "rgip_ip_ippt=0x%x\n", *rgip_v4_up);
+							IPACM_EvtDispatcher::PostEvt(&rgip_up_evt);
+						}
+					}
+				}
 			}
-		    evt_data.evt_data = data_all;
-					IPACM_EvtDispatcher::PostEvt(&evt_data);
-					/* finish command queue */
-			break;
+#endif /* FEATURE_IPoGRE */
+		}
+	    evt_data.evt_data = data_all;
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+				/* finish command queue */
+		break;
 
 		case RTM_DELNEIGH:
 			if(IPACM_SUCCESS != ipa_nl_decode_rtm_neigh(buffer, buflen, &(msg_ptr->nl_neigh_info)))
@@ -2526,7 +3138,34 @@ process_v6:
 							 msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
 							 sizeof(data_all->mac_addr));
 		    evt_data.event = IPA_DEL_NEIGH_EVENT;
-				data_all->if_index = msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
+			data_all->if_index = msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
+
+#ifdef FEATURE_IPoGRE
+			/*
+			 * RGIP passthrough: when the LAN client whose IPv4 address equals
+			 * rgip_ip disappears from the neighbor table, disable RGIP
+			 * passthrough so ConntrackListener stops installing no-op NAT
+			 * entries for its flows.
+			 */
+			if ((data_all->iptype == IPA_IP_v4) &&
+			    (IPACM_Iface::ipacmcfg->rgip_ip != 0) &&
+			    (data_all->ipv4_addr == IPACM_Iface::ipacmcfg->rgip_ip))
+			{
+				ipacm_cmd_q_data rgip_pass_evt;
+				ipacm_event_rgip_pass_info *rgip_pass_data =
+					(ipacm_event_rgip_pass_info *)malloc(sizeof(ipacm_event_rgip_pass_info));
+				if (rgip_pass_data)
+				{
+					rgip_pass_data->enable    = 0;
+					rgip_pass_data->rgip_addr = 0;
+					rgip_pass_evt.event    = IPA_RGIP_PASS_UPDATE_EVENT;
+					rgip_pass_evt.evt_data = rgip_pass_data;
+					IPACMDBG_H("Posting IPA_RGIP_PASS_UPDATE_EVENT: disable "
+					           "(neigh %s departed)\n", dev_name);
+					IPACM_EvtDispatcher::PostEvt(&rgip_pass_evt);
+				}
+			}
+#endif /* FEATURE_IPoGRE */
 
 		    IPACMDBG_H("posting IPA_DEL_NEIGH_EVENT (%s):index:%d ip-family: %d\n",
                                  dev_name,
@@ -2885,6 +3524,14 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				IPACM_NL_REPORT_ADDR( "route add -host", nl_route_info_get_route.attr_info.dst_addr );
 				IPACM_NL_REPORT_ADDR( "gw", nl_route_info_get_route.attr_info.gateway_addr );
 				IPACMDBG("dev %s\n",dev_name );
+
+				if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+					IPACMDBG_H(" Ignoring route on %s  \n",dev_name);
+					free(buf);
+					close(nl_sock);
+					return IPACM_SUCCESS;
+				}
+
 				/* insert to command queue */
 				IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr, nl_route_info_get_route.attr_info.dst_addr);
 				temp = (-1);
@@ -2924,6 +3571,13 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					IPACM_NL_REPORT_ADDR( "route add default gw \n", nl_route_info_get_route.attr_info.gateway_addr );
 					IPACMDBG_H("dev %s \n", dev_name);
 					IPACM_NL_REPORT_ADDR( "dstIP:\n", nl_route_info_get_route.attr_info.dst_addr );
+
+					if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+						IPACMDBG_H(" Ignoring route on %s \n",dev_name);
+						free(buf);
+						close(nl_sock);
+						return IPACM_SUCCESS;
+					}
 
 					/* insert to command queue */
 					data_addr = (ipacm_event_data_addr *)malloc(sizeof(ipacm_event_data_addr));
@@ -3295,6 +3949,98 @@ error:
 	return IPACM_FAILURE;
 }
 
+int ipa_nl_query_newneigh(int af_family)
+{
+	IPACMDBG("ipa_nl_send_getneigh\n");
+	int ret_val = IPACM_FAILURE, msglen = 0, nl_sock = 0;
+	ssize_t msgsent_len = 0;
+	char *buf = NULL;
+	nl_request_t nl_request;
+	struct sockaddr_nl nladdr;
+	struct msghdr msg;
+	struct nlmsghdr *h = NULL;
+	struct iovec iov;
+	nl_sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+	if (nl_sock < 0)
+	{
+		IPACMERR("Failed to open netlink socket");
+		return IPACM_FAILURE;
+	}
+
+	ipa_nl_msg_t  *msg_ptr = (ipa_nl_msg_t*)calloc(1, sizeof(ipa_nl_msg_t));
+	memset(&nl_request, 0, sizeof(nl_request));
+	memset(&nladdr, 0, sizeof(sockaddr_nl));
+	memset(&msg, 0, sizeof(msghdr));
+	memset(&iov, 0, sizeof(iovec));
+
+	nl_request.nlh.nlmsg_type = RTM_GETNEIGH;
+	nl_request.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+	nl_request.nd.ndm_state = NUD_REACHABLE;
+	nl_request.nd.ndm_flags = NTF_MASTER|NTF_SELF;
+	nl_request.nlh.nlmsg_len = sizeof(nl_request_t);
+	nl_request.nlh.nlmsg_seq = 1;
+	nl_request.nlh.nlmsg_pid = 0;
+	nl_request.rtm.rtm_family = af_family;
+
+	msgsent_len = send(nl_sock, &nl_request, sizeof(nl_request), 0);
+
+	msg = {
+		.msg_name = &nladdr,
+		.msg_namelen = sizeof(nladdr),
+		.msg_iov = &iov,
+		.msg_iovlen = 1,
+	};
+
+	msglen = ipa_nl_route_recvmsg(nl_sock, &msg, &buf);
+
+	if(msglen <= 0)
+	{
+		IPACMERR("NL route recv error\n");
+	}
+
+	h = (struct nlmsghdr *)buf;
+	while (NLMSG_OK(h, msglen))
+	{
+		if (h->nlmsg_flags & NLM_F_DUMP_INTR)
+		{
+			IPACMERR("Dump was interrupted\n");
+			break;
+		}
+		if (h->nlmsg_flags & NLMSG_OVERRUN || !h->nlmsg_flags)
+		{
+			IPACMERR("Dump was overun\n");
+			break;
+		}
+		if(h->nlmsg_type == NLMSG_DONE)
+			break;
+		if (nladdr.nl_pid != 0)
+		{
+			h = NLMSG_NEXT(h, msglen);
+			continue;
+		}
+
+		if (h->nlmsg_type == NLMSG_ERROR)
+		{
+			IPACMERR("Netlink message error");
+			break;
+		}
+
+		if (ipa_nl_decode_nlmsg((const char*)h, msglen, msg_ptr)) {
+			IPACMERR("Failed to decode rtm link message\n");
+			h = NLMSG_NEXT(h, msglen);
+			continue;
+		}
+		h = NLMSG_NEXT(h, msglen);
+	}
+	IPACMDBG("End\n");
+	close(nl_sock);
+	free(buf);
+	buf = NULL;
+	free(msg_ptr);
+	msg_ptr = NULL;
+	return 1;
+}
+
 /* find the newroute subnet mask */
 int find_mask(int ip_v4_last, int *mask_value)
 {
@@ -3393,4 +4139,190 @@ int mask_v6(int index, uint32_t *mask)
 	}
 }
 
+int ipa_open_nl_getlink_socket
+(
+ipa_nl_sk_info_t   *sk_info,
+int               protocol,
+unsigned int      grps
+)
+{
+	int                  *p_sk_fd;
+	struct sockaddr_nl   *p_sk_addr_loc ;
+	int ret = 0;
 
+	//ds_assert(sk_info != NULL);
+
+	p_sk_fd = &(sk_info->sk_fd);
+	p_sk_addr_loc = &(sk_info->sk_addr_loc);
+
+	/*--------------------------------------------------------------------------
+	Open netlink socket for specified protocol
+	---------------------------------------------------------------------------*/
+	if ((*p_sk_fd = socket(AF_NETLINK, SOCK_RAW, protocol)) < 0)
+	{
+	ret = errno;
+	IPACMDBG("Socket open failed %s \n", strerror(errno));
+	return ret;
+	}
+
+	/*--------------------------------------------------------------------------
+	Initialize socket parameters to 0
+	--------------------------------------------------------------------------*/
+	memset(p_sk_addr_loc, 0, sizeof(struct sockaddr_nl));
+
+	/*-------------------------------------------------------------------------
+	Populate socket parameters
+	--------------------------------------------------------------------------*/
+	p_sk_addr_loc->nl_family = AF_NETLINK;
+	p_sk_addr_loc->nl_pid = 0;
+	p_sk_addr_loc->nl_groups = grps;
+
+	/*-------------------------------------------------------------------------
+	128    Bind socket to receive the netlink events for the required groups
+	129  --------------------------------------------------------------------------*/
+
+	if( bind( *p_sk_fd,
+			(struct sockaddr *)p_sk_addr_loc,
+			sizeof(struct sockaddr_nl) ) < 0)
+	{
+	ret = errno;
+	IPACMDBG("Socket bind failed %s- Make sure no-one has opened a NL socket"
+			" with\n", strerror(errno));
+	close(*p_sk_fd);
+	return ret;
+	}
+	return ret;
+}
+
+int  ipa_nl_query_getlink(int af_family)
+{
+	ipa_nl_sk_info_t   sk_info;
+	struct sockaddr_nl req_nl_addr, recv_nl_addr;
+	struct msghdr req_nl_msg, recv_nl_msg;
+	ipa_nl_req_type    nl_req;
+	char dev_name[IF_NAME_LEN];
+
+	struct iovec recv_iovec, req_iovec;
+	char buff[8124] = {0};
+	unsigned int ret_val = 0;
+	struct nlmsghdr *nl_hdr = NULL;
+	struct ifinfomsg *iface_info = NULL;
+	int ret;
+
+	memset(&req_nl_msg, 0, sizeof(req_nl_msg));
+	memset(&req_nl_addr, 0, sizeof(req_nl_addr));
+	memset(&nl_req, 0, sizeof(nl_req));
+	memset(&sk_info, 0, sizeof(sk_info));
+
+	if (ipa_open_nl_getlink_socket(&sk_info, NETLINK_ROUTE, RTMGRP_LINK) != 0)
+	{
+		IPACMDBG("Failed to open the netlink socket", 0, 0, 0);
+		return -1;
+	}
+
+	req_nl_addr.nl_family = AF_NETLINK;
+	nl_req.hdr.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtgenmsg));
+	nl_req.hdr.nlmsg_type = RTM_GETLINK;
+	nl_req.hdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+	nl_req.hdr.nlmsg_seq = 1;
+	nl_req.hdr.nlmsg_pid = 0;
+	nl_req.gen.rtgen_family =  AF_PACKET;
+
+	req_iovec.iov_base = &nl_req;
+	req_iovec.iov_len = nl_req.hdr.nlmsg_len;
+	req_nl_msg.msg_iov = &req_iovec;
+	req_nl_msg.msg_iovlen = 1;
+	req_nl_msg.msg_name = &req_nl_addr;
+	req_nl_msg.msg_namelen = sizeof(req_nl_addr);
+	memset(&recv_nl_msg, 0, sizeof(recv_nl_msg));
+	memset(&recv_iovec, 0, sizeof(recv_iovec));
+
+	recv_iovec.iov_base = (void*)buff;
+	recv_iovec.iov_len = sizeof(buff);
+
+	recv_nl_msg.msg_name = (void*)&recv_nl_addr;
+	recv_nl_msg.msg_namelen = sizeof(recv_nl_addr);
+	recv_nl_msg.msg_iov = &recv_iovec;
+	recv_nl_msg.msg_iovlen = 1;
+	recv_nl_msg.msg_control = NULL;
+	recv_nl_msg.msg_controllen = 0;
+	recv_nl_msg.msg_flags = 0;
+	ipa_nl_link_info_t nl_link_info;
+	ipa_nl_msg_t *msg_ptr = (ipa_nl_msg_t *)calloc(1, sizeof(ipa_nl_msg_t));
+
+	if (sendmsg(sk_info.sk_fd, (struct msghdr *) &req_nl_msg, 0) <= 0)
+	{
+		IPACMDBG("QCMAP:Netlink Query to Kernel failed errno:%d",errno,0,0);
+		return -1;
+	}
+	while(1)
+	{
+		if ((ret_val = recvmsg(sk_info.sk_fd, &recv_nl_msg, 0)) < 0)
+		{
+			IPACMDBG("Error in reading from netlink socket errno:%d", errno, 0, 0);
+			break;
+		}
+		IPACMDBG("No of bytes recevied:%d", ret_val);
+		if ((nl_hdr = (struct nlmsghdr*)buff) == NULL)
+		{
+			IPACMDBG("nl_hdr is NULL", 0, 0, 0);
+			break;
+		}
+		if (nl_hdr->nlmsg_type == NLMSG_DONE)
+		{
+			IPACMDBG("Received NLMSG_DONE\n");
+			break;
+		}
+
+		while(NLMSG_OK(nl_hdr, ret_val))
+		{
+			if (nl_hdr->nlmsg_type == NLMSG_DONE)
+			{
+				IPACMDBG("Received NLMSG_DONE\n");
+				break;
+			}
+			if (nl_hdr->nlmsg_type == NLMSG_ERROR)
+			{
+				IPACMDBG("Error in received netlink msg :%u", nl_hdr->nlmsg_type, 0, 0);
+				break;
+			}
+			if ((iface_info = (struct ifinfomsg*)NLMSG_DATA (nl_hdr))==NULL)
+			{
+				IPACMDBG("Interface info from netlink message is NULL\n");
+				nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+				continue;
+			}
+			ret =  ipa_get_if_name(dev_name,
+					iface_info->ifi_index);
+			if(ret != 0)
+			{
+				IPACMDBG("Error while getting interface index\n");
+				ret = 0;
+				nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+				continue;
+			}
+			if(!strcmp(dev_name,"lo") || !strcmp(dev_name,"ip_vti0") || !strcmp(dev_name,"ip6_vti0")
+					|| !strcmp(dev_name,"sit0") || !strcmp(dev_name,"can0"))
+			{
+				nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+				continue;
+			}
+
+			if (nl_hdr->nlmsg_type == RTM_NEWLINK)
+			{
+				if(iface_info->ifi_flags & IFF_UP)
+				{
+					if (ipa_nl_decode_nlmsg((const char*)nl_hdr, ret_val, msg_ptr)) {
+						IPACMERR("Failed to decode rtm link message\n");
+						nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+						continue;
+					}
+				}
+			}
+			nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
+		}
+	}
+	if (sk_info.sk_fd > 0)
+		close(sk_info.sk_fd);
+	return 0;
+}

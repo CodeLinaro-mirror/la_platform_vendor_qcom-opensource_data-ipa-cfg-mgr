@@ -64,6 +64,7 @@ const char *IPACM_Config::DEVICE_NAME_ODU = "/dev/odu_ipa_bridge";
 #define IPACM_CONFIG_FACTORY_FILE "/etc/data/ipa/factory_IPACM_cfg.xml"
 #define IPACM_CONFIG_FILE "/etc/data/ipa/IPACM_cfg.xml"
 #define IPACM_CONFIG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
+#define IPACM_TUNNEL_CONFIG_FILE "/etc/data/ipa/ipacm_tunnel_cfg.xml"
 #endif
 #ifdef DATA_CONFIG_DIR_PATH
 #define IPACM_SWALLOW_FILE DATA_CONFIG_DIR_PATH"/ipa/ipa_filter_cfg.xml"
@@ -119,6 +120,8 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_LAN_CLIENT_DISCONNECT_EVENT),          /* ipacm_event_data_mac */
 	__stringify(IPA_LAN_CLIENT_UPDATE_EVENT),              /* ipacm_event_data_mac */
 #endif
+	__stringify(IPA_IP_PASS_UPDATE_EVENT),          /* ipacm_ip_pass_pdn_info */
+	__stringify(IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT),         /* Handle PDN info update.*/
 	__stringify(IPA_EXTERNAL_EVENT_MAX),
 	__stringify(IPA_HANDLE_WAN_UP),                        /* ipacm_event_iface_up  */
 	__stringify(IPA_HANDLE_WAN_DOWN),                      /* ipacm_event_iface_up  */
@@ -168,8 +171,6 @@ const char *ipacm_event_name[] = {
 #endif
 	__stringify(IPA_MAC_ADD_DEL_FLT_EVENT),                /* ipacm_event_data_mac */
 	__stringify(IPA_IP_COLLISION_UPDATE_EVENT),          /* ipacm_ip_collision_pdn_info */
-	__stringify(IPA_IP_PASS_UPDATE_EVENT),          /* ipacm_ip_pass_pdn_info */
-	__stringify(IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT),         /* Handle PDN info update.*/
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	__stringify(IPA_PKT_THRESHOLD_UPDATE_EVENT),           /* ipa_set_pkt_threshold */
 #endif
@@ -183,7 +184,19 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WAN_HANDLE_EoGRE_UP),                  /* Handle eogre enable event for WAN. */
 	__stringify(IPA_WAN_HANDLE_EoGRE_DOWN),                /* Handle eogre disable event for WAN. */
 #endif
+#ifdef FEATURE_IPoGRE
+	__stringify(IPA_HANDLE_IPOGRE_UP),                      /* Handle ipogre enable event. */
+	__stringify(IPA_HANDLE_IPOGRE_DOWN),                    /* Handle ipogre disable event. */
+	__stringify(IPA_WAN_HANDLE_IPOGRE_UP),                  /* Handle ipogre enable event. */
+	__stringify(IPA_WAN_HANDLE_IPOGRE_DOWN),
+	__stringify(IPA_HANDLE_RGIP_UP),                /* Handle ipogre disable event. */
+	__stringify(IPA_HANDLE_RGIP_DEL),                /* Handle ipogre disable event. */
+#endif
 	__stringify(IPA_DSCP_PCP_CONFIG_CHANGE_EVENT),         /* NULL */
+#ifdef FEATURE_PMIPV6
+	__stringify(IPA_HANDLE_GRE_UP),                      /* Handle gre enable event. */
+	__stringify(IPA_HANDLE_GRE_DOWN),                    /* Handle gre disable event. */
+#endif
 	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* Handle macsec map add event */
 	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* Handle macsec map delete event */
 	__stringify(IPA_ADD_BRIDGE_VLAN_PHY_INTF),             /* Handle vlan details add for physical interface.  */
@@ -207,6 +220,8 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_QOS_RULE_FLUSH_EVENT),                 /* ipacm_qos_rule_flush_event */
 	__stringify(IPA_HANDLE_NEW_NEIGH_EVENT),               /* ipacm_event_data_fid */
 	__stringify(IPA_WAN_GW_ADDR_ADD_EVENT),                /* ipacm_event_data_addr */
+	__stringify(IPA_MAPE_ADD_FMR_RULE),                        /* ipacm_event_data_addr */
+	__stringify(IPA_MAPE_DEL_FMR_RULE),                    /* ipacm_event_data_addr */
 	__stringify(IPACM_EVENT_MAX)
 };
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -261,9 +276,12 @@ IPACM_Config::IPACM_Config()
 	eth_vlan_wan_enable = false;
 	rt_tbl_inter_l2l_v4_set = false;
 	rt_tbl_inter_l2l_v6_set = false;
-
+	delegate_prefix_valid = false;
 	memset(&rt_tbl_inter_l2l_v4, 0, sizeof(rt_tbl_inter_l2l_v4));
 	memset(&rt_tbl_inter_l2l_v6, 0, sizeof(rt_tbl_inter_l2l_v6));
+
+	memset(ipv6_delegate_prefix, 0, sizeof(ipv6_delegate_prefix));
+	ipv6_delegate_prefix_len = 0;
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));
 	memset(&rt_tbl_wan_v4, 0, sizeof(rt_tbl_wan_v4));
@@ -293,6 +311,9 @@ IPACM_Config::IPACM_Config()
 #ifdef FEATURE_VLAN_MPDN
 	num_ipv6_prefixes = 0;
 	num_no_offload_ipv6_prefix = 0;
+	memset(rgip_iface_name, 0, sizeof(rgip_iface_name));
+	rgip_ip = 0;
+	rgip_ip_ippt = 0;
 	memset(ipa_ipv6_prefixes, 0, sizeof(ipa_ipv6_prefixes));
 	memset(ipa_no_offload_ipv6_prefixes, 0, sizeof(ipa_no_offload_ipv6_prefixes));
 	memset(vlan_bridges, 0, IPA_MAX_NUM_BRIDGES * sizeof(vlan_bridges[0]));
@@ -332,6 +353,15 @@ IPACM_Config::IPACM_Config()
 #endif
 #ifdef FEATURE_DUAL_BACKHAUL
 	memset(&second_backhaul_info,0,sizeof(second_backhaul_info));
+#endif
+#ifdef FEATURE_PMIPV6
+	memset(&ipgre_info, 0, sizeof(ipgre_info));
+	memset(&pmip_details, 0, sizeof(pmip_details));
+#endif
+#ifdef FEATURE_IPoGRE
+	memset(&ipgre_info, 0, sizeof(ipgre_info));
+	memset(&ipogre_details, 0, sizeof(ipogre_details));
+	ipogre_enabled  = false;
 #endif
 	ext_router_mode = IPA_PREFIX_DISABLED;
 
@@ -404,12 +434,18 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 	int ret = IPACM_SUCCESS;
 	int num_counters, i;
 
-	int fd = open(DEVICE_NAME, O_RDWR);
-
-	if (fd < 0) {
-		IPACMERR("fnr: Failed to open /dev/ipa\n");
+	/* Reuse the persistent m_fd instead of opening a new FD each time */
+	if (m_fd < 0) {
+		IPACMERR("fnr: m_fd not initialized\n");
 		return IPACM_FAILURE;
 	}
+
+	/* Verify fd is still valid by checking with fcntl */
+	if (fcntl(m_fd, F_GETFD) == -1) {
+		IPACMERR("fnr: m_fd is invalid (errno: %d)\n", errno);
+		return IPACM_FAILURE;
+	}
+
 	query = (struct ipa_ioc_flt_rt_query *)malloc(sizeof(struct ipa_ioc_flt_rt_query));
 	if (!query)
 	{
@@ -433,9 +469,9 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 		goto fail;
 	}
 	/* For now just query the stats and print it here */
-	if (fd  >= 0)
+	if (m_fd >= 0)
 	{
-		ret = ipacm_fnr_v2_ioctl(fd, IPA_IOC_FNR_COUNTER_QUERY, query);
+		ret = ipacm_fnr_v2_ioctl(m_fd, IPA_IOC_FNR_COUNTER_QUERY, query);
 		if (ret < 0)
 			IPACMERR("IOCTL %lu failed\n", IPA_IOC_FNR_COUNTER_QUERY);
 	}
@@ -443,7 +479,6 @@ int IPACM_Config::ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint
 	free((void *)query->stats);
 	free(query);
 fail:
-	close(fd);
 	return ret;
 }
 
@@ -475,15 +510,54 @@ int IPACM_Config::reset_cnt_idx(int index, bool reset_all)
 	return IPACM_SUCCESS;
 }
 
+int IPACM_Config::get_vlan_counter(uint16_t vlan_id, uint8_t *cnt_idx_out)
+{
+	auto it = vlan_counter_map.find(vlan_id);
+	if (it != vlan_counter_map.end()) {
+		*cnt_idx_out = it->second.wan_cnt_idx;
+		it->second.ref_count++;
+		return 0;
+	}
+	return -1;
+}
+
+/* Register a new counter for a VLAN (first client on this VLAN across all ifaces). */
+void IPACM_Config::register_vlan_counter(uint16_t vlan_id, uint8_t cnt_idx_in)
+{
+	ipacm_vlan_counter_entry entry;
+	entry.wan_cnt_idx = cnt_idx_in;
+	entry.ref_count   = 1;
+	vlan_counter_map[vlan_id] = entry;
+}
+
+/* Decrement ref_count for a VLAN counter. Frees the counter when last client disconnects. */
+void IPACM_Config::release_vlan_counter(uint16_t vlan_id)
+{
+	auto it = vlan_counter_map.find(vlan_id);
+	if (it == vlan_counter_map.end()) {
+		return;
+	}
+	it->second.ref_count--;
+	if (it->second.ref_count <= 0) {
+		reset_cnt_idx(it->second.wan_cnt_idx, false);
+		vlan_counter_map.erase(it);
+	}
+}
+
 int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters)
 
 {
 	int i, ret = 0;
-	int nfd = open(DEVICE_NAME, O_RDWR);
 	int counter_idx;
 
-	if (nfd < 0) {
-		IPACMERR("fnr: error opening device file\n");
+	if (m_fd < 0) {
+		IPACMERR("fnr: m_fd not initialized\n");
+		return IPACM_FAILURE;
+	}
+
+	/* Verify fd is still valid by checking with fcntl */
+	if (fcntl(m_fd, F_GETFD) == -1) {
+		IPACMERR("fnr: m_fd is invalid (errno: %d)\n", errno);
 		return IPACM_FAILURE;
 	}
 
@@ -493,7 +567,7 @@ int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *
 	IPACMDBG_H("Allocating %d counters, with start id %d\n", fnr_counters->hw_counter.num_counters,
 		fnr_counters->hw_counter.start_id);
 	/* reset all the counters after allocation */
-	ret = ipacm_fnr_v2_ioctl(nfd, IPA_IOC_FNR_COUNTER_ALLOC, fnr_counters);
+	ret = ipacm_fnr_v2_ioctl(m_fd, IPA_IOC_FNR_COUNTER_ALLOC, fnr_counters);
 	if (ret < 0)
 	{
 		IPACMERR("Failed to execute ioctl %lu\n", IPA_IOC_FNR_COUNTER_ALLOC);
@@ -529,7 +603,6 @@ int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *
 		counter_idx += 2;
 	}
 bail:
-	close(nfd);
 	return ret;
 }
 
@@ -685,6 +758,11 @@ reread:
 		ipa_num_ipa_interfaces++;
 	}
 
+	mape_wan_iface_table_index = ipa_num_ipa_interfaces;
+	ipa_num_ipa_interfaces++;
+	IPACMDBG_H(" mape_wan_iface_table_index %d \n",mape_wan_iface_table_index);
+	IPACMDBG_H(" ipa_num_ipa_interfaces %d \n",ipa_num_ipa_interfaces);
+
 	if (iface_table != NULL)
 	{
 		free(iface_table);
@@ -698,6 +776,10 @@ reread:
 		IPACMERR("Unable to allocate iface_table memory.\n");
 		ret = IPACM_FAILURE;
 		goto fail;
+	}
+
+	if(pInstance-> Load_tunnel_xml_details()==IPACM_FAILURE){
+		IPACMDBG_H("Could not load file\n");
 	}
 
 	for (i = 0; i < cfg->iface_config.num_iface_entries; i++)
@@ -732,6 +814,14 @@ reread:
 			iface_table[eth_wan_iface_table_idx[i]].virtual_iface = true;
 		}
 	}
+
+	strlcpy(iface_table[mape_wan_iface_table_index].iface_name,MAPE_IFACE_NAME,strlen(MAPE_IFACE_NAME)+1);
+	IPACMDBG_H(" iface_name %s \n",iface_table[mape_wan_iface_table_index].iface_name);
+	iface_table[mape_wan_iface_table_index].if_cat = WAN_IF;
+	iface_table[mape_wan_iface_table_index].if_mode = ROUTER;
+	iface_table[mape_wan_iface_table_index].virtual_iface = true;
+	memcpy(iface_table[mape_wan_iface_table_index].phy_dev_name, cfg->mape_wan_iface_name, sizeof(iface_table[mape_wan_iface_table_index].phy_dev_name));
+	IPACMDBG_H(" phy_dev_name %s \n",iface_table[mape_wan_iface_table_index].phy_dev_name);
 
 	/* Construct IPACM ALG table */
 	ipa_num_alg_ports = cfg->alg_config.num_alg_entries;
@@ -810,13 +900,16 @@ reread:
 	ipacm_msgflt_enable = cfg->msgflt_enable;
 	IPACMDBG_H("ipacm_msgflt_feature_enable %d\n", ipacm_msgflt_enable);
 
+	mape_enable = cfg->mape_enable;
+	IPACMDBG_H(" mape_enable %d \n",mape_enable);
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	if (!ipacm_lan_stats_enable_set)
 	{
 		/* Read the configuration only once. */
 		ipacm_lan_stats_enable = cfg->lan_stats_enable;
+		lan_stats_mode = cfg->lan_stats_mode;
 		ipacm_lan_stats_enable_set = true;
-		IPACMDBG_H("ipacm_lan_stats_enable %d. \n", ipacm_lan_stats_enable);
+		IPACMDBG_H("ipacm_lan_stats_enable %d mode %d. \n", ipacm_lan_stats_enable, lan_stats_mode);
 	}
 	if (!ipacm_lan2lan_stats_enable_set)
 	{
@@ -884,6 +977,12 @@ skip_fnr_alloc:
 			memset(active_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
 			inactive_lan_client_index[i].lan_stats_idx = -1;
 			memset(inactive_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
+#ifdef IPA_HW_FNR_STATS
+			active_lan_client_index[i].vlan_id    = 0;
+			active_lan_client_index[i].ref_count   = 0;
+			inactive_lan_client_index[i].vlan_id   = 0;
+			inactive_lan_client_index[i].ref_count  = 0;
+#endif
 		}
 		lan_stats_inited = true;
 	}
@@ -1071,6 +1170,7 @@ skip_fnr_alloc:
 	IPACMDBG_H(" depend MAP-7 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_ETHERNET_PROD, IPA_RM_RESOURCE_USB_CONS);
 	IPACMDBG_H(" depend MAP-8 rm index %d to rm index: %d \n", IPA_RM_RESOURCE_WLAN_PROD, IPA_RM_RESOURCE_ETHERNET_CONS);
 
+
 fail:
 	if (cfg != NULL)
 	{
@@ -1099,6 +1199,35 @@ IPACM_Config* IPACM_Config::GetInstance()
 	}
 
 	return pInstance;
+}
+
+int IPACM_Config::Load_tunnel_xml_details(){
+	IPACM_tunnel_conf_t tunnel_cfg;
+	IPACMDBG("Loading Tunnel details\n");
+	if(IPACM_read_tunnel_xml(IPACM_TUNNEL_CONFIG_FILE,&tunnel_cfg) == IPACM_FAILURE){
+		IPACMERR("Could not read tunnel xml\n");
+		return IPACM_FAILURE;
+	}
+	#ifdef FEATURE_PMIPV6
+	ipacm_cmd_q_data evt_data;
+	if(pInstance->pmip_details.pmipv6_enabled != tunnel_cfg.pmipv6_enable && tunnel_cfg.pmipv6_enable && pInstance->pmip_details.pmipv6_tunnel_setup){
+		/* This means, GRE tunnel for PMIP is UP, but GRE UP event hasn't been posted because in the XML file, the pmipv6_enable was 0 */
+		evt_data.event    = IPA_HANDLE_GRE_UP;
+		evt_data.evt_data = 0;
+		IPACMDBG_H("Posting usb IPA_HANDLE_GRE_UP \n");
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+	}
+	else if(pInstance->pmip_details.pmipv6_enabled != tunnel_cfg.pmipv6_enable  && !tunnel_cfg.pmipv6_enable && pInstance->pmip_details.pmipv6_up){
+		/* If PMIPv6 tunnel is up, then we will being it down when pmipv6 enabled is set to 0 in the XML */
+		evt_data.event    = IPA_HANDLE_GRE_DOWN;
+		evt_data.evt_data = 0;
+		IPACMDBG_H("Posting usb IPA_HANDLE_GRE_DOWN\n");
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+	}
+	pInstance->pmip_details.pmipv6_enabled=tunnel_cfg.pmipv6_enable;
+	IPACMDBG("pmipv6 enabled: %d %d\n",pInstance->pmip_details.pmipv6_enabled, tunnel_cfg.pmipv6_enable);
+	#endif
+	return IPACM_SUCCESS;
 }
 
 int IPACM_Config::GetAlgPorts(int nPorts, ipacm_alg *pAlgPorts)
@@ -1937,7 +2066,8 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	{
 		if(it_vlan->vlan_interface_index == data->vlan_interface_index)
 		{
-			IPACMERR("The vlan iface was added before with id %d\n", it_vlan->vlan_id);
+			it_vlan->priority = data->priority;
+			IPACMERR("The vlan iface was added before with id %d and pcp %d\n", it_vlan->vlan_id, it_vlan->priority);
 			pthread_mutex_unlock(&vlan_l2tp_lock);
 			return;
 		}
@@ -1972,6 +2102,8 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	memset(&new_vlan_info, 0, sizeof(new_vlan_info));
 	strlcpy(new_vlan_info.vlan_iface_name, data->name, sizeof(new_vlan_info.vlan_iface_name));
 	new_vlan_info.vlan_id = data->vlan_id;
+
+	new_vlan_info.priority = data->priority;
 	new_vlan_info.vlan_interface_index = data->vlan_interface_index;
 	m_vlan_iface.push_front(new_vlan_info);
 	pthread_mutex_unlock(&vlan_l2tp_lock);
@@ -1989,7 +2121,7 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 		}
 		memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
 
-		memcpy(evt_data_eth_bridge->iface_name, data->name,
+		strlcpy(evt_data_eth_bridge->iface_name, data->name,
 			sizeof(evt_data_eth_bridge->iface_name));
 
 		evt_data_eth_bridge->VlanID = data->vlan_id;
@@ -2012,6 +2144,13 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 #endif
+	/* Sending Getneigh to receive missing neighbor in case if missed early */
+	IPACMDBG_H("Query Getneigh for vlan ifaces\n");
+	ipa_nl_query_newneigh(AF_BRIDGE);
+	IPACMDBG_H("Query Getneigh for v4\n");
+	ipa_nl_query_newneigh(AF_INET);
+	IPACMDBG_H("Query Getneigh for v6\n");
+	ipa_nl_query_newneigh(AF_INET6);
 	return;
 }
 
@@ -2114,7 +2253,7 @@ void IPACM_Config::del_vlan_iface(ipa_vlan_iface_info *data)
 		}
 		memset(evt_data_eth_bridge, 0, sizeof(*evt_data_eth_bridge));
 
-		memcpy(evt_data_eth_bridge->iface_name, data->name,
+		strlcpy(evt_data_eth_bridge->iface_name, data->name,
 			sizeof(evt_data_eth_bridge->iface_name));
 
 		evt_data_eth_bridge->VlanID = data->vlan_id;
@@ -5213,6 +5352,21 @@ void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name, const char
 				IPACMERR("No mapped session found in /proc/net/pppoe\n");
 			}
 		}
+		/* br-wan mode Enable with PPPoE backhaul */
+		char *dev_name = params[2];
+		if (dev_name == NULL)
+		{
+			IPACMERR("Invalid dev_name parameter, continue.\n");
+			continue;
+		}
+
+		if (strstr(dev_name, "br-wanpppoe"))
+		{
+			IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable = true;
+			IPACMDBG_H("Got session info for %s br-wan enabled %d\n", dev_name, IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
+			IPACMDBG_H("Update session info to pppoe_dev_name %s associated vid %d, passed vid %d\n", pppoe_dev_name, vid, vlan_id);
+			update_pppoe_session_info(pppoe_dev_name, params);
+		}
 	}
 	fclose(fp);
 }
@@ -5334,6 +5488,33 @@ int IPACM_Config::get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id)
 	}
 
 	pthread_mutex_unlock(&pppoe_map_lock);
+
+	return ret;
+}
+
+int IPACM_Config::get_pppoe_vlan_pcp( uint16_t *vlan_id, uint8_t *pcp)
+{
+	list<vlan_iface_info>::iterator it_vlan;
+	int ret = IPACM_FAILURE;
+
+	if (pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+
+	for (it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
+	{
+		if (it_vlan->vlan_id == *vlan_id)
+		{
+			*pcp = it_vlan->priority;
+			IPACMDBG_H("Found vlan iface %s vlan_id=%d pcp=%d\n",
+				it_vlan->vlan_iface_name, *vlan_id, *pcp);
+			ret = IPACM_SUCCESS;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&vlan_l2tp_lock);
 
 	return ret;
 }

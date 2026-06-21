@@ -125,9 +125,14 @@ private:
 	bool isCTReg;
 	bool isNatThreadStart;
 	bool WanUp;
+	uint8_t muxid;
 	uint8_t ip_pass_enable_default_pdn;
 	uint32_t ip_pass_dummy_ip_default_pdn;
 	uint8_t ip_pass_skip_nat_default_pdn;
+	/* Set when RGIP v4 address is assigned to tethered client (RGIP passthrough mode).
+	 * In this mode the modem keeps its own WAN IP; the RGIP client traffic gets a
+	 * no-op dummy NAT entry (private_ip == public_ip == rgip_addr). */
+	uint8_t rgip_pass_enable;
 	bool WanUp_v6;
 	bool is_acct_enabled;
 	NatApp *nat_inst;
@@ -232,6 +237,7 @@ private:
 public:
 	char wan_ifname[IPA_IFACE_NAME_LEN];
 	uint32_t wan_ipaddr;
+	uint32_t rgip_addr;
 	IpAddress& wan_ipaddr_v6;
 	bool isStaMode;
 	IPACM_ConntrackListener();

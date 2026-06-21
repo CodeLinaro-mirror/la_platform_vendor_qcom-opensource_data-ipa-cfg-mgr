@@ -292,6 +292,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 				IPACM_Wlan::total_num_wifi_clients = (IPACM_Wlan::total_num_wifi_clients) - \
                                                                      (num_wifi_client);
+				IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].is_wlan_if_vlan = false;
 
 				return;
 			}
@@ -489,8 +490,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						if(data->iptype == IPA_IP_v6)
 						{
 							memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
-							delete_ipv6_prefix_flt_rule();
-							install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
+							modify_ipv6_prefix_flt_rule();
 #ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
@@ -564,6 +564,16 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						handle_software_routing_enable();
 					}
 				}
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
+					if ( IPACM_Iface::ipacmcfg->pmip_details.pmipv6_enabled || IPACM_Iface::ipacmcfg->ipogre_enabled == true)
+					{
+						IPACMDBG_H(
+							"A previous ipogre enable needs to be undone, then redone. "
+							"Need to call gre_down followed by an gre_up\n");
+						gre_down(false,true);
+						gre_up(false,true);
+					}
+#endif
 			}
 		}
 		break;
@@ -614,7 +624,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 			{
 				memcpy(ipv6_prefix, data_wan_tether->ipv6_prefix, sizeof(ipv6_prefix));
-				install_ipv6_prefix_flt_rule(data_wan_tether->ipv6_prefix);
+				modify_ipv6_prefix_flt_rule();
 				if(data_wan_tether->is_sta == false)
 				{
 					ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6);
@@ -823,8 +833,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 		{
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));
-			delete_ipv6_prefix_flt_rule();
-			install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
+			modify_ipv6_prefix_flt_rule();
 #ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 			IPACM_Wan::read_firewall_filter_rules_ul();
@@ -922,6 +931,16 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			return;
 		}
 		IPACMDBG_H("Backhaul is sta mode?%d\n", data_wan->is_sta);
+#ifdef FEATURE_VLAN_MPDN
+		/* VLAN IFACES don't care about default route */
+		if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) &&
+			(IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled == TRUE ||
+			IPACM_Wan::isVlanWanUP()))
+		{
+			IPACMDBG_H("IF %s is vlan IF, ignoring IPA_HANDLE_WAN_DOWN\n", dev_name);
+			return;
+		}
+#endif
 		if (rx_prop != NULL)
 		{
 			if(ip_type == IPA_IP_v4 || ip_type == IPA_IP_MAX)
@@ -1035,8 +1054,8 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					if (is_svap_iface())
 					{
-						clnt_indx = get_wlan_client_index(data->mac_addr);
-						if (clnt_indx == IPACM_INVALID_INDEX)
+					clnt_indx = get_wlan_client_index(data->mac_addr, data->vlan_id);
+					if (clnt_indx == IPACM_INVALID_INDEX)
 						{
 							IPACMERR("wlan client not found/attached \n");
 							return;
@@ -1637,7 +1656,6 @@ end:
 		if (ipa_interface_index == ipa_if_num)
 		{
 			IPACMDBG_H("Received IPA_LAN_CLIENT_CONNECT_EVENT wlan\n");
-
 			for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; i++)
 			{
 				if (memcmp(IPACM_Iface::ipacmcfg->active_lan_client_index[i].mac, data->mac_addr, IPA_MAC_ADDR_SIZE) == 0 &&
@@ -1652,36 +1670,60 @@ end:
 
 			/* Check if we can add this to the active list. */
 			/* Active List:- Clients for which index is less than IPA_MAX_NUM_HW_PATH_CLIENTS_V2. */
-			if (get_free_active_lan_stats_index(data->mac_addr, ipa_if_num) == -1)
 			{
-				IPACMDBG_H("Failed to reserve active lan_stats index, try inactive list. \n");
-				for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; i++)
+				int active_result;
+#ifdef IPA_HW_FNR_STATS
+				if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+					active_result = get_free_active_lan_stats_index(data->mac_addr, ipa_if_num,IPACM_Iface::ipacmcfg->lan_stats_mode, data->vlan_id);
+				else
+#endif
+					active_result = get_free_active_lan_stats_index(data->mac_addr, ipa_if_num);
+				if (active_result == -1)
 				{
-					if (memcmp(IPACM_Iface::ipacmcfg->inactive_lan_client_index[i].mac, data->mac_addr, IPA_MAC_ADDR_SIZE) == 0
-						&& IPACM_Iface::ipacmcfg->inactive_lan_client_index[i].ipa_if_num == ipa_if_num)
+					IPACMDBG_H("Failed to reserve active lan_stats index, try inactive list. \n");
+					for (int i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; i++)
 					{
-						IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
-							data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
-							data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
-						return; // MAC found
+						if (memcmp(IPACM_Iface::ipacmcfg->inactive_lan_client_index[i].mac, data->mac_addr, IPA_MAC_ADDR_SIZE) == 0
+							&& IPACM_Iface::ipacmcfg->inactive_lan_client_index[i].ipa_if_num == ipa_if_num)
+						{
+							IPACMDBG_H("MAC %02x:%02x:%02x:%02x:%02x:%02x has been received already, return\n",
+								data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+								data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
+							return; // MAC found
+						}
 					}
-				}
 
-				/* Try to get the inactive index which can be used later. */
-				if (get_free_inactive_lan_stats_index(data->mac_addr) == -1)
-				{
-					IPACMDBG_H("Failed to reserve inactive lan_stats index, return\n");
+					int inactive_result;
+#ifdef IPA_HW_FNR_STATS
+					if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+						inactive_result = get_free_inactive_lan_stats_index(data->mac_addr,IPACM_Iface::ipacmcfg->lan_stats_mode, data->vlan_id);
+					else
+#endif
+						inactive_result = get_free_inactive_lan_stats_index(data->mac_addr);
+					if (inactive_result == -1)
+					{
+						IPACMDBG_H("Failed to reserve inactive lan_stats index, return\n");
+					}
+					return;
 				}
-				return;
 			}
 handle_stats:
 			/* Check if the client is inactive list and remove it*/
-			if (reset_inactive_lan_stats_index(data->mac_addr, ipa_if_num) == -1)
 			{
-				IPACMDBG_H("Failed to reset inactive lan_stats index, return\n");
+				int reset_inactive_result;
+#ifdef IPA_HW_FNR_STATS
+				if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+					reset_inactive_result = reset_inactive_lan_stats_index(data->mac_addr, ipa_if_num,IPACM_Iface::ipacmcfg->lan_stats_mode, data->vlan_id);
+				else
+#endif
+					reset_inactive_result = reset_inactive_lan_stats_index(data->mac_addr, ipa_if_num);
+				if (reset_inactive_result == -1)
+				{
+					IPACMDBG_H("Failed to reset inactive lan_stats index, return\n");
+				}
 			}
 			/* Check if the client is already initialized and add filter/routing rules. */
-			IPACM_Wlan::handle_lan_client_connect(data->mac_addr);
+			IPACM_Wlan::handle_lan_client_connect(data->mac_addr, data->vlan_id);
 		}
 	}
 	break;
@@ -1694,7 +1736,7 @@ handle_stats:
 		if (ipa_interface_index == ipa_if_num)
 		{
 			IPACMDBG_H("Received IPA_LAN_CLIENT_DISCONNECT_EVENT\n");
-			IPACM_Wlan::handle_lan_client_disconnect(data->mac_addr);
+			IPACM_Wlan::handle_lan_client_disconnect(data->mac_addr, data->vlan_id);
 		}
 	}
 	break;
@@ -1706,7 +1748,7 @@ handle_stats:
 		if (ipa_interface_index == ipa_if_num)
 		{
 			IPACMDBG_H("Received IPA_LAN_CLIENT_UPDATE_EVENT\n");
-			IPACM_Wlan::handle_lan_client_connect(data->mac_addr);
+			IPACM_Wlan::handle_lan_client_connect(data->mac_addr, data->vlan_id);
 		}
 	}
 	break;
@@ -2524,7 +2566,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	ipacm_ext_prop* ext_prop;
 	struct wan_ioctl_lan_client_info_v2 *client_info;
-	int cnt_idx;
+	int cnt_idx = -1;
 #endif
 	int max_clients = (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS_V2: IPA_MAX_NUM_WIFI_CLIENTS;
 	uint16_t ta_peer_id = 0;
@@ -2859,7 +2901,12 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 		get_client_memptr(wlan_client, num_wifi_client)->ipv6_ul_rules_set = false;
 		get_client_memptr(wlan_client, num_wifi_client)->ipv4_sta_ul_rules_set = false;
 		get_client_memptr(wlan_client, num_wifi_client)->ipv6_sta_ul_rules_set = false;
-		get_client_memptr(wlan_client, num_wifi_client)->lan_stats_idx = get_lan_stats_index(get_client_memptr(wlan_client, num_wifi_client)->mac);
+#ifdef IPA_HW_FNR_STATS
+		if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+			get_client_memptr(wlan_client, num_wifi_client)->lan_stats_idx = get_lan_stats_index(get_client_memptr(wlan_client, num_wifi_client)->mac,IPACM_Iface::ipacmcfg->lan_stats_mode, vlan_id);
+		else
+#endif
+			get_client_memptr(wlan_client, num_wifi_client)->lan_stats_idx = get_lan_stats_index(get_client_memptr(wlan_client, num_wifi_client)->mac);
 		memset(get_client_memptr(wlan_client, num_wifi_client)->wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 		memset(get_client_memptr(wlan_client, num_wifi_client)->wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 #ifdef IPA_HW_FNR_STATS
@@ -2936,6 +2983,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 			client_info->client_idx = get_client_memptr(wlan_client, wlan_index)->lan_stats_idx;
 			client_info->ul_src_pipe = (enum ipa_client_type) IPA_CLIENT_MAX;
 			client_info->hdr_len = hdr_len;
+			bool is_first_on_vlan;
 #ifdef IPA_HW_FNR_STATS
 			IPACMERR("Client counter index (%d) ul/ul = (%d/%d) dl/dl = (%d/%d)\n",
 				get_client_memptr(wlan_client, wlan_index)->index_populated,
@@ -2945,14 +2993,44 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx);
 			if (IPACM_Iface::ipacmcfg->hw_fnr_stats_support && !get_client_memptr(wlan_client, wlan_index)->index_populated)
 			{
-				pthread_mutex_lock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
-				cnt_idx = IPACM_Wan::ipacmcfg->get_free_cnt_idx();
-				pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
-				if (cnt_idx == -1)
-				{
-					IPACMERR("Got invalid cnt_idx. Abort\n");
-					res = IPACM_FAILURE;
-					goto fail;
+
+#ifndef FEATURE_VLAN_MPDN
+				get_client_memptr(wlan_client, wlan_index)->vlan_id = vlan_id;
+#endif
+				if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1) {
+					if (vlan_id == 0 || vlan_id > 4094) {
+						IPACMERR("Mode 1: invalid vlan_id=%d for WLAN client, rejecting\n", vlan_id);
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+
+					/* Phase-1 Mode 1: check global VLAN counter map first.
+					 * This covers cross-iface sharing (ETH + WLAN + USB on same VLAN). */
+					pthread_mutex_lock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
+					uint8_t count_idx = 0;
+					if (IPACM_Iface::ipacmcfg->get_vlan_counter(vlan_id, &count_idx) == 0) {
+						cnt_idx = (int)count_idx;
+						IPACMDBG_H("Mode 1: reusing global cnt_idx=%d for VLAN=%d\n", cnt_idx, vlan_id);
+					}
+					pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
+				}
+				is_first_on_vlan = (cnt_idx == -1);
+				if (cnt_idx == -1) {
+					/* Mode 0: always allocate new; Mode 1: first client for this VLAN across all ifaces */
+					pthread_mutex_lock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
+					cnt_idx = IPACM_Wan::ipacmcfg->get_free_cnt_idx();
+					if (cnt_idx == -1)
+					{
+						pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
+						IPACMERR("Got invalid cnt_idx. Abort\n");
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+					/* Phase-1 Mode 1: register the new counter globally so other ifaces can reuse it */
+					if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1 && vlan_id >= 1 && vlan_id <= 4094) {
+						IPACM_Iface::ipacmcfg->register_vlan_counter(vlan_id, cnt_idx);
+					}
+					pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
 				}
 
 				client_info->wan_cnt_idx = cnt_idx;
@@ -2978,16 +3056,44 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 			{
 				client_info->ul_src_pipe = rx_prop->rx[0].src_pipe;
 			}
-			if (set_lan_client_info(client_info))
+			/* Mode 1: use v3 struct with vlan_id; Mode 0: use existing v2 set. */
+			if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
 			{
-				res = IPACM_FAILURE;
-				free(client_info);
-				/* Reset the mac from active list. */
-				reset_active_lan_stats_index(get_client_memptr(wlan_client, wlan_index)->lan_stats_idx, get_client_memptr(wlan_client, wlan_index)->mac);
-				/* Add the mac to inactive list. */
-				get_free_inactive_lan_stats_index(get_client_memptr(wlan_client, wlan_index)->mac);
-				get_client_memptr(wlan_client, wlan_index)->lan_stats_idx = -1;
-				goto fail;
+				struct wan_ioctl_lan_client_info_vlan ci_v3;
+				memset(&ci_v3, 0, sizeof(ci_v3));
+				ci_v3.device_type = client_info->device_type;
+				memcpy(ci_v3.mac, client_info->mac, IPA_MAC_ADDR_SIZE);
+				ci_v3.vlan_id = get_client_memptr(wlan_client, wlan_index)->vlan_id;
+				ci_v3.client_init = client_info->client_init;
+				ci_v3.client_idx  = client_info->client_idx;
+				ci_v3.ul_src_pipe = client_info->ul_src_pipe;
+				ci_v3.wan_cnt_idx = client_info->wan_cnt_idx;
+				ci_v3.lan_cnt_idx = client_info->lan_cnt_idx;
+				if (is_first_on_vlan) {
+					if (set_lan_client_info_vlan(&ci_v3))
+					{
+						res = IPACM_FAILURE;
+						free(client_info);
+						reset_active_lan_stats_index(get_client_memptr(wlan_client, wlan_index)->lan_stats_idx, get_client_memptr(wlan_client, wlan_index)->mac);
+						get_free_inactive_lan_stats_index(get_client_memptr(wlan_client, wlan_index)->mac);
+						get_client_memptr(wlan_client, wlan_index)->lan_stats_idx = -1;
+						goto fail;
+					}
+				}
+			}
+			else
+			{
+				if (set_lan_client_info(client_info))
+				{
+					res = IPACM_FAILURE;
+					free(client_info);
+					/* Reset the mac from active list. */
+					reset_active_lan_stats_index(get_client_memptr(wlan_client, wlan_index)->lan_stats_idx, get_client_memptr(wlan_client, wlan_index)->mac);
+					/* Add the mac to inactive list. */
+					get_free_inactive_lan_stats_index(get_client_memptr(wlan_client, wlan_index)->mac);
+					get_client_memptr(wlan_client, wlan_index)->lan_stats_idx = -1;
+					goto fail;
+				}
 			}
 			free(client_info);
 
@@ -5853,7 +5959,7 @@ int IPACM_Wlan::delete_pdn_dscp_wlan_rtrules(ipa_ip_type iptype, uint32_t trigge
 #endif
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
-int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
+int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr, uint16_t vlan_id )
 {
 	int wlan_index, res = IPACM_SUCCESS;
 	ipacm_ext_prop* ext_prop;
@@ -5912,16 +6018,47 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 		IPACMDBG_H("client_info->ul_src_pipe :%d \n", client_info->ul_src_pipe);
 		IPACMDBG_H("client_info->hdr_len :%d \n", client_info->hdr_len);
 		IPACMDBG_H("client_info->device_type :%d \n", client_info->device_type);
+		bool is_first_on_vlan;
 #ifdef IPA_HW_FNR_STATS
 		if (IPACM_Wan::ipacmcfg->hw_fnr_stats_support && !get_client_memptr(wlan_client, wlan_index)->index_populated) {
-			pthread_mutex_lock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
-			cnt_idx = IPACM_Wan::ipacmcfg->get_free_cnt_idx();
-			pthread_mutex_unlock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
-			if (cnt_idx == -1)
-			{
-				IPACMERR("Got invalid cnt_idx. Abort\n");
-				res = IPACM_FAILURE;
-				goto fail;
+#ifndef FEATURE_VLAN_MPDN
+				get_client_memptr(wlan_client, wlan_index)->vlan_id = vlan_id;
+#endif
+			if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1) {
+				/* Validate VLAN ID: 0 or >4094 is invalid in Mode 1 */
+				if (vlan_id == 0 || vlan_id > 4094) {
+					IPACMERR("Mode 1: invalid vlan_id=%d for WLAN client, rejecting\n", vlan_id);
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+
+				/* Phase-1 Mode 1: check global VLAN counter map first.
+					* This covers cross-iface sharing (ETH + WLAN + USB on same VLAN). */
+				pthread_mutex_lock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
+				uint8_t count_idx = 0;
+				if (IPACM_Iface::ipacmcfg->get_vlan_counter(vlan_id, &count_idx) == 0) {
+					cnt_idx = (int)count_idx;
+					IPACMDBG_H("Mode 1: reusing global cnt_idx=%d for VLAN=%d\n", cnt_idx, vlan_id);
+				}
+				pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
+			}
+			is_first_on_vlan = (cnt_idx == -1);
+			if (cnt_idx == -1) {
+				/* Mode 0: always allocate new; Mode 1: first client for this VLAN across all ifaces */
+				pthread_mutex_lock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
+				cnt_idx = IPACM_Wan::ipacmcfg->get_free_cnt_idx();
+				if (cnt_idx == -1)
+				{
+					pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
+					IPACMERR("Got invalid cnt_idx. Abort\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+				/* Phase-1 Mode 1: register the new counter globally so other ifaces can reuse it */
+				if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1 && vlan_id >= 1 && vlan_id <= 4094) {
+					IPACM_Iface::ipacmcfg->register_vlan_counter(vlan_id, cnt_idx);
+				}
+				pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
 			}
 			client_info->wan_cnt_idx = cnt_idx;
 			client_info->lan_cnt_idx = cnt_idx + 1;
@@ -5949,11 +6086,39 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 		{
 			client_info->ul_src_pipe = rx_prop->rx[0].src_pipe;
 		}
-		if (set_lan_client_info(client_info))
+		/* Mode 1: use v3 struct with vlan_id; Mode 0: use existing v2 set. */
+		if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
 		{
-			res = IPACM_FAILURE;
-			free(client_info);
-			goto fail;
+			struct wan_ioctl_lan_client_info_vlan ci_v3;
+			memset(&ci_v3, 0, sizeof(ci_v3));
+			ci_v3.device_type = client_info->device_type;
+			memcpy(ci_v3.mac, client_info->mac, IPA_MAC_ADDR_SIZE);
+			ci_v3.vlan_id = get_client_memptr(wlan_client, wlan_index)->vlan_id;
+			ci_v3.client_init = client_info->client_init;
+			ci_v3.client_idx  = client_info->client_idx;
+			ci_v3.ul_src_pipe = client_info->ul_src_pipe;
+			ci_v3.wan_cnt_idx = client_info->wan_cnt_idx;
+			ci_v3.lan_cnt_idx = client_info->lan_cnt_idx;
+			if (is_first_on_vlan) {
+				if (set_lan_client_info_vlan(&ci_v3))
+				{
+					res = IPACM_FAILURE;
+					free(client_info);
+					reset_active_lan_stats_index(get_client_memptr(wlan_client, wlan_index)->lan_stats_idx, get_client_memptr(wlan_client, wlan_index)->mac);
+					get_free_inactive_lan_stats_index(get_client_memptr(wlan_client, wlan_index)->mac);
+					get_client_memptr(wlan_client, wlan_index)->lan_stats_idx = -1;
+					goto fail;
+				}
+			}
+		}
+		else
+		{
+			if (set_lan_client_info(client_info))
+			{
+				res = IPACM_FAILURE;
+				free(client_info);
+				goto fail;
+			}
 		}
 		free(client_info);
 
@@ -5961,8 +6126,8 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 		if(IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable == true)
 		{
 			/* LanToLan client handling */
-			IPACMDBG_H("Handle client connect for dev name %s vlan_id %d \n", dev_name, get_client_memptr(wlan_client, wlan_index)->vlan_id);
-			eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, get_client_memptr(wlan_client, wlan_index)->mac, NULL, dev_name, get_client_memptr(wlan_client, wlan_index)->vlan_id);
+			IPACMDBG_H("Handle client connect for dev name %s vlan_id %d \n", dev_name, vlan_id);
+			eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, get_client_memptr(wlan_client, wlan_index)->mac, NULL, dev_name, vlan_id);
 		}
 
 		if(!(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name)))
@@ -5978,7 +6143,7 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 						install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(),
 							get_client_memptr(wlan_client, wlan_index)->mac,
 							get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx,
-							get_client_memptr(wlan_client, wlan_index)->vlan_id,
+							vlan_id,
 							NULL, false,
 							get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					else
@@ -5990,7 +6155,7 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 				}
 				else
 				{
-					res = handle_wan_up_v2(IPA_IP_v4, get_client_memptr(wlan_client, wlan_index)->vlan_id,
+					res = handle_wan_up_v2(IPA_IP_v4, vlan_id,
 						get_client_memptr(wlan_client, wlan_index)->mac,
 						get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx);
 					if(res == IPACM_SUCCESS)
@@ -6006,7 +6171,7 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 #ifdef IPA_HW_FNR_STATS
 					if (IPACM_Wan::ipacmcfg->hw_fnr_stats_support)
 						install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v6, 0, get_client_memptr(wlan_client, wlan_index)->mac,
-								get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, get_client_memptr(wlan_client, wlan_index)->vlan_id,
+								get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx, vlan_id,
 								NULL, false,
 								get_client_memptr(wlan_client, wlan_index)->ta_peer_id);
 					else
@@ -6017,7 +6182,7 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 				}
 				else
 				{
-					handle_wan_up_v2(IPA_IP_v6, get_client_memptr(wlan_client, wlan_index)->vlan_id,
+					handle_wan_up_v2(IPA_IP_v6, vlan_id,
 						get_client_memptr(wlan_client, wlan_index)->mac,
 						get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx);
 					if(res == IPACM_SUCCESS)
@@ -6069,14 +6234,25 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 	return IPACM_SUCCESS;
 fail:
 	/* Reset the mac from active list. */
-	reset_active_lan_stats_index(get_client_memptr(wlan_client, wlan_index)->lan_stats_idx, mac_addr);
-	/* Add the mac to inactive list. */
-	get_free_inactive_lan_stats_index(mac_addr);
+#ifdef IPA_HW_FNR_STATS
+	if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+	{
+		reset_active_lan_stats_index(get_client_memptr(wlan_client, wlan_index)->lan_stats_idx, mac_addr,IPACM_Iface::ipacmcfg->lan_stats_mode, vlan_id);
+		/* Add the mac to inactive list. */
+		get_free_inactive_lan_stats_index(mac_addr,IPACM_Iface::ipacmcfg->lan_stats_mode, vlan_id);
+	}
+	else
+#endif
+	{
+		reset_active_lan_stats_index(get_client_memptr(wlan_client, wlan_index)->lan_stats_idx, mac_addr);
+		/* Add the mac to inactive list. */
+		get_free_inactive_lan_stats_index(mac_addr);
+	}
 	get_client_memptr(wlan_client, wlan_index)->lan_stats_idx = -1;
 	return IPACM_FAILURE;
 }
 
-int IPACM_Wlan::handle_lan_client_disconnect(uint8_t *mac_addr)
+int IPACM_Wlan::handle_lan_client_disconnect(uint8_t *mac_addr, uint16_t vlan_id)
 {
 	int ipa_if_num1;
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
@@ -6084,42 +6260,92 @@ int IPACM_Wlan::handle_lan_client_disconnect(uint8_t *mac_addr)
 	ipacm_cmd_q_data evt_data;
 
 	/* Check if the client is in active list and remove it. */
-	if (reset_active_lan_stats_index(get_lan_stats_index(mac_addr), mac_addr) == -1)
 	{
-		IPACMDBG_H("Failed to reset active lan_stats index, try inactive list. \n");
-		/* If it is not in active list, check inactive list and remove it. */
-		if (reset_inactive_lan_stats_index(mac_addr, ipa_if_num) == -1)
+#ifdef IPA_HW_FNR_STATS
+
+		int active_stats_idx;
+		if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+			active_stats_idx = get_lan_stats_index(mac_addr,IPACM_Iface::ipacmcfg->lan_stats_mode, vlan_id);
+		else
+			active_stats_idx = get_lan_stats_index(mac_addr);
+		int reset_active_result;
+		if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+			reset_active_result = reset_active_lan_stats_index(active_stats_idx, mac_addr,IPACM_Iface::ipacmcfg->lan_stats_mode, vlan_id);
+		else
+			reset_active_result = reset_active_lan_stats_index(active_stats_idx, mac_addr);
+		if (reset_active_result == -1)
+#else
+		if (reset_active_lan_stats_index(get_lan_stats_index(mac_addr), mac_addr) == -1)
+#endif
 		{
-			IPACMDBG_H("Failed to reserve inactive lan_stats index, return\n");
+			IPACMDBG_H("Failed to reset active lan_stats index, try inactive list. \n");
+			/* If it is not in active list, check inactive list and remove it. */
+#ifdef IPA_HW_FNR_STATS
+			int reset_inactive_result;
+			if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+				reset_inactive_result = reset_inactive_lan_stats_index(mac_addr, ipa_if_num,IPACM_Iface::ipacmcfg->lan_stats_mode, vlan_id);
+			else
+				reset_inactive_result = reset_inactive_lan_stats_index(mac_addr, ipa_if_num);
+			if (reset_inactive_result == -1)
+#else
+			if (reset_inactive_lan_stats_index(mac_addr, ipa_if_num) == -1)
+#endif
+			{
+				IPACMDBG_H("Failed to reserve inactive lan_stats index, return\n");
+			}
+			return IPACM_SUCCESS;
 		}
-		return IPACM_SUCCESS;
 	}
 	/* As we have free lan stats index. */
 		/* Go through the inactive list and pick the first available one to add it to active list. */
-	if (get_available_inactive_lan_client(mac, &ipa_if_num1) == IPACM_FAILURE)
 	{
-		IPACMDBG_H("Error in getting in active client.\n");
-		return IPACM_FAILURE;
-	}
+		uint16_t inactive_vlan_id = 0;
+		int get_avail_result;
+#ifdef IPA_HW_FNR_STATS
+		if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+			get_avail_result = get_available_inactive_lan_client(mac, &ipa_if_num1,IPACM_Iface::ipacmcfg->lan_stats_mode, &inactive_vlan_id);
+		else
+#endif
+			get_avail_result = get_available_inactive_lan_client(mac, &ipa_if_num1);
+		if (get_avail_result == IPACM_FAILURE)
+		{
+			IPACMDBG_H("Error in getting in active client.\n");
+			return IPACM_FAILURE;
+		}
 
-	/* Add the mac to the active list. */
-	if (get_free_active_lan_stats_index(mac, ipa_if_num1) == -1)
-	{
-		IPACMDBG_H("Free active index not available. Abort\n");
-		return IPACM_FAILURE;
-	}
+		/* Add the mac to the active list. */
+		int add_active_result;
+#ifdef IPA_HW_FNR_STATS
+		if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+			add_active_result = get_free_active_lan_stats_index(mac, ipa_if_num1,IPACM_Iface::ipacmcfg->lan_stats_mode, inactive_vlan_id);
+		else
+#endif
+			add_active_result = get_free_active_lan_stats_index(mac, ipa_if_num1);
+		if (add_active_result == -1)
+		{
+			IPACMDBG_H("Free active index not available. Abort\n");
+			return IPACM_FAILURE;
+		}
 
-	/* Remove the mac from inactive list. */
-	if (reset_inactive_lan_stats_index(mac, ipa_if_num1) == IPACM_FAILURE)
-	{
-		IPACMDBG_H("Unable to remove the client from inactive list. Check\n");
+		/* Remove the mac from inactive list. */
+		int remove_inactive_result;
+#ifdef IPA_HW_FNR_STATS
+		if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+			remove_inactive_result = reset_inactive_lan_stats_index(mac, ipa_if_num1,IPACM_Iface::ipacmcfg->lan_stats_mode, inactive_vlan_id);
+		else
+#endif
+			remove_inactive_result = reset_inactive_lan_stats_index(mac, ipa_if_num1);
+		if (remove_inactive_result == IPACM_FAILURE)
+		{
+			IPACMDBG_H("Unable to remove the client from inactive list. Check\n");
+		}
 	}
 
 	/* Check if the client is attached to the same Interface. */
 	if (ipa_if_num1 == ipa_if_num)
 	{
 		/* Process the new lan stats index. */
-		return handle_lan_client_connect(mac);
+		return handle_lan_client_connect(mac, vlan_id);
 	}
 	else
 	{
@@ -6299,6 +6525,9 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext(uint8_t *mac_addr, ipa_ip_type
 				if (false == m_routing.AddRoutingRuleExt(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
+					if (rt_rule->rules) {
+						free((void *)rt_rule->rules);
+					}
 					free(rt_rule);
 					return IPACM_FAILURE;
 				}
@@ -6541,6 +6770,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 			free(rt_rule);
 			return IPACM_FAILURE;
 		}
+		void *rules_ptr = (void *)rt_rule->rules;
 		rt_rule->rule_add_ext_size = sizeof(struct ipa_rt_rule_add_ext_v2);
 		rt_rule->commit = 1;
 		rt_rule->num_rules = (uint8_t)NUM;
@@ -6618,7 +6848,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 				if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
-					free((void *)rt_rule->rules);
+					free(rules_ptr);
 					free(rt_rule);
 					return IPACM_FAILURE;
 				}
@@ -6680,7 +6910,7 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
-						free((void *)rt_rule->rules);
+						free(rules_ptr);
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -6761,6 +6991,9 @@ int IPACM_Wlan::handle_wlan_client_route_rule_ext_v2(uint8_t *mac_addr, ipa_ip_t
 				get_client_memptr(wlan_client, wlan_index)->route_rule_set_v6 = get_client_memptr(wlan_client, wlan_index)->ipv6_set;
 			}/* end of for loop */
 		} /* end of tx loop */
+		if (rules_ptr) {
+			free(rules_ptr);
+		}
 		free(rt_rule);
 	}
 
@@ -7757,6 +7990,8 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 		client_info->client_init = 0;
 		client_info->client_idx = get_client_memptr(wlan_client, clt_indx)->lan_stats_idx;
 		client_info->ul_src_pipe = (enum ipa_client_type) IPA_CLIENT_MAX;
+
+		bool is_last_on_vlan = true;
 #ifdef IPA_HW_FNR_STATS
 		client_info->wan_cnt_idx = get_client_memptr(wlan_client, clt_indx)->ul_cnt_idx;
 		client_info->lan_cnt_idx = get_client_memptr(wlan_client, clt_indx)->ul_cnt_idx + 1;
@@ -7766,8 +8001,19 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 			get_client_memptr(wlan_client, clt_indx)->dl_cnt_idx = -1;
 			get_client_memptr(wlan_client, clt_indx)->index_populated = false;
 			pthread_mutex_lock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
-			if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->wan_cnt_idx, false))
-				IPACMERR("Failed to reset counter index %u\n", client_info->wan_cnt_idx);
+			if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1) {
+				uint16_t disc_vlan = get_client_memptr(wlan_client, clt_indx)->vlan_id;
+				auto it = IPACM_Iface::ipacmcfg->vlan_counter_map.find(disc_vlan);
+				if (it != IPACM_Iface::ipacmcfg->vlan_counter_map.end() &&
+					it->second.ref_count > 1) {
+					is_last_on_vlan = false;
+				}
+				IPACM_Iface::ipacmcfg->release_vlan_counter(disc_vlan);
+			} else {
+				/* Mode 0: always free */
+				if (IPACM_Iface::ipacmcfg->reset_cnt_idx(client_info->wan_cnt_idx, false))
+					IPACMERR("Failed to reset counter index %u\n", client_info->wan_cnt_idx);
+			}
 			if (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable == true)
 			{
 				if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->lan_cnt_idx, false))
@@ -7780,7 +8026,25 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 		{
 			client_info->ul_src_pipe = rx_prop->rx[0].src_pipe;
 		}
-		clear_lan_client_info(client_info);
+		if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+		{
+			struct wan_ioctl_lan_client_info_vlan ci_v3;
+			memset(&ci_v3, 0, sizeof(ci_v3));
+			ci_v3.device_type = client_info->device_type;
+			memcpy(ci_v3.mac, client_info->mac, IPA_MAC_ADDR_SIZE);
+			ci_v3.vlan_id = get_client_memptr(wlan_client, clt_indx)->vlan_id;
+			ci_v3.client_init = client_info->client_init;
+			ci_v3.client_idx  = client_info->client_idx;
+			ci_v3.ul_src_pipe = client_info->ul_src_pipe;
+			ci_v3.wan_cnt_idx = client_info->wan_cnt_idx;
+			ci_v3.lan_cnt_idx = client_info->lan_cnt_idx;
+			if (is_last_on_vlan)
+				clear_lan_client_info_vlan(&ci_v3);
+		}
+		else
+		{
+			clear_lan_client_info(client_info);  /* Mode 0 only */
+		}
 		free(client_info);
 	}
 	get_client_memptr(wlan_client, clt_indx)->lan_stats_idx = -1;
@@ -7859,6 +8123,11 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 			get_client_memptr(wlan_client, (clt_indx + 1))->ipv4_sta_ul_rules_set;
 		get_client_memptr(wlan_client, clt_indx)->ipv6_sta_ul_rules_set =
 			get_client_memptr(wlan_client, (clt_indx + 1))->ipv6_sta_ul_rules_set;
+
+		get_client_memptr(wlan_client, clt_indx)->sta_ul_fl_rule_hdl_v4 =
+			get_client_memptr(wlan_client, (clt_indx + 1))->sta_ul_fl_rule_hdl_v4;
+		get_client_memptr(wlan_client, clt_indx)->sta_ul_fl_rule_hdl_v6 =
+			get_client_memptr(wlan_client, (clt_indx + 1))->sta_ul_fl_rule_hdl_v6;
 #ifdef IPA_HW_FNR_STATS
 		get_client_memptr(wlan_client, clt_indx)->ul_cnt_idx =
 			get_client_memptr(wlan_client, clt_indx + 1)->ul_cnt_idx;
@@ -8352,9 +8621,10 @@ fail:
 				memcpy(client_info->mac,
 						get_client_memptr(wlan_client, i)->mac,
 						IPA_MAC_ADDR_SIZE);
-				client_info->client_init = 0;
-				client_info->client_idx = get_client_memptr(wlan_client, i)->lan_stats_idx;
-				client_info->ul_src_pipe = (enum ipa_client_type) IPA_CLIENT_MAX;
+			client_info->client_init = 0;
+			client_info->client_idx = get_client_memptr(wlan_client, i)->lan_stats_idx;
+			client_info->ul_src_pipe = (enum ipa_client_type) IPA_CLIENT_MAX;
+			bool is_last_on_vlan = true;
 #ifdef IPA_HW_FNR_STATS
 				if (IPACM_Wan::ipacmcfg->hw_fnr_stats_support)
 				{
@@ -8364,8 +8634,20 @@ fail:
 					get_client_memptr(wlan_client, i)->dl_cnt_idx = -1;
 					get_client_memptr(wlan_client, i)->index_populated = false;
 					pthread_mutex_lock(&IPACM_Wan::ipacmcfg->cnt_idx_lock);
-					if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->wan_cnt_idx, false))
-						IPACMERR("Failed to reset counter index = %u\n", client_info->wan_cnt_idx);
+
+					if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1) {
+					uint16_t down_vlan = get_client_memptr(wlan_client, i)->vlan_id;
+					auto it = IPACM_Iface::ipacmcfg->vlan_counter_map.find(down_vlan);
+					if (it != IPACM_Iface::ipacmcfg->vlan_counter_map.end() &&
+						it->second.ref_count > 1) {
+						is_last_on_vlan = false;
+					}
+					IPACM_Iface::ipacmcfg->release_vlan_counter(down_vlan);
+					} else {
+						if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->wan_cnt_idx, false))
+							IPACMERR("Failed to reset counter index = %u\n", client_info->wan_cnt_idx);
+					}
+
 					if (IPACM_Iface::ipacmcfg->ipacm_lan2lan_stats_enable == true)
 					{
 						if (IPACM_Wan::ipacmcfg->reset_cnt_idx(client_info->lan_cnt_idx, false))
@@ -8378,10 +8660,31 @@ fail:
 				{
 					client_info->ul_src_pipe = rx_prop->rx[0].src_pipe;
 				}
+				if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+			{
+				struct wan_ioctl_lan_client_info_vlan ci_v3;
+				memset(&ci_v3, 0, sizeof(ci_v3));
+				ci_v3.device_type = client_info->device_type;
+				memcpy(ci_v3.mac, client_info->mac, IPA_MAC_ADDR_SIZE);
+				ci_v3.vlan_id = get_client_memptr(wlan_client, i)->vlan_id;
+				ci_v3.client_init = client_info->client_init;
+				ci_v3.client_idx  = client_info->client_idx;
+				ci_v3.ul_src_pipe = client_info->ul_src_pipe;
+				ci_v3.wan_cnt_idx = client_info->wan_cnt_idx;
+				ci_v3.lan_cnt_idx = client_info->lan_cnt_idx;
+				/* iface is going down — always last on VLAN from this iface's perspective */
+				if (is_last_on_vlan) {
+					if (clear_lan_client_info_vlan(&ci_v3))
+						res = IPACM_FAILURE;
+				}
+			}
+			else
+			{
 				if (clear_lan_client_info(client_info))
 				{
 					res = IPACM_FAILURE;
 				}
+			}
 				free(client_info);
 			}
 			get_client_memptr(wlan_client, i)->lan_stats_idx = -1;
@@ -8394,7 +8697,12 @@ fail:
 		if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
 			IPACMDBG_H("Resetting lan stats indices. \n");
-			reset_lan_stats_index();
+#ifdef IPA_HW_FNR_STATS
+			if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+				reset_vlan_stats_index();
+			else
+#endif
+				reset_lan_stats_index();
 		}
 #endif
 
@@ -8448,6 +8756,12 @@ end:
 	{
 		free(wlan_client);
 		wlan_client = NULL;
+	}
+
+	if(wlan_primary_client != NULL)
+	{
+		free(wlan_primary_client);
+		wlan_primary_client = NULL;
 	}
 
 	is_active = false;
@@ -9891,6 +10205,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 
 	for(cnt=0; cnt < prop->num_ext_props && index < total_rules; cnt++)
 	{
+		SET_FLT_RULE_PRIORITY(flt_rule_entry, total_rules, index);
 		if (isFirewall)
 		{
 			memcpy(&flt_rule_entry.rule.eq_attrib,
@@ -9964,6 +10279,21 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1<<4);
 
 		flt_rule_entry.rule.eq_attrib.num_offset_meq_128++;
+
+		if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1 && vlan_id >= 1 && vlan_id <= 4094) {
+			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 9);
+			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.value  =
+									(vlan_id & 0xFFF) << 16;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask   = 0x0FFF0000;
+
+			IPACMDBG_H("Mode 1: added VLAN ID %d to UL filter rule "
+					"via metadata_meq32 (value=0x%08X mask=0x%08X)\n",
+					vlan_id,
+					(vlan_id & 0xFFF) << 16,
+					0x0FFF0000);
+		}
 
 		/* Handle XLAT configuration */
 		if ((!isFirewall) && (iptype == IPA_IP_v4) && prop->prop[cnt].is_xlat_rule && (xlat_mux_id != 0))
@@ -10039,7 +10369,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 		if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
 			prop->prop[cnt].action != IPA_PASS_TO_EXCEPTION)
 		{
-			//duplicate the old rule to new index
+			// duplicate the old rule to new index and update the priority
+			SET_FLT_RULE_PRIORITY(flt_rule_entry, total_rules, index);
 			memcpy((void *)pFilteringTable->rules + (index * sizeof(struct ipa_flt_rule_add_v2)),
 				&flt_rule_entry, sizeof(flt_rule_entry));
 
@@ -10075,7 +10406,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 
 			flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
 
-			//overwrite the old rule and increment the rule count
+			// overwrite the old rule and increment the rule count and update the priority to one less than original rule
+			SET_FLT_RULE_PRIORITY(flt_rule_entry, total_rules, index - 1);
 			memcpy((void *)pFilteringTable->rules + ((index -1) * sizeof(struct ipa_flt_rule_add_v2)),
 				&flt_rule_entry, sizeof(flt_rule_entry));
 			index++;
@@ -11739,6 +12071,10 @@ int IPACM_Wlan::handle_refresh_filtering_rules(bool wlan_vlan_mpdn_enable)
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, 1);
 		IPACMDBG_H("Deleted TCP syn v4 filter rules successfully.\n");
+
+		/* Delete the modem UL rules on Non-vlan pipe
+		   Will be installed later on Vlan pipe using HANDLE_VLAN_PDN_UP event */
+		handle_wan_down(false);
 	}
 
 	/* Delete v6 filtering rules */
@@ -12411,6 +12747,9 @@ int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
 					if (false == m_routing.AddRoutingRule(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
+						if (rt_rule->rules) {
+							free((void *)rt_rule->rules);
+						}
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -12733,6 +13072,9 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 					IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp marking failed: %d\n",
 						hdr_proc_ctx_table->proc_ctx[0].status);
 					free(hdr_proc_ctx_table);
+					if (rt_rule->rules) {
+						free((void *)rt_rule->rules);
+					}
 					free(rt_rule);
 					return IPACM_FAILURE;
 				}
@@ -12743,6 +13085,9 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 				if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
+					if (rt_rule->rules) {
+						free((void *)rt_rule->rules);
+					}
 					free(rt_rule);
 					return IPACM_FAILURE;
 				}
@@ -12936,6 +13281,9 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 						IPACMERR("ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp marking failed: %d\n",
 							hdr_proc_ctx_table->proc_ctx[0].status);
 						free(hdr_proc_ctx_table);
+						if (rt_rule->rules) {
+							free((void *)rt_rule->rules);
+						}
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -12946,6 +13294,9 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
+						if (rt_rule->rules) {
+							free((void *)rt_rule->rules);
+						}
 						free(rt_rule);
 						return IPACM_FAILURE;
 					}
@@ -12979,6 +13330,9 @@ int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
 
 		} /* end of for loop */
 
+		if (rt_rule->rules) {
+			free((void *)rt_rule->rules);
+		}
 		free(rt_rule);
 	}
 	return IPACM_SUCCESS;
@@ -13886,6 +14240,7 @@ int IPACM_Wlan::handle_wan_up_v2(ipa_ip_type ip_type, uint16_t vlan_id, uint8_t 
 			{
 				IPACMERR("Failed to get routing table index from name\n");
 				close(fd);
+				free(m_pFilteringTable);
 				return IPACM_FAILURE;
 			}
 			close(fd);
@@ -14046,4 +14401,3 @@ int IPACM_Wlan::handle_wan_up_v2(ipa_ip_type ip_type, uint16_t vlan_id, uint8_t 
 	}
 	return IPACM_SUCCESS;
 }
-

@@ -92,6 +92,7 @@
 #else
 #define IPACM_CFG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
 #endif
+#define IPACM_TUNNEL_CFG_FILE_NAME "ipacm_tunnel_cfg.xml"
 #ifndef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/var/run/data/ipa/ipacm.pid"
 #ifdef FEATURE_RDKB
@@ -112,7 +113,7 @@
 #define IPA_DRIVER_WLAN_EVENT_SIZE  (sizeof(struct ipa_wlan_msg_ex)+ IPA_DRIVER_WLAN_EVENT_MAX_OF_ATTRIBS*sizeof(ipa_wlan_hdr_attrib_val))
 #define IPA_DRIVER_PIPE_STATS_EVENT_SIZE  (sizeof(struct ipa_get_data_stats_resp_msg_v01))
 #define IPA_DRIVER_WLAN_META_MSG    (sizeof(struct ipa_msg_meta))
-#define IPA_DRIVER_WLAN_BUF_LEN     (IPA_DRIVER_PIPE_STATS_EVENT_SIZE + IPA_DRIVER_WLAN_META_MSG)
+#define IPA_DRIVER_WLAN_BUF_LEN     (sizeof(struct ipa_sw_flt_list_type))
 
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
 
@@ -271,6 +272,21 @@ void* firewall_monitor(void *param)
 						IPACMERR("Easy Mesh is not supported or has lower mode \n");
 					}
 				}
+				else if(!strncmp(event->name, IPACM_TUNNEL_CFG_FILE_NAME, event->len))
+				{
+					IPACMDBG_H("File \"%s\" was 0x%x\n", event->name, event->mask);
+					IPACMDBG_H("The interested file %s .\n", IPACM_TUNNEL_CFG_FILE_NAME);
+
+					IPACM_Config* config = IPACM_Config::GetInstance();
+					if(config-> Load_tunnel_xml_details()==IPACM_FAILURE){
+						IPACMDBG_H("Could not load file\n");
+					}
+					IPACMDBG_H("PMIPv6 enable info loaded\n");
+					// pmipv6_enabled
+					// evt_data.event = IPA_TUNNEL_CFG_CHANGE_EVENT;
+					// evt_data.evt_data = NULL;
+					//IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
 			}
 			IPACMDBG_H("Received monitoring event %s.\n", event->name);
 		}
@@ -299,6 +315,7 @@ void* ipa_driver_msg_notifier(void *param)
 	struct ipa_get_apn_data_stats_resp_msg_v01 event_network_stats;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	struct ipa_lan_client_msg event_lan_client;
+	struct ipa_lan_client_msg_vlan event_lan_client_vlan;
 #endif
 
 	ipacm_cmd_q_data evt_data;
@@ -321,6 +338,8 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_event_data_all* new_neigh_data;
 	ipa_ioc_gsb_info *event_gsb = NULL;
 	ipa_ioc_pdn_config *pdn_info = NULL;
+	uint32_t *rgip_v4 = NULL;
+	struct rgip_info *ipv4_src = NULL;
 #ifdef FEATURE_STATIC_POLICY
 	ipa_ioc_pdn_dscp_map_info *pdn_dscp_info = NULL;
 #endif
@@ -736,6 +755,28 @@ void* ipa_driver_msg_notifier(void *param)
 				}
 			}
 
+			if(IPACM_Iface::ipacmcfg->mape_wan_iface_table_index >= 0 &&
+				strncmp(
+					IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name,
+					event_ecm.name, sizeof(event_ecm.name)) == 0)
+			{
+				data_fid2 = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+				if(data_fid2 == NULL)
+				{
+					IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+					return NULL;
+				}
+				data_fid2->if_index =
+					IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].netlink_interface_index;
+				evt_data.event = IPA_LINK_DOWN_EVENT;
+				evt_data.evt_data = data_fid2;
+				IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT event %d for ETH VLAN iface:%d dev_name:%s\n",
+					evt_data.event, data_fid2->if_index,
+					IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].iface_name);
+				IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].ifi_flags = 0;
+				IPACM_EvtDispatcher::PostEvt(&evt_data);
+			}
+
 			memset(&evt_data, 0, sizeof(evt_data));
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
@@ -864,17 +905,38 @@ void* ipa_driver_msg_notifier(void *param)
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 		case IPA_PER_CLIENT_STATS_CONNECT_EVENT:
 			IPACMDBG_H("Received IPA_PER_CLIENT_STATS_CONNECT_EVENT\n");
-			memcpy(&event_lan_client, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_lan_client_msg));
-			data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
-			if(data == NULL)
+#ifdef IPA_HW_FNR_STATS
+			if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
 			{
-				IPACMERR("unable to allocate memory for event data\n");
-				goto done;
+				/* Mode 1: payload is ipa_lan_client_msg_vlan (has vlan_id) */
+				memcpy(&event_lan_client_vlan, buffer + sizeof(struct ipa_msg_meta),
+					sizeof(struct ipa_lan_client_msg_vlan));
+				data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
+				if (data == NULL)
+				{
+					IPACMERR("unable to allocate memory for event data\n");
+					goto done;
+				}
+				memset(data, 0, sizeof(ipacm_event_data_mac));
+				memcpy(data->mac_addr, event_lan_client_vlan.mac, sizeof(event_lan_client_vlan.mac));
+				data->vlan_id = event_lan_client_vlan.vlan_id;
+				ipa_get_if_index(event_lan_client_vlan.lanIface, &(data->if_index));
 			}
-			memcpy(data->mac_addr,
-						 event_lan_client.mac,
-						 sizeof(event_lan_client.mac));
-			ipa_get_if_index(event_lan_client.lanIface, &(data->if_index));
+			else
+#endif
+			{
+				memcpy(&event_lan_client, buffer + sizeof(struct ipa_msg_meta),
+					sizeof(struct ipa_lan_client_msg));
+				data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
+				if (data == NULL)
+				{
+					IPACMERR("unable to allocate memory for event data\n");
+					goto done;
+				}
+				memset(data, 0, sizeof(ipacm_event_data_mac));
+				memcpy(data->mac_addr, event_lan_client.mac, sizeof(event_lan_client.mac));
+				ipa_get_if_index(event_lan_client.lanIface, &(data->if_index));
+			}
 			IPACM_Iface::ipacmcfg->stats_client_info(data->mac_addr, true);
 			evt_data.event = IPA_LAN_CLIENT_CONNECT_EVENT;
 			evt_data.evt_data = data;
@@ -882,17 +944,37 @@ void* ipa_driver_msg_notifier(void *param)
 
 		case IPA_PER_CLIENT_STATS_DISCONNECT_EVENT:
 			IPACMDBG_H("Received IPA_PER_CLIENT_STATS_DISCONNECT_EVENT\n");
-			memcpy(&event_lan_client, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_lan_client_msg));
-			data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
-			if(data == NULL)
+#ifdef IPA_HW_FNR_STATS
+			if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
 			{
-				IPACMERR("unable to allocate memory for event data\n");
-				goto done;
+				memcpy(&event_lan_client_vlan, buffer + sizeof(struct ipa_msg_meta),
+					sizeof(struct ipa_lan_client_msg_vlan));
+				data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
+				if (data == NULL)
+				{
+					IPACMERR("unable to allocate memory for event data\n");
+					goto done;
+				}
+				memset(data, 0, sizeof(ipacm_event_data_mac));
+				memcpy(data->mac_addr, event_lan_client_vlan.mac, sizeof(event_lan_client_vlan.mac));
+				data->vlan_id = event_lan_client_vlan.vlan_id;
+				ipa_get_if_index(event_lan_client_vlan.lanIface, &(data->if_index));
 			}
-			memcpy(data->mac_addr,
-						 event_lan_client.mac,
-						 sizeof(event_lan_client.mac));
-			ipa_get_if_index(event_lan_client.lanIface, &(data->if_index));
+			else
+#endif
+			{
+				memcpy(&event_lan_client, buffer + sizeof(struct ipa_msg_meta),
+					sizeof(struct ipa_lan_client_msg));
+				data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
+				if (data == NULL)
+				{
+					IPACMERR("unable to allocate memory for event data\n");
+					goto done;
+				}
+				memset(data, 0, sizeof(ipacm_event_data_mac));
+				memcpy(data->mac_addr, event_lan_client.mac, sizeof(event_lan_client.mac));
+				ipa_get_if_index(event_lan_client.lanIface, &(data->if_index));
+			}
 			IPACM_Iface::ipacmcfg->stats_client_info(data->mac_addr, false);
 			evt_data.event = IPA_LAN_CLIENT_DISCONNECT_EVENT;
 			evt_data.evt_data = data;
@@ -1358,7 +1440,34 @@ void* ipa_driver_msg_notifier(void *param)
 
 			continue;
 #endif
+#ifdef FEATURE_IPoGRE
+		case IPA_RGIP_ADD_EVENT:
+			IPACMDBG_H("Received an IPA_IPoGRE_RGIP_EVENT\n");
+			rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
+			if(rgip_v4 == NULL)
+			{
+				IPACMERR("Memory not assigned to rgip\n");
+				goto done;
+			}
+			ipv4_src = (struct rgip_info *)(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_IPoGRE_RGIP_EVENT withrgip iface %s\n",ipv4_src->rgip_iface_name);
+			ipv4_src->rgip_v4 =  ntohl(ipv4_src->rgip_v4);
+			memcpy(rgip_v4,&ipv4_src->rgip_v4,sizeof(rgip_v4));
+			if(*rgip_v4 == 0)
+			{
+				evt_data.event    = IPA_HANDLE_RGIP_DEL;
+			}
+			else
+			{
+				evt_data.event    = IPA_HANDLE_RGIP_UP;
+				IPACM_Iface::ipacmcfg->rgip_ip = *rgip_v4;
+			}
+			evt_data.evt_data = rgip_v4;
 
+			strlcpy(IPACM_Iface::ipacmcfg->rgip_iface_name,ipv4_src->rgip_iface_name, IPA_IFACE_NAME_LEN);
+
+			break;
+#endif
 		case IPA_MACSEC_ADD_EVENT:
 		case IPA_MACSEC_DEL_EVENT:
 			IPACMDBG_H("Received an %s\n",
@@ -1406,6 +1515,10 @@ void* ipa_driver_msg_notifier(void *param)
 				ext_router_info.ipv6_addr[0], ext_router_info.ipv6_addr[1], ext_router_info.ipv6_addr[2], ext_router_info.ipv6_addr[3],
 				ext_router_info.ipv6_mask[0], ext_router_info.ipv6_mask[1], ext_router_info.ipv6_mask[2], ext_router_info.ipv6_mask[3]);
 
+			if (!strlen(ext_router_info.pdn_name)){
+				IPACMERR("Received the null pdn name for IPA_SET_EXT_ROUTER_MODE_EVENT\n");
+				goto done;
+			}
 			if (IPACM_Iface::ipacmcfg->ext_router_mode == IPA_PREFIX_DISABLED && ext_router_info.mode == IPA_PREFIX_DISABLED )
 			{
 				IPACMERR("IPACM is already in ext_router disabled mode\n");
@@ -1712,6 +1825,19 @@ int main(int argc, char **argv)
 	int ret;
 	pthread_t netlink_thread = 0, monitor_thread = 0, ipa_driver_thread = 0;
 	pthread_t cmd_queue_thread = 0;
+	pthread_t netlinks_query_thread = 0;
+
+	/* Allow toggling logs from init scripts:
+	 * - Command line: --logs=0 | --logs=1 | --disable-logs | --enable-logs
+	 * Do this before any logging macros are used.
+	 */
+	for (int i = 1; i < argc; ++i) {
+		if (strcmp(argv[i], "--logs=0") == 0 || strcmp(argv[i], "--disable-logs") == 0) {
+			ipacm_set_log_enabled(0);
+		} else if (strcmp(argv[i], "--logs=1") == 0 || strcmp(argv[i], "--enable-logs") == 0) {
+			ipacm_set_log_enabled(1);
+		}
+	}
 
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();

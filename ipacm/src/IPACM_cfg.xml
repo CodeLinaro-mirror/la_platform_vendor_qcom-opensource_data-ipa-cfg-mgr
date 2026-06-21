@@ -6,6 +6,7 @@
 	</ODUCFG>
 	<LANStats>
 		<EnableLANStats>0</EnableLANStats>
+		<LANStatsMode>0</LANStatsMode>
 	</LANStats>
 	<PublicIpSupport>
 		<EnablePublicIpSupport>0</EnablePublicIpSupport>
@@ -800,6 +801,10 @@
 		<IPACMMSGFLT>
 			<IPACMMSGFLTEnable>0</IPACMMSGFLTEnable>
 		</IPACMMSGFLT>
+		<IPACMMAPE>
+			<IPACMMAPEEnable>0</IPACMMAPEEnable>
+			<MAPEPhyIface>eth0</MAPEPhyIface>
+		</IPACMMAPE>
 		<IPACMLog>
 			<IPACMfilevar>2097152</IPACMfilevar>
 		</IPACMLog>

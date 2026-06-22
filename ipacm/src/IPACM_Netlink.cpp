@@ -1472,6 +1472,18 @@ static int ipa_nl_decode_nlmsg
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
 						}
 					}
+					if (IPACM_Iface::ipacmcfg->ipogre_enabled &&
+						strncmp(dev_name, IPACM_Iface::ipacmcfg->pmip_details.tunnel_name,
+							sizeof(IPACM_Iface::ipacmcfg->pmip_details.tunnel_name)) == 0)
+					{
+						IPACMDBG_H("IPoGRE iface %s link down, post IPA_HANDLE_IPOGRE_DOWN\n", dev_name);
+						IPACM_Iface::ipacmcfg->ipogre_enabled = false;
+						ipacm_cmd_q_data ipogre_evt_data;
+						memset(&ipogre_evt_data, 0, sizeof(ipogre_evt_data));
+						ipogre_evt_data.event = IPA_HANDLE_IPOGRE_DOWN;
+						ipogre_evt_data.evt_data = 0;
+						IPACM_EvtDispatcher::PostEvt(&ipogre_evt_data);
+					}
 #endif
 					IPACMDBG_H("Interface %s bring down with IP-family: %d \n", dev_name,
 						msg_ptr->nl_link_info.metainfo.ifi_family);

@@ -727,6 +727,18 @@ static int ipacm_cfg_xml_parse_tree
 							}
 						}
 				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMDEBUG_TAG))
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						dynamic_logs_enable = atoi(content_buf);
+						IPACMDBG_H("dynamic_logs_enable: %d\n", dynamic_logs_enable);
+					}
+				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_Enable_TAG) == 0)
 				{
 						IPACMDBG_H("inside enable MPDN\n");

@@ -158,6 +158,10 @@ extern "C"
 #define IPACM_SW_FLT 2
 
 #define IPA_MAX_VLAN_PER_BRIDGE 3
+
+#define MIN_VLAN_ID 0
+#define MAX_VLAN_ID 4095
+
 /*---------------------------------------------------------------------------
 										Return values indicating error status
 ---------------------------------------------------------------------------*/

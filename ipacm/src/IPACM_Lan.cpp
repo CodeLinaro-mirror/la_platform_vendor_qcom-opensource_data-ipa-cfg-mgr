@@ -2433,10 +2433,11 @@ int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype,
 	uint8_t mac_a[6] = {0};
 	std::array<uint8_t, 6> mac = {0};
 	std::map<std::array<uint8_t, 6>, mac_flt_type * >::iterator it;
-	int j = 0;
+	int j = 0,eth_index,vlan_id=0;
 
 	memcpy(mac_a,mac_addr,IPA_MAC_ADDR_SIZE);
 	std::copy(std::begin(mac_a), std::end(mac_a), std::begin(mac));
+	eth_index = get_eth_client_index(mac_addr);
 
 	if (rx_prop == NULL)
 	{
@@ -2504,7 +2505,14 @@ int IPACM_Lan::add_mac_flt_blacklist_rule(uint8_t *mac_addr, ipa_ip_type iptype,
 		flt_rule_entry_v2.rule.action = IPA_PASS_TO_EXCEPTION;
 		flt_rule_entry_v2.rule.hashable = false;
 
-		flt_rule_entry_v2.rule.attrib.attrib_mask |= IPA_FLT_MAC_SRC_ADDR_ETHER_II;
+		vlan_id = get_client_memptr(eth_client, eth_index)->vlan_id;
+		IPACMERR(" vlan_id %d \n",vlan_id);
+		if (vlan_id > MIN_VLAN_ID && vlan_id <= MAX_VLAN_ID){
+			flt_rule_entry_v2.rule.attrib.attrib_mask |= IPA_FLT_MAC_SRC_ADDR_802_1Q;
+		}
+		if ( vlan_id == 0 ){
+			flt_rule_entry_v2.rule.attrib.attrib_mask |= IPA_FLT_MAC_SRC_ADDR_ETHER_II;
+		}
 		memset(flt_rule_entry_v2.rule.attrib.src_mac_addr_mask, 0xFF, sizeof(flt_rule_entry_v2.rule.attrib.src_mac_addr_mask));
 		memcpy(flt_rule_entry_v2.rule.attrib.src_mac_addr, mac_addr, sizeof(flt_rule_entry_v2.rule.attrib.src_mac_addr));
 
@@ -3185,7 +3193,9 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	ipacm_event_data_all data_all;
 	std::list <ipacm_event_data_all>::iterator it;
 	ipacm_bridge *bridge;
+	tether_client_info client_info;
 	int skip_nat_set = 0;
+	int eth_index =0;
 	IPACMDBG_H("\n");
 
 	if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
@@ -3199,6 +3209,7 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		return IPACM_FAILURE;
 	}
 
+	memset(&client_info, 0, sizeof(tether_client_info));
 	/* get bridge from vlan id */
 	bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge_from_vid(vlan_id);
 	if (!bridge)
@@ -3207,9 +3218,21 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		return IPACM_FAILURE;
 	}
 
+	client_info.is_vlan = true;
 	IPACMDBG_H("VLAN IF %s got client, vlan id %d \n", data->iface_name, vlan_id);
 	data_vlan = (ipacm_event_new_neigh_vlan *)data;
 
+	if (data->iptype == IPA_IP_v4) {
+		client_info.v4_addr = data->ipv4_addr;
+	} else if  (data->iptype == IPA_IP_v6) {
+		client_info.v4_addr = 0;
+	}
+	memcpy(client_info.iface, dev_name, IPA_IFACE_NAME_LEN);
+	eth_index = get_eth_client_index(data->mac_addr, vlan_id);
+	if(eth_index != IPACM_INVALID_INDEX){
+		IPACMDBG_H(" updating vlan client info to tethering info \n");
+		IPACM_Iface::ipacmcfg->update_client_info(data->mac_addr, &client_info, true);
+	}
 	if((data_vlan->data_all.iptype != ip_type) && (ip_type != IPA_IP_MAX))
 	{
 		IPACMERR("inconsistent iptype. iptype = %d, instance ip_type = %d\n", data_vlan->data_all.iptype,
@@ -5859,7 +5882,7 @@ int IPACM_Lan::check_neigh_ipv4(ipacm_event_data_all *data)
 /*handle eth client */
 int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 {
-	int clnt_indx, size = 0;
+	int clnt_indx, size = 0,eth_index = 0;
 	int v6_num;
 	uint32_t ipv6_link_local_prefix = 0xFE800000;
 	uint32_t ipv6_link_local_prefix_mask = 0xFFC00000;
@@ -6142,6 +6165,17 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 			}
 		}
 	}
+
+	eth_index = get_eth_client_index(data->mac_addr, vlan_id);
+
+	if (eth_index == IPACM_INVALID_INDEX)
+	{
+		IPACMERR("eth client not found/attached\n");
+		return IPACM_FAILURE;
+	}
+	get_client_memptr(eth_client, eth_index)->if_index = data->if_index;
+	IPACMDBG_H("index: %d if_index: %d\n", eth_index, get_client_memptr(eth_client, eth_index)->if_index);
+
 	return IPACM_SUCCESS;
 }
 

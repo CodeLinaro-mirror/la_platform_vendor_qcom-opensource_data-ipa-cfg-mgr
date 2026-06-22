@@ -27,7 +27,6 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Technologies, Inc. are provided under the following license:
- *
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -836,7 +835,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 	/* Update the IP Type. */
 	config_ip_type(data->iptype);
-
+	IPACMDBG_H("Received handle_addr_evt. dev_name: %s, data->iptype %d\n", dev_name, data->iptype);
 #ifdef FEATURE_STATIC_POLICY
 	if(pthread_mutex_lock(&IPACM_Iface::ipacmcfg->pdn_dscp_lock) != 0)
 	{
@@ -1521,7 +1520,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			ipa_nl_send_getroute(IPA_IP_v4, dev_name);
 		}
 	}
-
+	
+	IPACMDBG_H("number of v4 num_ipv4_sta_pdn %d\n", num_ipv4_sta_pdn);
 	IPACMDBG_H("number of v6 default route rules %d\n", num_dft_rt_v6);
 
 	data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
@@ -4218,7 +4218,7 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 	}
 
 	IPACMDBG_H("Process IPA_ROUTE_ADD_VLAN_PDN_EVENT for IPV4\n");
-
+	IPACMDBG_H("Process IPV4 data->wan_ipv4_addr 0x%x , wan_v4_addr 0x%x \n", data->wan_ipv4_addr, wan_v4_addr);
 	if(data->wan_ipv4_addr == wan_v4_addr)
 	{
 		IPACMDBG_H("received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, if %d\n", data->VlanID, dev_name, ipa_if_num);
@@ -4471,6 +4471,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 	IPACMDBG_H("Process IPA_ROUTE_ADD_VLAN_PDN_EVENT for iptype: %d\n", iptype);
 	IPACMDBG_H("data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
 	IPACMDBG_H("ipv6_prefix: 0x%08x%08x\n", ipv6_prefix[0], ipv6_prefix[1]);
+	IPACMDBG_H("data->wan_ipv4_addr: 0x%x\n", data->wan_ipv4_addr);
 
 	if(iptype == IPA_IP_v6 || iptype == IPA_IP_MAX)
 	{
@@ -8426,7 +8427,7 @@ int IPACM_Wan::handle_down_evt()
 #ifdef FEATURE_DUAL_BACKHAUL
 	bool isSecondBackhaul;
 #endif
-	IPACMDBG_H(" wan handle_down_evt, ip_type: %d\n", ip_type);
+	IPACMDBG_H(" wan handle_down_evt, dev_name %s ip_type: %d\n", dev_name, ip_type);
 	if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
 	{
 		/* Delete corresponding ipa_rm_resource_name of TX-endpoint after delete IPV4/V6 RT-rule */
@@ -8442,11 +8443,14 @@ int IPACM_Wan::handle_down_evt()
 	{
 		goto fail;
 	}
-
+	IPACMDBG_H("The number of STA ipv4 pdn is %d.\n", num_ipv4_sta_pdn);
 	/*Post v4/v6 Vlan PDN_DOWN event if associated*/
 	if(ip_type == IPA_IP_v4)
 	{
-		num_ipv4_sta_pdn--;
+		if(num_ipv4_sta_pdn > 0)
+		{
+			num_ipv4_sta_pdn--;
+		}
 		IPACMDBG_H("Now the number of STA ipv4 pdn is %d.\n", num_ipv4_sta_pdn);
 	}
 	else if(ip_type == IPA_IP_v6)
@@ -8459,7 +8463,10 @@ int IPACM_Wan::handle_down_evt()
 	}
 	else if(ip_type == IPA_IP_MAX)
 	{
-		num_ipv4_sta_pdn--;
+		if(num_ipv4_sta_pdn > 0)
+		{
+			num_ipv4_sta_pdn--;
+		}
 		IPACMDBG_H("Now the number of STA ipv4 pdn is %d.\n", num_ipv4_sta_pdn);
 		if (num_dft_rt_v6 > 1)
 			num_ipv6_sta_pdn--;
@@ -10835,7 +10842,8 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 	uint32_t cnt;
 	int clnt_indx;
 	uint16_t session_id;
-
+	
+	IPACMDBG_H("Wan dev_name %s \n", dev_name);
 	clnt_indx = get_wan_client_index(mac_addr);
 
 	if (clnt_indx != IPACM_INVALID_INDEX)
@@ -10924,13 +10932,14 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 									if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true && is_ppp_iface)
 									{
 										session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+										IPACMDBG_H("WAN %s has session_id: %x\n", dev_name, session_id);
 										sCopyHeader.hdr_len = 22;
 										pHeaderDescriptor->hdr[0].hdr[12] = (PPPOE_SESSION_ETH_TYPE >> 8) & 0xFF;
 										pHeaderDescriptor->hdr[0].hdr[13] = PPPOE_SESSION_ETH_TYPE & 0xFF;
 										pHeaderDescriptor->hdr[0].hdr[14] = 0x11;
 										pHeaderDescriptor->hdr[0].hdr[15] = 0x00;
-										pHeaderDescriptor->hdr[0].hdr[16] = (session_id >> 8) & 0xFF;
-										pHeaderDescriptor->hdr[0].hdr[17] = session_id & 0xFF;
+										pHeaderDescriptor->hdr[0].hdr[16] = session_id & 0xFF;
+										pHeaderDescriptor->hdr[0].hdr[17] = (session_id >> 8) & 0xFF;
 										pHeaderDescriptor->hdr[0].hdr[18] = 0x00;/* Payload length 2bytes update by uC */
 										pHeaderDescriptor->hdr[0].hdr[19] = 0x00;
 										pHeaderDescriptor->hdr[0].hdr[20] = (PPPOE_PROTOCOL_V4_TYPE >> 8) & 0xFF;/* PPPoE protocol 2bytes size */
@@ -10953,13 +10962,14 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 											if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true && is_ppp_iface)
 											{
 												session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+												IPACMDBG_H("WAN %s has session_id: %x\n", dev_name, session_id);
 												sCopyHeader.hdr_len = 26;
 												pHeaderDescriptor->hdr[0].hdr[16] = (PPPOE_SESSION_ETH_TYPE >> 8) & 0xFF;
 												pHeaderDescriptor->hdr[0].hdr[17] = PPPOE_SESSION_ETH_TYPE & 0xFF;
 												pHeaderDescriptor->hdr[0].hdr[18] = 0x11;
 												pHeaderDescriptor->hdr[0].hdr[19] = 0x00;
-												pHeaderDescriptor->hdr[0].hdr[20] = (session_id >> 8) & 0xFF;
-												pHeaderDescriptor->hdr[0].hdr[21] = session_id & 0xFF;
+												pHeaderDescriptor->hdr[0].hdr[20] = session_id & 0xFF;
+												pHeaderDescriptor->hdr[0].hdr[21] = (session_id >> 8) & 0xFF;
 												pHeaderDescriptor->hdr[0].hdr[22] = 0x00;/* Payload length 2bytes update by uC */
 												pHeaderDescriptor->hdr[0].hdr[23] = 0x00;
 												pHeaderDescriptor->hdr[0].hdr[24] = (PPPOE_PROTOCOL_V4_TYPE >> 8) & 0xFF;/* PPPoE protocol 2bytes size */
@@ -11074,13 +11084,14 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 					if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true && is_ppp_iface)
 					{
 						session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+						IPACMDBG_H("WAN %s has session_id: %x\n", dev_name, session_id);
 						sCopyHeader.hdr_len = 22;
 						pHeaderDescriptor->hdr[0].hdr[12] = (PPPOE_SESSION_ETH_TYPE >> 8) & 0xFF;
 						pHeaderDescriptor->hdr[0].hdr[13] = PPPOE_SESSION_ETH_TYPE & 0xFF;
 						pHeaderDescriptor->hdr[0].hdr[14] = 0x11;
 						pHeaderDescriptor->hdr[0].hdr[15] = 0x00;
-						pHeaderDescriptor->hdr[0].hdr[16] = (session_id >> 8) & 0xFF;
-						pHeaderDescriptor->hdr[0].hdr[17] = session_id & 0xFF;
+						pHeaderDescriptor->hdr[0].hdr[16] = session_id & 0xFF;
+						pHeaderDescriptor->hdr[0].hdr[17] = (session_id >> 8) & 0xFF;
 						pHeaderDescriptor->hdr[0].hdr[18] = 0x00;/* Payload length 2bytes update by uC */
 						pHeaderDescriptor->hdr[0].hdr[19] = 0x00;
 						pHeaderDescriptor->hdr[0].hdr[20] = (PPPOE_PROTOCOL_V6_TYPE >> 8) & 0xFF;/* PPPoE protocol 2bytes size */
@@ -11103,13 +11114,14 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 						if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true && is_ppp_iface)
 						{
 							session_id = IPACM_Iface::ipacmcfg->pppoe_get_session_id(dev_name);
+							IPACMDBG_H("WAN %s has session_id: %x\n", dev_name, session_id);
 							sCopyHeader.hdr_len = 26;
 							pHeaderDescriptor->hdr[0].hdr[16] = (PPPOE_SESSION_ETH_TYPE >> 8) & 0xFF;
 							pHeaderDescriptor->hdr[0].hdr[17] = PPPOE_SESSION_ETH_TYPE & 0xFF;
 							pHeaderDescriptor->hdr[0].hdr[18] = 0x11;
 							pHeaderDescriptor->hdr[0].hdr[19] = 0x00;
-							pHeaderDescriptor->hdr[0].hdr[20] = (session_id >> 8) & 0xFF;
-							pHeaderDescriptor->hdr[0].hdr[21] = session_id & 0xFF;
+							pHeaderDescriptor->hdr[0].hdr[20] = session_id & 0xFF;
+							pHeaderDescriptor->hdr[0].hdr[21] = (session_id >> 8) & 0xFF;
 							pHeaderDescriptor->hdr[0].hdr[22] = 0x00;/* Payload length 2bytes update by uC */
 							pHeaderDescriptor->hdr[0].hdr[23] = 0x00;
 							pHeaderDescriptor->hdr[0].hdr[24] = (PPPOE_PROTOCOL_V6_TYPE >> 8) & 0xFF;/* PPPoE protocol 2bytes size */
@@ -11220,6 +11232,7 @@ int IPACM_Wan::handle_wan_client_ipaddr(ipacm_event_data_all *data)
 	int v6_num;
 	std::array<uint32_t, 4> ipv6 = {0};
 
+	IPACMDBG_H("dev_name %s, data->iptype %d \n", dev_name, data->iptype);
 	IPACMDBG_H("number of wan clients: %d\n", num_wan_client);
 	IPACMDBG_H(" event MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 					 data->mac_addr[0],

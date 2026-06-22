@@ -2445,7 +2445,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_STATIC_POLICY
 				if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable && m_is_sta_mode == Q6_WAN)
 				{
-					IPACMDBG_H("Ignore IPA_ROUTE_ADD_EVENT when Static policy is enabled.\n", dev_name);
+					IPACMDBG_H("Ignore IPA_ROUTE_ADD_EVENT when Static policy is enabled on %s.\n", dev_name);
 					return;
 				}
 #endif
@@ -3094,6 +3094,143 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					   data->ipv6_addr[2] == wan_v6_addr_gw[2] &&
 					   data->ipv6_addr[3] == wan_v6_addr_gw[3])
 					   	gw_addr = true;
+				}
+
+				/* If the same IP (v4 or v6) is already registered to a different MAC
+				 * (e.g. VRRP failover / kernel in-place neighbor update without a
+				 * preceding RTM_DELNEIGH), clean up all state for the old MAC before
+				 * installing the new one. */
+				int old_clnt_indx = IPACM_INVALID_INDEX;
+
+				if (data->iptype == IPA_IP_v4)
+				{
+					IPACMDBG_H("IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT: dev %s iptype v4 "
+					           "ip 0x%08x mac %02x:%02x:%02x:%02x:%02x:%02x\n",
+					           dev_name, data->ipv4_addr,
+					           data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+					           data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
+				}
+				else
+				{
+					IPACMDBG_H("IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT: dev %s iptype v6 "
+					           "ip %08x:%08x:%08x:%08x mac %02x:%02x:%02x:%02x:%02x:%02x\n",
+					           dev_name, data->ipv6_addr[0], data->ipv6_addr[1],
+					           data->ipv6_addr[2], data->ipv6_addr[3],
+					           data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+					           data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
+				}
+				/* (1) look up the incoming IP in the WAN client table */
+				if (data->iptype == IPA_IP_v4 && data->ipv4_addr != 0)
+					old_clnt_indx = get_wan_client_index_ipv4(data->ipv4_addr);
+				else if (data->iptype == IPA_IP_v6)
+					old_clnt_indx = get_wan_client_index_ipv6(data->ipv6_addr);
+
+				if (old_clnt_indx != IPACM_INVALID_INDEX &&
+				    memcmp(get_client_memptr(wan_client, old_clnt_indx)->mac,
+				           data->mac_addr, sizeof(data->mac_addr)) != 0)
+				{
+					if (data->iptype == IPA_IP_v4)
+					{
+						IPACMDBG_H("IPv4 0x%08x already bound to MAC "
+						           "%02x:%02x:%02x:%02x:%02x:%02x, new MAC "
+						           "%02x:%02x:%02x:%02x:%02x:%02x - removing stale client %d\n",
+						           data->ipv4_addr,
+						           get_client_memptr(wan_client, old_clnt_indx)->mac[0],
+						           get_client_memptr(wan_client, old_clnt_indx)->mac[1],
+						           get_client_memptr(wan_client, old_clnt_indx)->mac[2],
+						           get_client_memptr(wan_client, old_clnt_indx)->mac[3],
+						           get_client_memptr(wan_client, old_clnt_indx)->mac[4],
+						           get_client_memptr(wan_client, old_clnt_indx)->mac[5],
+						           data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+						           data->mac_addr[3], data->mac_addr[4], data->mac_addr[5],
+						           old_clnt_indx);
+					}
+					else
+					{
+						IPACMDBG_H("IPv6 %08x:%08x:%08x:%08x already bound to MAC "
+						           "%02x:%02x:%02x:%02x:%02x:%02x, new MAC "
+						           "%02x:%02x:%02x:%02x:%02x:%02x - removing stale client %d\n",
+						           data->ipv6_addr[0], data->ipv6_addr[1],
+						           data->ipv6_addr[2], data->ipv6_addr[3],
+						           get_client_memptr(wan_client, old_clnt_indx)->mac[0],
+						           get_client_memptr(wan_client, old_clnt_indx)->mac[1],
+						           get_client_memptr(wan_client, old_clnt_indx)->mac[2],
+						           get_client_memptr(wan_client, old_clnt_indx)->mac[3],
+						           get_client_memptr(wan_client, old_clnt_indx)->mac[4],
+						           get_client_memptr(wan_client, old_clnt_indx)->mac[5],
+						           data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+						           data->mac_addr[3], data->mac_addr[4], data->mac_addr[5],
+						           old_clnt_indx);
+					}
+					/* (2) flush NAT/conntrack before routing rules are removed */
+					HandleSTAClientDelEvt(get_client_memptr(wan_client, old_clnt_indx),
+					                      old_clnt_indx);
+
+					/* (3) delete routing rules only for versions that are active */
+					if (get_client_memptr(wan_client, old_clnt_indx)->ipv4_set)
+						delete_wan_rtrules(old_clnt_indx, IPA_IP_v4);
+					if (get_client_memptr(wan_client, old_clnt_indx)->ipv6_set > 0)
+						delete_wan_rtrules(old_clnt_indx, IPA_IP_v6);
+
+					/* (4) delete header processing contexts */
+					if (get_client_memptr(wan_client, old_clnt_indx)->sta_hdr_proc_ctx_set)
+					{
+						uint32_t hdl_v4 =
+						    get_client_memptr(wan_client, old_clnt_indx)->sta_hdr_proc_hdl_v4;
+						uint32_t hdl_v6 =
+						    get_client_memptr(wan_client, old_clnt_indx)->sta_hdr_proc_hdl_v6;
+						if (hdl_v4)
+							m_header.DeleteHeaderProcCtx(hdl_v4);
+						if (hdl_v6)
+							m_header.DeleteHeaderProcCtx(hdl_v6);
+						get_client_memptr(wan_client, old_clnt_indx)->sta_hdr_proc_ctx_set = false;
+					}
+
+					/* (5) delete IPA header handles */
+					if (get_client_memptr(wan_client, old_clnt_indx)->ipv4_header_set)
+					{
+						m_header.DeleteHeaderHdl(
+						    get_client_memptr(wan_client, old_clnt_indx)->hdr_hdl_v4);
+						get_client_memptr(wan_client, old_clnt_indx)->ipv4_header_set = false;
+					}
+					if (get_client_memptr(wan_client, old_clnt_indx)->ipv6_header_set)
+					{
+						m_header.DeleteHeaderHdl(
+						    get_client_memptr(wan_client, old_clnt_indx)->hdr_hdl_v6);
+						get_client_memptr(wan_client, old_clnt_indx)->ipv6_header_set = false;
+					}
+
+					/* (6) release global IPv6 counter, reset IPv4 flag, clear map */
+					uint32_t ipv6_to_release =
+					    get_client_memptr(wan_client, old_clnt_indx)->ipv6_set;
+					if (IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6 >= 0 &&
+					    (uint32_t)IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6 >= ipv6_to_release)
+						IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6 -= (int)ipv6_to_release;
+					else
+					{
+						IPACMERR("ipa_num_clients_ipv6 underflow prevented (was %d, tried to subtract %u)\n",
+						         IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6, ipv6_to_release);
+						IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6 = 0;
+					}
+					get_client_memptr(wan_client, old_clnt_indx)->ipv6_set = 0;
+					get_client_memptr(wan_client, old_clnt_indx)->ipv4_set = false;
+					rt_hdl_v6_list[old_clnt_indx].clear();
+
+					/* (7) compact the client array: move the last slot into the
+					 * freed slot so handle_wan_hdr_init can append at the end */
+					if (old_clnt_indx != (num_wan_client - 1))
+					{
+						memcpy(get_client_memptr(wan_client, old_clnt_indx),
+						       get_client_memptr(wan_client, num_wan_client - 1),
+						       wan_client_len);
+						rt_hdl_v6_list[old_clnt_indx] =
+						    std::move(rt_hdl_v6_list[num_wan_client - 1]);
+					}
+					// Always clear the vacated last slot to prevent stale state
+					rt_hdl_v6_list[num_wan_client - 1].clear();
+					num_wan_client--;
+					IPACMDBG_H("Stale WAN client removed; num_wan_client now %d\n",
+					           num_wan_client);
 				}
 
 				handle_wan_hdr_init(data->mac_addr, gw_addr);

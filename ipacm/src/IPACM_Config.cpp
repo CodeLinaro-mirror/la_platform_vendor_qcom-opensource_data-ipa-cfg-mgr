@@ -272,6 +272,7 @@ IPACM_Config::IPACM_Config()
 	ipacm_socksv5_enable = false;
 	ipacm_flt_enable = 0;
 	ipacm_qos_enable = false;
+	is_ipacm_restart = false;
 
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));

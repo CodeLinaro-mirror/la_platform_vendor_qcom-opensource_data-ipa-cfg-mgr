@@ -757,7 +757,7 @@
 			<MaxIpv6CTEntries>4096</MaxIpv6CTEntries>
 		</IPACMIPV6CT>
 		<IPACMIPV6NAT>
-			<IPV6NATEnabled>0</IPV6NATEnabled>
+			<IPV6NATEnabled>1</IPV6NATEnabled>
 		</IPACMIPV6NAT>
 		<IPACML2TP>
 			<IPACML2TPEnabled>0</IPACML2TPEnabled>

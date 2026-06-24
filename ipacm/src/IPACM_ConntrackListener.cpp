@@ -203,23 +203,53 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 	{
 		const ipacm_ct_evt_data* evt_data = static_cast<const ipacm_ct_evt_data*>(data);
 		IPACMDBG_H("Received IPA_PROCESS_CT_MESSAGE_V6 event\n");
+
+		/* ct_should_run tracks whether the CT path should process this event.
+		 * It is set to false when NAT handles a real (non-dummy) connection
+		 * with actual address/port translation, to prevent duplicate rules. */
+		bool ct_should_run = IsIpv6CTEnabled();
+
 #ifdef FEATURE_IPV6_NAT
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable) {
-			Ipv6NatEntry entry;
+			Ipv6NatEntry nat_entry;
 
-			IPACMDBG_H("IPv6NAT is Enabled\n");
-			CreateIpv6NatEntryFromCtEventData(evt_data, entry);
-			ProcessCTMessage_v6(evt_data, entry);
-		} else
+			IPACMDBG_H("nat enabled\n");
+			CreateIpv6NatEntryFromCtEventData(evt_data, nat_entry);
+
+			/* A real NAT connection has actual address or port translation:
+			 *   GetClientIp() != GetPublicIp()  (address was translated)
+			 *   OR m_srcPort != m_publicPort     (port was translated)
+			 * Pure CT conntracks (no translation) must not be processed by
+			 * NAT — doing so would cause a "Duplicate rule" error when CT
+			 * also tries to add the same connection. */
+			bool is_real_nat = nat_entry.Valid()
+			                   && !nat_entry.m_isDummy
+			                   && (nat_entry.GetClientIp() != nat_entry.GetPublicIp()
+			                       || nat_entry.m_srcPort != nat_entry.m_publicPort);
+
+			if (is_real_nat) {
+				/* Real NAT: address/port translation is happening.
+				 * CT must NOT also process this event.
+				 * NAT owns ct destruction here. */
+				IPACMDBG_H("Real NAT entry (address/port translated): CT path suppressed\n");
+				ct_should_run = false;
+				ProcessCTMessage_v6(evt_data, nat_entry, true, true);
+			} else {
+				/* Dummy/invalid NAT or no actual translation (pure CT traffic).
+				 * CT may also process; defer ct destruction to CT block. */
+				ProcessCTMessage_v6(evt_data, nat_entry, !ct_should_run, true);
+			}
+		}
 #endif
-			if (IsIpv6CTEnabled()) {
-				Ipv6ctEntry entry;
-				IPACMDBG_H("IPv6CT is Enabled\n");
-				CreateIpv6ctEntryFromCtEventData(evt_data, entry);
-				ProcessCTMessage_v6(evt_data, entry);
+		if (ct_should_run) {
+			Ipv6ctEntry ct_entry;
+
+			CreateIpv6ctEntryFromCtEventData(evt_data, ct_entry);
+			/* CT owns ct destruction here. */
+			ProcessCTMessage_v6(evt_data, ct_entry, true, false);
 		}
 #ifdef CT_OPT
-			ProcessCTV6Message(data);
+		ProcessCTV6Message(data);
 #endif
 		break;
 	}
@@ -460,8 +490,10 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 				break;
 			}
 		}
-		if(!pConfig->ipv6_nat_enable)
 #endif
+		/* Update conntrack v6 filters when IPv6CT is active, regardless of
+		 * whether IPv6NAT is also enabled. */
+		if(IsIpv6CTEnabled())
 			IPACM_ConntrackClient::UpdateFilters_v6(static_cast<ipacm_event_iface_up*>(data));
 		break;
 
@@ -2643,7 +2675,8 @@ void IPACM_ConntrackListener::query_conntracks(int af_family, uint32_t ipv4_addr
 	return;
 }
 
-void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry)
+void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data,
+		NatEntryBase& entry, bool destroy_ct, bool is_nat)
 {
 	IPACMDBG_H("\n");
 #ifdef IPACM_DEBUG
@@ -2658,11 +2691,14 @@ void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_d
 
 	if (entry.Valid())
 	{
-		ProcessTCPorUDPMsg_v6(evt_data, entry);
+		ProcessTCPorUDPMsg_v6(evt_data, entry, is_nat);
 	}
 
-	/* Cleanup item that was allocated during the original CT callback */
-	nfct_destroy(evt_data->ct);
+	/* Cleanup item that was allocated during the original CT callback.
+	 * When both IPv6CT and IPv6NAT are active concurrently, the caller
+	 * controls destruction to avoid a double-free.*/
+	if (destroy_ct)
+		nfct_destroy(evt_data->ct);
 	IPACMDBG_H("return\n");
 }
 
@@ -4441,9 +4477,10 @@ IGNORE:
 	return;
 }
 
-void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry)
+void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data,
+	NatEntryBase& entry, bool is_nat)
 {
-	IPACMDBG_H("Received conntrack event with type: %d\n", evt_data->type);
+	IPACMDBG_H("Received conntrack event with type: %d, is_nat: %d\n", evt_data->type, is_nat);
 	entry.DebugDump("with");
 
 	bool isTempEntry = false;
@@ -4461,7 +4498,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 		CheckSTAClient_v6(entry, isTempEntry);
 	}
 
-	if(!IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+	/* Route to CT processing path when is_nat=false, NAT processing path when is_nat=true */
+	if(!is_nat)
 	{
 		uint64_t src_ipv6_msb = 0;
 
@@ -5193,22 +5231,7 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 		IPACMDBG("addresses aren't global, bail\n");
 		goto bail;
 	}
-#ifdef FEATURE_IPoGRE
-	/*
-	 *  If either the source or the destination address shares
-	 * the same /64 subnet as wan_ipaddr_v6 (the rmnet_data v6 address), this
-	 * session does not belong to the WAN interface and must be ignored – do not
-	 * add a CT entry for it.
-	 */
-	if (wan_ipaddr_v6.Valid() && IPACM_Iface::ipacmcfg->ipogre_enabled == true)
-	{
-		if (wan_ipaddr_v6.IsSameSubnet(srcAddr) || wan_ipaddr_v6.IsSameSubnet(dstAddr) || wan_ipaddr_v6.IsSameSubnet(srcAddr_repl) || wan_ipaddr_v6.IsSameSubnet(dstAddr_repl))
-		{
-			IPACMDBG_H("v6 conntrack src/dst in rmnet_data v6 subnet, ignoring session\n");
-			goto bail;
-		}
-	}
-#endif
+
 	if (nat_iface_ipv6_addr.Find(srcAddr) != NULL)
 	{
 		entry.m_direction = NatEntryBase::DirectionOutbound;

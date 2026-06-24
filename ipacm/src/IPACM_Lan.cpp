@@ -15032,7 +15032,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	ipa_fltr_installed_notif_req_msg_v01 flt_index;
 	int fd;
 	int i, j, index, idx = 0;
-	uint32_t value = 0, total_rules = 0, v6_xlat_ul_rules = 0;
+	uint32_t value = 0, total_rules = 0, v6_xlat_ul_rules = 0, v6_meta_ul_rules = 0;
 	bool is_dev_in_vlan_mode = false;
 	enum ipa_flt_action action_cache;
 
@@ -15143,6 +15143,18 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 		total_rules = total_rules + v6_xlat_ul_rules;
 		IPACMDBG("Need %d additional XLAT rules\n", v6_xlat_ul_rules);
+	}
+
+	/* for IPv6 duplicate modem UL rules once more for metadata 0xfe */
+	if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable &&
+		IPACM_Iface::ipacmcfg->IsIpv6CTEnabled())
+	{
+		for(i = 0; i < prop->num_ext_props; i++)
+			if(prop->prop[i].action != IPA_PASS_TO_EXCEPTION)
+				v6_meta_ul_rules++;
+
+		total_rules = total_rules + v6_meta_ul_rules;
+		IPACMDBG_H("Need %d additional v6 metadata 0xfe rules\n", v6_meta_ul_rules);
 	}
 
 	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
@@ -15268,13 +15280,8 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			if (compatible_gre) {
 				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 			} else
-#if defined(FEATURE_IPV6_NAT) && !defined(FEATURE_SOCKSv5)
-				/* for v6 nat, second pass should go directly to RT block */
-				if (IPACM_Iface::ipacmcfg->ipv6_nat_enable) flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-				else
-#endif
-					flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
-						IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+				flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
+					IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
 		}
 
 		index = IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, iptype);
@@ -15541,6 +15548,36 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 				//overwrite the old rule and increment the rule count
 				memcpy(&pFilteringTable->rules[i - 1], &flt_rule_entry, sizeof(flt_rule_entry));
+				index++;
+				i++;
+			}
+
+			/* for IPv6, duplicate rule once more with metadata 0xfe/0xff */
+			if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable &&
+				IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
+				prop->prop[cnt].action != IPA_PASS_TO_EXCEPTION) {
+				/* shift catchall to slot i, then build 0xfe rule
+				   in flt_rule_entry for slot i-1 */
+				memcpy(&pFilteringTable->rules[i], &pFilteringTable->rules[i - 1],
+					sizeof(flt_rule_entry));
+				memcpy(&flt_rule_entry, &pFilteringTable->rules[i - 1],
+					sizeof(flt_rule_entry));
+
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 9);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value =
+					(flt_rule_entry.rule.eq_attrib.metadata_meq32.value &
+					~(IPv6NAT_UL_METADATA_MASK << IPv6NAT_UL_METADATA_SHIFT)) |
+					(IPv6NAT_UL_METADATA_VALUE << IPv6NAT_UL_METADATA_SHIFT);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |=
+					(IPv6NAT_UL_METADATA_MASK << IPv6NAT_UL_METADATA_SHIFT);
+
+				memcpy(&pFilteringTable->rules[i - 1], &flt_rule_entry,
+					sizeof(flt_rule_entry));
+				IPACMDBG_H("Added v6 metadata 0xfe rule at index %d for cnt %d\n",
+					i - 1, cnt);
 				index++;
 				i++;
 			}
@@ -17303,7 +17340,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 	int clnt_indx;
 	uint8_t num_offset_meq_128 = 0;
 	struct ipa_ipfltr_mask_eq_128 *offset_meq_128 = NULL;
-	int total_rules = 0, v6_xlat_ul_rules = 0, install_total_rules = 0;
+	int total_rules = 0, v6_xlat_ul_rules = 0, v6_meta_ul_rules = 0, install_total_rules = 0;
 	enum ipa_flt_action action_cache;
 	bool is_dev_in_vlan_mode=false;
 
@@ -17353,6 +17390,20 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 		install_total_rules = total_rules;
 		IPACMDBG_H("Need %d additional XLAT rules %d total_rules and %d rules_to_install\n", v6_xlat_ul_rules, total_rules, install_total_rules);
 	}
+
+	/* for IPv6 duplicate modem UL rules once more for metadata 0xfe */
+	if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable &&
+		IPACM_Iface::ipacmcfg->IsIpv6CTEnabled())
+	{
+		for(i = 0; i < prop->num_ext_props; i++)
+			if(prop->prop[i].action != IPA_PASS_TO_EXCEPTION)
+				v6_meta_ul_rules++;
+
+		install_total_rules = install_total_rules + v6_meta_ul_rules;
+		IPACMDBG_H("Need %d additional v6 metadata 0xfe rules, total install_total_rules %d\n",
+			v6_meta_ul_rules, install_total_rules);
+	}
+
 	clnt_indx = get_eth_client_index(mac_addr, vlan_id);
 
 	if (clnt_indx == IPACM_INVALID_INDEX)
@@ -17482,14 +17533,8 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 		}
 		else if(iptype == IPA_IP_v6)
 		{
-#if defined(FEATURE_IPV6_NAT) && !defined(FEATURE_SOCKSv5)
-			/* for v6 nat, second pass should go directly to RT block */
-			if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
-				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-			else
-#endif
-				flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
-						IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
+					IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
 		}
 		else
 		{
@@ -17710,6 +17755,40 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 					&flt_rule_entry, sizeof(flt_rule_entry));
 				index++;
 				flt_rule_entry.rule.action = action_cache;
+			}
+
+			/* for IPv6, duplicate rule once more with metadata 0xfe/0xff */
+			if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable &&
+				IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
+				prop->prop[cnt].action != IPA_PASS_TO_EXCEPTION)
+			{
+				/* load catchall, shift it to index, then build 0xfe rule at index-1 */
+				memcpy(&flt_rule_entry,
+					(void *)pFilteringTable->rules + ((index - 1) *
+					sizeof(struct ipa_flt_rule_add_v2)),
+					sizeof(flt_rule_entry));
+				SET_FLT_RULE_PRIORITY(flt_rule_entry, install_total_rules, index);
+				memcpy((void *)pFilteringTable->rules + (index *
+					sizeof(struct ipa_flt_rule_add_v2)),
+					&flt_rule_entry, sizeof(flt_rule_entry));
+
+				SET_FLT_RULE_PRIORITY(flt_rule_entry, install_total_rules, index - 1);
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 9);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value =
+					(flt_rule_entry.rule.eq_attrib.metadata_meq32.value &
+					~(IPv6NAT_UL_METADATA_MASK << IPv6NAT_UL_METADATA_SHIFT)) |
+					(IPv6NAT_UL_METADATA_VALUE << IPv6NAT_UL_METADATA_SHIFT);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |=
+					(IPv6NAT_UL_METADATA_MASK << IPv6NAT_UL_METADATA_SHIFT);
+				memcpy((void *)pFilteringTable->rules + ((index - 1) *
+					sizeof(struct ipa_flt_rule_add_v2)),
+					&flt_rule_entry, sizeof(flt_rule_entry));
+				IPACMDBG_H("Added v6 metadata 0xfe rule at index %d for cnt %d\n",
+					index - 1, cnt);
+				index++;
 			}
 		}
 
@@ -25344,6 +25423,11 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 	}
 
 #ifdef FEATURE_VLAN_MPDN
+	if(iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+	{
+		/* construct 1st pass v6NAT flt-rule */
+		add_ipv6_nat_ula_prefix_flt_rule();
+	}
 	handle_uplink_filter_rule(
 		IPACM_Iface::ipacmcfg->GetExtProp(iptype),
 		iptype,
@@ -25503,6 +25587,13 @@ void IPACM_Lan::gre_down(bool isPmipv6, bool ipogre_enabled)
 		IPACM_Iface::ipacmcfg->GetQmapId(),
 		false,
 		false, false,false);
+
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+		{
+			/* construct 1st pass v6NAT flt-rule */
+			add_ipv6_nat_ula_prefix_flt_rule();
+		}
+
 		res = handle_uplink_filter_rule(
 		IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6),
 		IPA_IP_v6,

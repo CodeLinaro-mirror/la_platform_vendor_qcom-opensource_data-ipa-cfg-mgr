@@ -306,6 +306,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	is_ipv6_frag_firewall_flt_rule_installed = false;
 #ifdef FEATURE_IPV6_NAT
 	ipv6_ula_prefix_hdl = 0;
+	ipv6_nat_second_pass_flt_hdl = 0;
 #endif
 
 	mtu_v4 = DEFAULT_MTU_SIZE;
@@ -7066,9 +7067,10 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 				{
 					/* add 2nd pass rule ULA address go to RT for STA mode */
-					if(IPACM_Iface::ipacmcfg->ipv6_nat_enable && m_pFilteringTable != NULL)
+					if(m_pFilteringTable != NULL)
 						add_ipv6_nat_ula_prefix_flt_rule(m_pFilteringTable);
-
+					/* add 2nd pass rule metadata rule to go to RT for STA mode */
+					add_ipv6_nat_second_pass_filter_rule();
 					/* 1st pass rule - go to DST NAT */
 					flt_rule_entry.rule.action = IPA_PASS_TO_DST_NAT;
 				}
@@ -7235,6 +7237,9 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 {
 #endif
 	int num_rules = 0, original_num_rules = 0, res, pos = rule_offset;
+#if defined(FEATURE_VLAN_MPDN) && defined(FEATURE_IPV6_NAT)
+	bool second_pass_flt_installed = false;
+#endif
 
 	IPACMDBG_H("ip-family: %d; \n", iptype);
 
@@ -7389,6 +7394,23 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		}
 #endif
 #ifdef FEATURE_VLAN_MPDN
+#ifdef FEATURE_IPV6_NAT
+		if (!second_pass_flt_installed && IPACM_Iface::ipacmcfg->ipv6_nat_enable &&
+			(wan_up_v6 || isVlanWanUP_V6()))
+		{
+			res = add_ipv6_nat_second_pass_filter_rule_ex(rx_prop->rx[1].attrib, rules, pos);
+			if (res != IPACM_SUCCESS)
+			{
+				return res;
+			}
+			if(ext_prop != NULL)
+			{
+				rules[pos].mux_id = ext_prop->ext[0].mux_id;
+			}
+			pos += 1;
+			second_pass_flt_installed = true;
+		}
+#endif
 		/* default rule for all PDNs which are up */
 		for (uint32_t i = 0; i < offloaded_pdns_count_v6; ++i)
 		{
@@ -8883,6 +8905,15 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 					return IPACM_FAILURE;
 				}
 				ipv6_ula_prefix_hdl = 0;
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+
+				if (m_filtering.DeleteFilteringHdls(&ipv6_nat_second_pass_flt_hdl,
+					IPA_IP_v6, 1) == false)
+				{
+					IPACMERR("Error Deleting second pass Filtering rules, aborting...\n");
+					return IPACM_FAILURE;
+				}
+				ipv6_nat_second_pass_flt_hdl = 0;
 				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
 			}
 #endif
@@ -13964,6 +13995,161 @@ int IPACM_Wan::add_ipv6_nat_ula_prefix_flt_rule_ex(
 	++(*num_flt_rule);
 	return IPACM_SUCCESS;
 }
+
+int IPACM_Wan::add_ipv6_nat_second_pass_filter_rule()
+{
+	struct ipa_flt_rule_add flt_rule_entry;
+	int len;
+	ipa_ioc_add_flt_rule *pFilteringTable;
+
+	ipa_ioc_get_rt_tbl_indx rt_tbl_idx;
+	memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
+	rt_tbl_idx.ip = IPA_IP_v6;
+	strlcpy(rt_tbl_idx.name, ipacmcfg->rt_tbl_wan_v6.name, IPA_RESOURCE_NAME_MAX);
+	rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+	if (ioctl(m_fd_ipa, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx))
+	{
+		IPACMERR("Failed to get routing table index from name\n");
+		return IPACM_FAILURE;
+	}
+	IPACMDBG_H("Routing table %s has index %d\n", rt_tbl_idx.name, rt_tbl_idx.idx);
+
+	len = sizeof(struct ipa_ioc_add_flt_rule) + 1 *
+		sizeof(struct ipa_flt_rule_add);
+	pFilteringTable = (struct ipa_ioc_add_flt_rule *)calloc(len, sizeof(uint8_t));
+	if (pFilteringTable == NULL)
+	{
+		IPACMERR("Error allocating memory for second pass filtering table\n");
+		return IPACM_FAILURE;
+	}
+
+	pFilteringTable->commit    = 1;
+	pFilteringTable->ep        = rx_prop->rx[0].src_pipe;
+	pFilteringTable->global    = false;
+	pFilteringTable->ip        = IPA_IP_v6;
+	pFilteringTable->num_rules = 1;
+
+	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+	flt_rule_entry.rule.rt_tbl_idx    = rt_tbl_idx.idx;
+	flt_rule_entry.rule.action         = IPA_PASS_TO_ROUTING;
+	flt_rule_entry.at_rear             = true;
+	flt_rule_entry.flt_rule_hdl        = -1;
+	flt_rule_entry.status              = -1;
+	flt_rule_entry.rule.retain_hdr     = 1;
+	flt_rule_entry.rule.to_uc          = 0;
+	flt_rule_entry.rule.eq_attrib_type = 1;
+#ifdef FEATURE_IPA_V3
+	flt_rule_entry.rule.hashable       = true;
+#endif
+
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib,
+		sizeof(struct ipa_rule_attrib));
+	flt_rule_entry.rule.attrib.attrib_mask = IPA_FLT_META_DATA;
+	flt_rule_entry.rule.attrib.meta_data      =
+		(IPv6NAT_DL_METADATA_VALUE << IPv6NAT_DL_METADATA_SHIFT);
+	flt_rule_entry.rule.attrib.meta_data_mask =
+		(IPv6NAT_DL_METADATA_VALUE << IPv6NAT_DL_METADATA_SHIFT);
+	change_to_network_order(IPA_IP_v6, &flt_rule_entry.rule.attrib);
+	memcpy(&pFilteringTable->rules[0], &flt_rule_entry,
+		sizeof(flt_rule_entry));
+
+	if (false == m_filtering.AddFilteringRule(pFilteringTable))
+	{
+		IPACMERR("Error Adding second pass Filtering rules, aborting...\n");
+		free(pFilteringTable);
+		return IPACM_FAILURE;
+	}
+
+	IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+	ipv6_nat_second_pass_flt_hdl = pFilteringTable->rules[0].flt_rule_hdl;
+	IPACMDBG_H("second pass flt rule hdl=0x%x\n", ipv6_nat_second_pass_flt_hdl);
+
+	free(pFilteringTable);
+	return IPACM_SUCCESS;
+}
+
+/* Extended version of add_ipv6_nat_second_pass_filter_rule for cellular backhaul filter table */
+#ifdef FEATURE_VLAN_MPDN
+int IPACM_Wan::add_ipv6_nat_second_pass_filter_rule_ex(
+	const struct ipa_rule_attrib& rx_prop_attrib,
+	ipacm_pdn_flt_rule* rules, int fltr_rule_number)
+#else
+int IPACM_Wan::add_ipv6_nat_second_pass_filter_rule_ex(
+	const struct ipa_rule_attrib& rx_prop_attrib,
+	struct ipa_flt_rule_add *rules, int fltr_rule_number)
+#endif
+{
+	IPACMDBG_H("\n");
+	ipa_ioc_get_rt_tbl_indx rt_tbl_idx;
+	struct ipa_flt_rule_add flt_rule_entry;
+	ipa_ioc_generate_flt_eq flt_eq;
+
+	if (fltr_rule_number >= IPA_MAX_FLT_RULE)
+	{
+		IPACMERR("Filtering table is full. Number of rules %d allowed %d\n",
+			fltr_rule_number + 1, IPA_MAX_FLT_RULE);
+		return IPACM_FAILURE;
+	}
+
+	memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
+	rt_tbl_idx.ip = IPA_IP_v6;
+	strlcpy(rt_tbl_idx.name, ipacmcfg->rt_tbl_wan_v6.name, IPA_RESOURCE_NAME_MAX);
+	rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+	if (ioctl(m_fd_ipa, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx))
+	{
+		IPACMERR("Failed to get routing table index from name\n");
+		return IPACM_FAILURE;
+	}
+	IPACMDBG_H("Routing table %s has index %d\n", rt_tbl_idx.name, rt_tbl_idx.idx);
+
+	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+	flt_rule_entry.rule.rt_tbl_idx    = rt_tbl_idx.idx;
+	flt_rule_entry.rule.action         = IPA_PASS_TO_ROUTING;
+	flt_rule_entry.at_rear             = true;
+	flt_rule_entry.flt_rule_hdl        = -1;
+	flt_rule_entry.status              = -1;
+	flt_rule_entry.rule.retain_hdr     = 1;
+	flt_rule_entry.rule.to_uc          = 0;
+	flt_rule_entry.rule.eq_attrib_type = 1;
+#ifdef FEATURE_IPA_V3
+	flt_rule_entry.rule.hashable       = true;
+#endif
+
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop_attrib,
+		sizeof(struct ipa_rule_attrib));
+	flt_rule_entry.rule.attrib.attrib_mask = IPA_FLT_META_DATA;
+	flt_rule_entry.rule.attrib.meta_data      =
+		(IPv6NAT_DL_METADATA_VALUE << IPv6NAT_DL_METADATA_SHIFT);
+	flt_rule_entry.rule.attrib.meta_data_mask =
+		(IPv6NAT_DL_METADATA_VALUE << IPv6NAT_DL_METADATA_SHIFT);
+	change_to_network_order(IPA_IP_v6, &flt_rule_entry.rule.attrib);
+	memset(&flt_eq, 0, sizeof(flt_eq));
+	memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib,
+		sizeof(flt_eq.attrib));
+	flt_eq.ip = IPA_IP_v6;
+	if (ioctl(m_fd_ipa, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
+	{
+		IPACMERR("Failed to get eq_attrib\n");
+		return IPACM_FAILURE;
+	}
+	memcpy(&flt_rule_entry.rule.eq_attrib, &flt_eq.eq_attrib,
+		sizeof(flt_rule_entry.rule.eq_attrib));
+#ifdef FEATURE_VLAN_MPDN
+	memcpy(&(rules[fltr_rule_number].flt_rule), &flt_rule_entry,
+		sizeof(struct ipa_flt_rule_add));
+	IPACMDBG_H("Filter rule[%d] attrib mask: 0x%x\n", fltr_rule_number,
+		rules[fltr_rule_number].flt_rule.rule.attrib.attrib_mask);
+#else
+	memcpy(&(rules[fltr_rule_number]), &flt_rule_entry,
+		sizeof(struct ipa_flt_rule_add));
+	IPACMDBG_H("Filter rule[%d] attrib mask: 0x%x\n", fltr_rule_number,
+		rules[fltr_rule_number].rule.attrib.attrib_mask);
+#endif
+	++num_v6_flt_rule;
+
+	return IPACM_SUCCESS;
+}
+
 #endif // FEATURE_IPV6_NAT
 
 int IPACM_Wan::add_catchup_all_filtering_rule_each_pdn(

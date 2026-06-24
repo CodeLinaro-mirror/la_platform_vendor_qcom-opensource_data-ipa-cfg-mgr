@@ -670,6 +670,16 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
     if (attrib[IFLA_IFNAME]) {  // validation
         IPACMDBG("ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
 		strlcpy(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), IPA_IFACE_NAME_LEN);
+#ifdef FEATURE_IPoGRE
+		/* Separately store the GRE interface name for IPoGRE so that
+		 * ipgre_install_dl_exception_flt_rule() can look up the interface
+		 * IP via getifaddrs().  pmip_details.tunnel_name is only written
+		 * when the call-site guard fires, which previously required
+		 * FEATURE_EoGRE due to the broken "#ifdef FEATURE_EoGRE || ..."
+		 * directive. */
+		strlcpy(pConfig->ipogre_tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), IPA_IFACE_NAME_LEN);
+		IPACMDBG_H("IPoGRE tunnel iface name: %s\n", pConfig->ipogre_tunnel_name);
+#endif
     }
 	if (!attrib[IFLA_LINKINFO]){
 		IPACMDBG("No Link info\n");
@@ -781,12 +791,16 @@ static int tunnel_delete(struct ifinfomsg* ifi, int len, int type)
 		{
 			IPACMDBG("Tunnel Delete: ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
 #if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
-			if(strncmp(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), strlen(pConfig->pmip_details.tunnel_name)) == 0)
+			if(pConfig->pmip_details.tunnel_name[0] != '\0' &&
+				strncmp(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), strlen(pConfig->pmip_details.tunnel_name)) == 0)
 			{
 				IPACMDBG("Tunnel name matched, Cleaning up\n");
 				pConfig->pmip_details.tunnel_name[0]='\0';
 				pConfig->pmip_details.pmipv6_tunnel_setup=false;
 				pConfig->pmip_details.pmipv6_gre_event_posted=false;
+#ifdef FEATURE_IPoGRE
+				pConfig->ipogre_tunnel_name[0] = '\0';
+#endif
 				if(pConfig->pmip_details.pmipv6_enabled)
 				{
 					/* Send GRE DOWN event */
@@ -1249,7 +1263,7 @@ static int ipa_nl_decode_nlmsg
 				 * Android but this should be processed in case of MDM for
 				 * Ehernet interface.
 				 */
-#ifdef FEATURE_EoGRE || FEATURE_PMIPV6
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 				// struct nlmsghdr *h;
 				struct ifinfomsg *ifi2;
 				//ifi_type is 1 for gretap2
@@ -1989,6 +2003,21 @@ static int ipa_nl_decode_nlmsg
 							/* Refresh rgip_ip with the confirmed address */
 							IPACM_Iface::ipacmcfg->rgip_ip = raw_host_addr;
 						}
+					}
+					/* When an address is added to the GRE tunnel interface, notify
+					 * IPACM_Wan to install the DL exception filter rule. */
+					else if (strlen(IPACM_Iface::ipacmcfg->ipogre_tunnel_name) > 0 &&
+					         strncmp(dev_name, IPACM_Iface::ipacmcfg->ipogre_tunnel_name,
+					                 IPA_IFACE_NAME_LEN) == 0)
+					{
+						IPACMDBG_H("Address add on GRE tunnel iface %s (iptype=%d), "
+						           "post IPA_HANDLE_IPOGRE_ADDR_ADD\n",
+						           dev_name, data_addr->iptype);
+						ipacm_cmd_q_data gre_addr_evt;
+						memset(&gre_addr_evt, 0, sizeof(gre_addr_evt));
+						gre_addr_evt.event = IPA_HANDLE_IPOGRE_ADDR_ADD;
+						gre_addr_evt.evt_data = NULL;
+						IPACM_EvtDispatcher::PostEvt(&gre_addr_evt);
 					}
 #endif
 				}

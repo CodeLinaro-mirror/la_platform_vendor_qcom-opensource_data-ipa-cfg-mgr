@@ -46,6 +46,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <ifaddrs.h>
 #include <IPACM_Wan.h>
 #include <IPACM_Xml.h>
 #include <IPACM_Log.h>
@@ -3501,6 +3502,41 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		ipgre_info.iptype = IPA_IP_v4;
 		if (ipgre_add_rgip_rt_rule(ipgre_info) != IPACM_SUCCESS)
 			IPACMERR("IPA_HANDLE_RGIP_UP: ipgre_add_rgip_rt_rule failed\n");
+		break;
+	}
+
+	case IPA_HANDLE_IPOGRE_ADDR_ADD:
+	{
+		/* GRE tunnel interface got an address. Delete all DL filter rules
+		 * and reinstall them so the exception filter rule (which matches the
+		 * GRE interface overlay IP) is fresh and sits above the tunnel-based
+		 * IPoGRE DL filter rules. */
+
+		ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->ipgre_info;
+		ipa_ip_type iptype = ipgre_info.iptype;
+		if (!IPACM_Iface::ipacmcfg->ipogre_enabled)
+		{
+			IPACMDBG_H("IPA_HANDLE_IPOGRE_ADDR_ADD: IPoGRE not yet enabled, skipping\n");
+			break;
+		}
+		IPACMDBG_H("IPA_HANDLE_IPOGRE_ADDR_ADD: reinstalling all DL filter rules\n");
+
+		/* Delete and reinstall the tunnel-based DL filter rules */
+		if (iptype == IPA_IP_v4)
+		{
+			if (gre_v4_work(false) != IPACM_SUCCESS)
+				IPACMERR("IPA_HANDLE_IPOGRE_ADDR_ADD: gre_v4_work(false) failed\n");
+			if (gre_v4_work(true) != IPACM_SUCCESS)
+				IPACMERR("IPA_HANDLE_IPOGRE_ADDR_ADD: gre_v4_work(true) failed\n");
+		}
+		else
+		{
+			if (gre_v6_work(false) != IPACM_SUCCESS)
+				IPACMERR("IPA_HANDLE_IPOGRE_ADDR_ADD: gre_v6_work(false) failed\n");
+			if (gre_v6_work(true) != IPACM_SUCCESS)
+				IPACMERR("IPA_HANDLE_IPOGRE_ADDR_ADD: gre_v6_work(true) failed\n");
+		}
+
 		break;
 	}
 #endif
@@ -6964,15 +7000,24 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			}
 
 			IPACMDBG_H("adding default rule for iface %s\n", curr_interface->dev_name);
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 			if (IPACM_Iface::ipacmcfg->ipogre_enabled)
 			{
 				res = add_ipogre_frag_flt_rule_ex(curr_interface->rx_prop->rx[0].attrib,
 					rules[pos].flt_rule, pos, iptype, false);
 				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
 				++pos;
+				res = ipgre_install_dl_exception_flt_rule(curr_interface->rx_prop->rx[0].attrib,rules[pos].flt_rule, pos,IPA_IP_v4 );
+				if(res == 0)
+				{
+					rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
+					++pos;
+				}
 			}
+#endif
 			res = add_catchup_all_filtering_rule_each_pdn(iptype,
 				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos, isPmipv6);
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 			if((isPmipv6 || IPACM_Iface::ipacmcfg->ipogre_enabled) && iptype==IPACM_Iface::ipacmcfg->ipgre_info.iptype)
 			{
 				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
@@ -6981,6 +7026,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				res = add_catchup_all_filtering_rule_each_pdn(iptype,
 				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,false);
 			}
+#endif
 			if (res != IPACM_SUCCESS)
 			{
 				return res;
@@ -7041,6 +7087,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		{
 			IPACM_Wan* curr_interface = offloaded_pdns_v6[i]->pIface;
 			IPACMDBG_H("adding default rule for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 			/* for ipv6 nat case this shall be the 2nd pass catch all rule to send to v6 LAN RT table*/
 			/* Add IPoGRE frag filter rule when ipogre is enabled */
 			if (IPACM_Iface::ipacmcfg->ipogre_enabled)
@@ -7053,10 +7100,18 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 					rules[pos].flt_rule, pos, iptype, false);
 				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
 				++pos;
-			}
 
+				res = ipgre_install_dl_exception_flt_rule(curr_interface->rx_prop->rx[0].attrib,rules[pos].flt_rule, pos,IPA_IP_v6 );
+				if(res == 0)
+				{
+					rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
+					++pos;
+				}
+			}
+#endif
 			res = add_catchup_all_filtering_rule_each_pdn(iptype,
 				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,true);
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 			if(isPmipv6 || IPACM_Iface::ipacmcfg->ipogre_enabled)
 			{
 				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
@@ -7065,6 +7120,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				res = add_catchup_all_filtering_rule_each_pdn( iptype,
 				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,false);
 			}
+#endif
 			if (res != IPACM_SUCCESS)
 			{
 				return res;
@@ -8057,7 +8113,14 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 		flt_rule_entry.rule.hashable = false;
 		flt_rule_entry.rule.retain_hdr = 1;
 		flt_rule_entry.rule.to_uc = 0;
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#ifdef FEATURE_IPoGRE
+		/* IPoGRE DL: send TCP control packets to kernel so iptables FORWARD
+		 * rules on the gre/gre6-gre0 interface (e.g. MSS clamping) fire. */
+		if (IPACM_Iface::ipacmcfg->ipogre_enabled)
+			flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+		else
+#endif
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 		flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
 		flt_rule_entry.rule.eq_attrib_type = 1;
 		flt_rule_entry.rule.eq_attrib.rule_eq_bitmap = 0;
@@ -8110,7 +8173,14 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 		flt_rule_entry.rule.retain_hdr = 1;
 		flt_rule_entry.rule.to_uc = 0;
 		flt_rule_entry.rule.eq_attrib_type = 1;
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#ifdef FEATURE_IPoGRE
+		/* IPoGRE DL: send TCP control packets to kernel so iptables FORWARD
+		 * rules on the gre/gre6-gre0 interface (e.g. MSS clamping) fire. */
+		if (IPACM_Iface::ipacmcfg->ipogre_enabled)
+			flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+		else
+#endif
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 
 		IPACMDBG_H("rx property attrib mask:0x%x\n", rx_prop->rx[0].attrib.attrib_mask);
 
@@ -8278,7 +8348,14 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 
 		flt_rule_entry.rule.retain_hdr = 1;
 		flt_rule_entry.rule.to_uc = 0;
-		flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+#ifdef FEATURE_IPoGRE
+		/* IPoGRE DL: send TCP control packets to kernel so iptables FORWARD
+		 * rules on the gre/gre6-gre0 interface (e.g. MSS clamping) fire. */
+		if (IPACM_Iface::ipacmcfg->ipogre_enabled)
+			flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+		else
+#endif
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 		flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
 		flt_rule_entry.rule.eq_attrib_type = 1;
 
@@ -13891,7 +13968,7 @@ int IPACM_Wan::add_ipogre_frag_flt_rule_ex(
 	flt_rule_entry.rule.retain_hdr = 1;
 	flt_rule_entry.rule.to_uc = 0;
 	flt_rule_entry.rule.eq_attrib_type = 1;
-	flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+	flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
 #ifdef FEATURE_IPA_V3
 	flt_rule_entry.rule.hashable = false;
 #endif
@@ -14029,20 +14106,6 @@ int IPACM_Wan::add_ipogre_frag_flt_rule_ex(
 		flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
 	}
 
-
-	/* Get routing table index */
-	memset(&rt_tbl_idx, 0, sizeof(rt_tbl_idx));
-	strlcpy(rt_tbl_idx.name, IPACM_Iface::ipacmcfg->rt_tbl_wan_dl.name, IPA_RESOURCE_NAME_MAX);
-	rt_tbl_idx.name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
-	rt_tbl_idx.ip = iptype;
-	if (0 != ioctl(m_fd_ipa, IPA_IOC_QUERY_RT_TBL_INDEX, &rt_tbl_idx))
-	{
-		IPACMERR("Failed to get routing table index from name\n");
-		return IPACM_FAILURE;
-	}
-	flt_rule_entry.rule.rt_tbl_idx = rt_tbl_idx.idx;
-	IPACMDBG_H("IPoGRE frag rule routing table %s has index %d\n",
-		rt_tbl_idx.name, rt_tbl_idx.idx);
 	memcpy(&flt_rule_add, &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 	IPACMDBG_H("IPoGRE frag filter rule attrib mask: 0x%x, num_offset_meq_32: %d\n",
 		flt_rule_add.rule.attrib.attrib_mask,
@@ -15990,6 +16053,17 @@ int IPACM_Wan::gre_v4_work(
 		IPACMDBG_H("Adding v4 modem DL rules on eogre enable.\n");
 
 		wan_up = is_default_gateway = true;
+
+		/* Rebuild v4 default filter rules now that ipogre_enabled is true so
+		 * the TCP SYN rule gets IPA_PASS_TO_EXCEPTION instead of IPA_PASS_TO_ROUTING.
+		 * add_dft_filtering_rule was called once at addr_add_evt before GRE came up. */
+		IPACM_Wan::num_v4_flt_rule = 0;
+#ifdef FEATURE_VLAN_MPDN
+		add_dft_filtering_rule(pdn_flt_rule_v4, IPACM_Wan::num_v4_flt_rule, IPA_IP_v4);
+#else
+		add_dft_filtering_rule(flt_rule_v4, IPACM_Wan::num_v4_flt_rule, IPA_IP_v4);
+#endif
+
 		/*Inserting First pass downlink rule above the default catchall rule*/
 		if ( config_wan_firewall_rule(IPA_IP_v4,true) != IPACM_SUCCESS )
 		{
@@ -16036,6 +16110,22 @@ int IPACM_Wan::gre_v6_work(
 		IPACMDBG_H("Adding v6 modem DL rules on gre enable.\n");
 
 		wan_up_v6 = is_default_gateway = true;
+
+		/* Rebuild v4 and v6 default filter rules now that ipogre_enabled is true
+		 * so the TCP SYN rules get IPA_PASS_TO_EXCEPTION instead of IPA_PASS_TO_ROUTING.
+		 * add_dft_filtering_rule was called once at addr_add_evt before GRE came up. */
+		IPACM_Wan::num_v4_flt_rule = 0;
+#ifdef FEATURE_VLAN_MPDN
+		add_dft_filtering_rule(pdn_flt_rule_v4, IPACM_Wan::num_v4_flt_rule, IPA_IP_v4);
+#else
+		add_dft_filtering_rule(flt_rule_v4, IPACM_Wan::num_v4_flt_rule, IPA_IP_v4);
+#endif
+		IPACM_Wan::num_v6_flt_rule = 0;
+#ifdef FEATURE_VLAN_MPDN
+		add_dft_filtering_rule(pdn_flt_rule_v6, IPACM_Wan::num_v6_flt_rule, IPA_IP_v6);
+#else
+		add_dft_filtering_rule(flt_rule_v6, IPACM_Wan::num_v6_flt_rule, IPA_IP_v6);
+#endif
 		/*Inserting First pass downlink rule above the default catchall rule*/
 		if ( config_wan_firewall_rule(IPA_IP_v6,true) != IPACM_SUCCESS )
 		{
@@ -16986,6 +17076,172 @@ int IPACM_Wan::ipgre_make_header_rmv_rt_rule(
 	return IPACM_SUCCESS;
 }
 
+/*
+ * Install a DL remote-driver filter rule that matches all GRE-encapsulated
+ * packets destined to the GRE tunnel interface's own IP address and sends
+ * them to the Linux kernel with the outer GRE header intact
+ * (IPA_PASS_TO_EXCEPTION, retain_hdr=1).  This ensures that:
+ *   - iptables FORWARD rules matching -i gre / -i gre6-gre0 fire correctly.
+ *   - MSS clamping via TCPMSS --clamp-mss-to-pmtu works in both directions.
+ *
+ * NOTE: The destination address used here is the IP of the GRE interface
+ * itself (e.g. gre6-gre0), NOT ipgre_info.ipv4_src / ipv6_src which is the
+ * WAN/rmnet tunnel-source address.  The two are distinct: the tunnel source
+ * is the underlay (rmnet_data) IP, while the GRE interface carries its own
+ * overlay IP address that incoming GRE packets are addressed to.
+ */
+int IPACM_Wan::ipgre_install_dl_exception_flt_rule(
+	const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add,
+		int fltr_rule_number,enum ipa_ip_type iptype )
+{
+	//enum ipa_ip_type iptype = IPACM_Iface::ipacmcfg->ipgre_info.iptype;
+	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->ipgre_info;
+	int len;
+	struct ipa_flt_rule_add flt_rule_entry;
+	ipa_ioc_generate_flt_eq flt_eq;
+
+	/* Read the GRE interface's own IP address via getifaddrs().
+	 * ipogre_tunnel_name is populated by populate_gre_details() in
+	 * IPACM_Netlink.cpp when the RTM_NEWLINK event fires for the GRE
+	 * interface.  It holds the virtual interface name (e.g. "gre6-gre0"),
+	 * which is distinct from ipgre_info.ipv4_src / ipv6_src — those are
+	 * the WAN/rmnet underlay tunnel-source addresses. */
+	const char *gre_iface = IPACM_Iface::ipacmcfg->ipogre_tunnel_name;
+	uint32_t    gre_iface_ipv4 = 0;
+	uint32_t    gre_iface_ipv6[4] = {0};
+	bool        gre_iface_addr_found = false;
+
+	IPACMDBG_H(
+		"Installing DL GRE exception filter rule for iptype(%d) on iface(%s)\n",
+		iptype, gre_iface);
+
+	if (fltr_rule_number >= IPA_MAX_FLT_RULE)
+	{
+		IPACMERR("Filtering table is full. Number of rules %d allowed %d\n",
+			fltr_rule_number + 1, IPA_MAX_FLT_RULE);
+		return IPACM_FAILURE;
+	}
+
+
+
+
+	if (strlen(gre_iface) == 0)
+	{
+		IPACMERR("GRE tunnel interface name not yet populated\n");
+		return IPACM_FAILURE;
+	}
+
+	/* Walk getifaddrs to find the GRE interface's address of the right family */
+	struct ifaddrs *ifa_list = NULL, *ifa;
+	if (getifaddrs(&ifa_list) != 0)
+	{
+		PERROR("getifaddrs failed");
+		return IPACM_FAILURE;
+	}
+	for (ifa = ifa_list; ifa != NULL; ifa = ifa->ifa_next)
+	{
+		if (ifa->ifa_addr == NULL)
+			continue;
+		if (strcmp(ifa->ifa_name, gre_iface) != 0)
+			continue;
+
+		if (iptype == IPA_IP_v4 && ifa->ifa_addr->sa_family == AF_INET)
+		{
+			struct sockaddr_in *s4 = (struct sockaddr_in *)ifa->ifa_addr;
+			gre_iface_ipv4 = ntohl(s4->sin_addr.s_addr);
+			gre_iface_addr_found = true;
+			IPACMDBG_H("GRE iface %s IPv4 addr: 0x%x\n", gre_iface, gre_iface_ipv4);
+			break;
+		}
+		else if (iptype == IPA_IP_v6 && ifa->ifa_addr->sa_family == AF_INET6)
+		{
+			struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)ifa->ifa_addr;
+			/* Skip link-local addresses — use global unicast only */
+			if (IN6_IS_ADDR_LINKLOCAL(&s6->sin6_addr))
+				continue;
+			memcpy(gre_iface_ipv6, &s6->sin6_addr, sizeof(gre_iface_ipv6));
+			/* Convert to host order to match ipgre_info convention */
+			for (int i = 0; i < 4; i++)
+				gre_iface_ipv6[i] = ntohl(gre_iface_ipv6[i]);
+			gre_iface_addr_found = true;
+			IPACMDBG_H("GRE iface %s IPv6 addr: 0x%x:%x:%x:%x\n", gre_iface,
+				gre_iface_ipv6[0], gre_iface_ipv6[1],
+				gre_iface_ipv6[2], gre_iface_ipv6[3]);
+			break;
+		}
+	}
+	freeifaddrs(ifa_list);
+
+	if (!gre_iface_addr_found)
+	{
+		IPACMERR("Could not find iptype(%d) address for GRE iface %s\n",
+			iptype, gre_iface);
+		return IPACM_FAILURE;
+	}
+
+
+	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+
+	flt_rule_entry.at_rear = false;
+	flt_rule_entry.flt_rule_hdl = -1;
+	flt_rule_entry.status = -1;
+	flt_rule_entry.rule.retain_hdr = 1;
+	flt_rule_entry.rule.to_uc = 0;
+	flt_rule_entry.rule.eq_attrib_type = 1;
+	flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+#ifdef FEATURE_IPA_V3
+	flt_rule_entry.rule.hashable = false;
+#endif
+
+	memcpy(&flt_rule_entry.rule.attrib, &rx_prop_attrib,
+		sizeof(flt_rule_entry.rule.attrib));
+	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+
+	if (iptype == IPA_IP_v4)
+	{
+		/* dst = GRE interface IP (the overlay address on gre6-gre0), */
+		flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+		flt_rule_entry.rule.attrib.u.v4.dst_addr      = gre_iface_ipv4;
+	}
+	else /* IPA_IP_v6 */
+	{
+		/* dst = GRE interface IPv6 (global unicast on gre6-gre0),*/
+		memset(flt_rule_entry.rule.attrib.u.v6.dst_addr_mask, 0xFF,
+			sizeof(flt_rule_entry.rule.attrib.u.v6.dst_addr_mask));
+		memcpy(flt_rule_entry.rule.attrib.u.v6.dst_addr, gre_iface_ipv6,
+			sizeof(flt_rule_entry.rule.attrib.u.v6.dst_addr));
+	}
+
+	change_to_network_order(iptype, &flt_rule_entry.rule.attrib);
+
+	memset(&flt_eq, 0, sizeof(flt_eq));
+	memcpy(&flt_eq.attrib, &flt_rule_entry.rule.attrib, sizeof(flt_eq.attrib));
+	flt_eq.ip = iptype;
+	if (0 != ioctl(m_fd_ipa, IPA_IOC_GENERATE_FLT_EQ, &flt_eq))
+	{
+		IPACMERR("Failed to generate filter equation for DL GRE exception rule\n");
+
+		return IPACM_FAILURE;
+	}
+	memcpy(&flt_rule_entry.rule.eq_attrib, &flt_eq.eq_attrib,
+			sizeof(flt_rule_entry.rule.eq_attrib));
+
+	memcpy(&flt_rule_add, &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+	IPACMDBG_H("IPoGRE frag filter rule attrib mask: 0x%x, num_offset_meq_32: %d\n",
+		flt_rule_add.rule.attrib.attrib_mask,
+		flt_rule_add.rule.eq_attrib.num_offset_meq_32);
+
+	if(iptype == IPA_IP_v4)
+		IPACM_Wan::num_v4_flt_rule++;
+	else
+		IPACM_Wan::num_v6_flt_rule++;
+	IPACMDBG_H(
+		"DL GRE exception filter rule installed,\n");
+
+
+	return IPACM_SUCCESS;
+}
+
 void IPACM_Wan::ipgre_clear_route_data(
 	enum ipa_ip_type             iptype)
 {
@@ -17048,6 +17304,7 @@ void IPACM_Wan::ipgre_clear_route_data(
 		if(IPACM_Wan::ipgre_route_data[iptype].ul_header_hdl_c){
 			m_header.DeleteHeaderHdl(IPACM_Wan::ipgre_route_data[iptype].ul_header_hdl_c);
 		}
+
 		ipgre_route_data_init(iptype);
 	}
 }

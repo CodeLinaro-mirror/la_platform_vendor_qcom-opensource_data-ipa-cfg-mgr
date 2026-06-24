@@ -276,7 +276,7 @@ public:
 	static uint16_t mtu_gre_v4;
 	static uint16_t mtu_gre_v6;
 #endif
-#ifdef FEATURE_PMIPV6
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 	/*
 	 * The following is for keeping gre route rule state...
 	 *
@@ -328,6 +328,10 @@ public:
 
 	int ipgre_make_header_rmv_rt_rule(
 		ipa_ipgre_info& ipgre_info);
+
+	int ipgre_install_dl_exception_flt_rule(
+		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add,
+		int fltr_rule_number, enum ipa_ip_type iptype);
 
 	void ipgre_clear_route_data(
 		enum ipa_ip_type             iptype);

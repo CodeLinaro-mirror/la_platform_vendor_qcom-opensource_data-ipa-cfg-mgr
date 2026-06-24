@@ -414,6 +414,7 @@ typedef enum
 	IPA_WAN_HANDLE_IPOGRE_DOWN,
 	IPA_HANDLE_RGIP_UP,
 	IPA_HANDLE_RGIP_DEL,
+	IPA_HANDLE_IPOGRE_ADDR_ADD,                /* address added to GRE tunnel iface */
 #endif
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */

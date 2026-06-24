@@ -362,6 +362,7 @@ IPACM_Config::IPACM_Config()
 	memset(&ipgre_info, 0, sizeof(ipgre_info));
 	memset(&ipogre_details, 0, sizeof(ipogre_details));
 	ipogre_enabled  = false;
+	ipogre_tunnel_name[0] = '\0';
 #endif
 	ext_router_mode = IPA_PREFIX_DISABLED;
 

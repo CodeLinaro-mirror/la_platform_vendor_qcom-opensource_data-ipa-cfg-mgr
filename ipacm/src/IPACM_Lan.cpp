@@ -2595,6 +2595,12 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	data->vlanID = vlan_id;
 	data_vlan = (ipacm_event_new_neigh_vlan *)data;
 
+	if(!data_vlan->bridge && data_vlan->data_all.iptype == IPA_IP_v4)
+	{
+		IPACMDBG_H("non bridged VLAN interface for v4 %s, ignoring\n", data->iface_name);
+		return IPACM_FAILURE;
+	}
+
 	bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge_from_vid(vlan_id);
 	if(!bridge && data_vlan->data_all.iptype == IPA_IP_v4)
 	{

@@ -25336,7 +25336,7 @@ void IPACM_Lan::gre_down(bool isPmipv6, bool ipogre_enabled)
 	}
 	ipa_ip_type    iptype     = ipgre_info.iptype;
 	int            res;
-	int j = 0;
+	int j = 0, fd,ret;
 
 	if((iptype != IPA_IP_v4) && (iptype != IPA_IP_v6))
 	{
@@ -25364,20 +25364,62 @@ void IPACM_Lan::gre_down(bool isPmipv6, bool ipogre_enabled)
 	IPACMDBG_H(
 		"Clearing filter rules for eogre iptype(%d)\n",
 		iptype);
-	if(isPmipv6 && IPACM_Wan::isWanUP(ipa_if_num))
+	if(ipogre_enabled && IPACM_Wan::isWanUP(ipa_if_num))
 	{
-		del_ul_flt_rules(iptype);/*Delete the UL rules updated by GRE, and reinsert them normally*/
+		struct ipa_ioc_write_qmapid mux;
+		fd = open(IPA_DEVICE_NAME, O_RDWR);
+
+		if (fd < 0)
+		{
+			IPACMDBG_H("Failed opening %s.\n", IPA_DEVICE_NAME);
+			return;
+		}
+
+		memset(&mux, 0, sizeof(mux));
+		uint8_t muxid = IPACM_Iface::ipacmcfg->GetQmapId();
+		IPACM_Iface::ipacmcfg->SetQmapId(muxid);
+		mux.qmap_id = muxid;
+		mux.client  = rx_prop->rx[0].src_pipe;
+
+		IPACMDBG_H(
+			"Issuing IPA_IOC_WRITE_QMAPID ioctl -> "
+			"mux.qmap_id(%u) mux.client(%u)\n",
+			mux.qmap_id,
+			mux.client);
+
+		ret = ioctl(fd, IPA_IOC_WRITE_QMAPID, &mux);
+
+		close(fd);
+
+		if ( ret )
+		{
+			IPACMERR("Failed to write mux id %d\n", mux.qmap_id);
+			return;
+		}
+		/*Delete the UL rules updated by GRE, and reinsert them normally*/
+		del_ul_flt_rules(IPA_IP_v4);
+		del_ul_flt_rules(IPA_IP_v6);
 #ifdef FEATURE_VLAN_MPDN
 		res = handle_uplink_filter_rule(
-		IPACM_Iface::ipacmcfg->GetExtProp(iptype),
-		iptype,
+		IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
+		IPA_IP_v4,
+		IPACM_Iface::ipacmcfg->GetQmapId(),
+		false,
+		false, false,false);
+		res = handle_uplink_filter_rule(
+		IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6),
+		IPA_IP_v6,
 		IPACM_Iface::ipacmcfg->GetQmapId(),
 		false,
 		false, false,false);
 #else
 		res = handle_uplink_filter_rule(
-		IPACM_Iface::ipacmcfg->GetExtProp(iptype),
-		iptype,
+		IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
+		IPA_IP_v4,
+		IPACM_Iface::ipacmcfg->GetQmapId(), false, false);
+		res = handle_uplink_filter_rule(
+		IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6),
+		IPA_IP_v6,
 		IPACM_Iface::ipacmcfg->GetQmapId(), false, false);
 #endif
 	}
@@ -25485,23 +25527,6 @@ void IPACM_Lan::gre_down(bool isPmipv6, bool ipogre_enabled)
 				mtu_flt_rule_offset[j][iptype]);
 			}
 		}
-		if(ipogre_enabled && IPACM_Wan::isWanUP(ipa_if_num))
-		{
-			del_ul_flt_rules(iptype);/*Delete the UL rules updated by GRE, and reinsert them normally*/
-#ifdef FEATURE_VLAN_MPDN
-			res = handle_uplink_filter_rule(
-			IPACM_Iface::ipacmcfg->GetExtProp(iptype),
-			iptype,
-			IPACM_Iface::ipacmcfg->GetQmapId(),
-			false,
-			false, false,false);
-#else
-			res = handle_uplink_filter_rule(
-			IPACM_Iface::ipacmcfg->GetExtProp(iptype),
-			iptype,
-			IPACM_Iface::ipacmcfg->GetQmapId(), false, false);
-#endif
-		}
 	}
 	if(isPmipv6){
 		for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++)
@@ -25555,7 +25580,6 @@ void IPACM_Lan::gre_down(bool isPmipv6, bool ipogre_enabled)
 			}
 		}
 	}
-	IPACM_Iface::ipacmcfg->SetQmapId(0xFF);
 
 	//need to clean mtu rules when eogre is disabled
 	modify_private_subnet();

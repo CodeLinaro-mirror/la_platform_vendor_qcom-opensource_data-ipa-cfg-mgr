@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -1367,6 +1367,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	evt_data.evt_data = data_fid;
 	IPACMDBG_H("Posting IPA_HANDLE_NEW_NEIGH_EVENT event:%d\n", evt_data.event);
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
+#ifdef FEATURE_EoGRE
 	if(IPACM_Iface::ipacmcfg->eogre_enabled == true &&
 		(data->iptype == IPACM_Iface::ipacmcfg->eogre_info.iptype))
 	{
@@ -1376,6 +1377,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		IPACMDBG_H("Posting IPA_HANDLE_EoGRE_UP \n");
 		IPACM_EvtDispatcher::PostEvt(&evt_data_eogre);
 	}
+#endif
 fail:
 	free(rt_rule);
 

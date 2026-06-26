@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -1763,12 +1763,14 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				/*install MTU rule */
 				modify_ipv6_prefix_flt_rule();
 
+#ifdef FEATURE_IPV6_NAT
 				//add new flt rule for every new LAN client
 				if (!static_policy_flt_rule_hdl_v6)
 				{
 					if (add_ipv6_nat_ula_prefix_flt_rule() == IPACM_FAILURE)
 						IPACMERR("failed to add 1st pass static policy flt rule for v6\n")
 				}
+#endif
 
 				//dont need to install uplink rules twice
 				if (modem_ul_v6_set[0])
@@ -1880,9 +1882,10 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						dev_name);
 					break;
 				}
-
+#ifdef FEATURE_IPV6_NAT
 				if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 					delete_ipv6_nat_ula_prefix_flt_rule();
+#endif
 
 				IPACMDBG_H("Deleted static policy PDN rules for %s for v6\n", dev_name);
 			}

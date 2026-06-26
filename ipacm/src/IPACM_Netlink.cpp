@@ -2001,6 +2001,22 @@ static int ipa_nl_decode_nlmsg
 			}
 			IPACM_LOG(IPACM_LOG_DEBUG, "Neighbour event with interface index %d master interface index %d family %d\n", msg_ptr->nl_neigh_info.metainfo.ndm_ifindex, msg_ptr->nl_neigh_info.master_interface_index, msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 
+			if(msg_ptr->nl_neigh_info.metainfo.ndm_state == NUD_NOARP)
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "RTM_NEWNEIGH received with NOARP. Ignoring\n");
+				return IPACM_SUCCESS;;
+			}
+			if (IS_IPV6_MCAST_MAC(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data))
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "RTM_NEWNEIGH received with IPv6 multicast mac address. Ignoring\n");
+				return IPACM_SUCCESS;
+			}
+			if (IS_IPV4_MCAST_MAC(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data))
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "RTM_NEWNEIGH received with IPv4 multicast mac address. Ignoring\n");
+				return IPACM_SUCCESS;
+			}
+
 			if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != 0) && (msg_ptr->nl_neigh_info.master_interface_index == 0) &&
 								(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family != 0))
 			{
@@ -2135,6 +2151,16 @@ static int ipa_nl_decode_nlmsg
 			{
 			  IPACM_LOG(IPACM_LOG_WARN,"RTM_DELNEIGH received with NULL MAC\n");
 			  return IPACM_SUCCESS;
+			}
+			if (IS_IPV6_MCAST_MAC(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data))
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "RTM_DELNEIGH received with IPv6 multicast mac address. Ignoring\n");
+				return IPACM_SUCCESS;
+			}
+			if (IS_IPV4_MCAST_MAC(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data))
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "RTM_DELNEIGH received with IPv4 multicast mac address. Ignoring\n");
+				return IPACM_SUCCESS;
 			}
 
 			/* insert to command queue */

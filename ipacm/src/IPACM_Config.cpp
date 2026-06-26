@@ -1368,7 +1368,6 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 		bridge->bridge_ipv4_addr = data->bridge_ipv4;
 		bridge->bridge_netmask = data->subnet_mask;
 	}
-
 	return;
 fail:
 	pthread_mutex_unlock(&vlan_l2tp_lock);
@@ -1588,14 +1587,6 @@ void IPACM_Config::add_vlan_iface(ipa_ioc_vlan_iface_info *data)
 	{
 		IPACM_Iface::iface_addr_query(vlan_iface_index, true, NULL);
 	}
-
-	/* Sending Getneigh to receive missing neighbor in case if missed early */
-	IPACMDBG_H("Query Getneigh for vlan ifaces\n");
-	ipa_nl_query_newneigh(AF_BRIDGE);
-	IPACMDBG_H("Query Getneigh for v4\n");
-	ipa_nl_query_newneigh(AF_INET);
-	IPACMDBG_H("Query Getneigh for v6\n");
-	ipa_nl_query_newneigh(AF_INET6);
 	return;
 }
 

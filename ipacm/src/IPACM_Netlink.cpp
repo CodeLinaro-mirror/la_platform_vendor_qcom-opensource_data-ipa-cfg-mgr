@@ -621,7 +621,8 @@ static int ipa_nl_decode_nlmsg
 (
 	 const char   *buffer,
 	 unsigned int  buflen,
-	 ipa_nl_msg_t  *msg_ptr
+	 ipa_nl_msg_t  *msg_ptr,
+	 char *iface_name
 	 )
 {
 	char dev_name[IF_NAME_LEN]={0};
@@ -1450,7 +1451,14 @@ static int ipa_nl_decode_nlmsg
 				{
 				IPACMDBG("\n GOT RTM_NEWNEIGH event (%s) ip %d\n",dev_name,msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 			}
-
+			if(iface_name != NULL)
+			{
+				if(!strstr(dev_name, iface_name))
+				{
+					IPACMDBG("Skiping this route, since it does not belong to interface %s\n", iface_name);
+					goto fail;
+				}
+			}
 			// This check is to  prevent handling of netlink messages with NULL MAC addr
 			if(!(memcmp(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
 						nullMac,sizeof(nullMac))))
@@ -1657,7 +1665,7 @@ int ipa_nl_recv_msg(int fd)
 		}
 		iov = msghdr->msg_iov;
 		memset(nlmsg, 0, sizeof(ipa_nl_msg_t));
-		if(IPACM_SUCCESS != ipa_nl_decode_nlmsg((char *)iov->iov_base, msglen, nlmsg))
+		if(IPACM_SUCCESS != ipa_nl_decode_nlmsg((char *)iov->iov_base, msglen, nlmsg, NULL))
 		{
 			IPACMERR("Failed to decode nl message \n");
 			goto error;
@@ -2168,7 +2176,7 @@ error:
 	return IPACM_FAILURE;
 }
 
-int ipa_nl_query_newneigh(int af_family)
+int ipa_nl_query_newneigh(int af_family, char *iface_name)
 {
 	IPACMDBG("ipa_nl_send_getneigh\n");
 	int ret_val = IPACM_FAILURE, msglen = 0, nl_sock = 0;
@@ -2223,7 +2231,7 @@ int ipa_nl_query_newneigh(int af_family)
 		goto end;
 	}
 
-	if (IPACM_SUCCESS != ipa_nl_decode_nlmsg((const char*)buf, msglen, msg_ptr)) {
+	if (IPACM_SUCCESS != ipa_nl_decode_nlmsg((const char*)buf, msglen, msg_ptr, iface_name)) {
 		IPACMERR("Failed to decode rtm link message\n");
 		ret_val  = IPACM_FAILURE;
 		goto end;

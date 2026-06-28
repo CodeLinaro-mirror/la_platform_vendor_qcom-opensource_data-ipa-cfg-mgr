@@ -874,6 +874,21 @@ static int ipacm_cfg_xml_parse_tree
 						config->ipacm_socksv5_enable = atoi(content);
 					}
 				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACM_LOG_TIMESTAMP_ENABLE_TAG))
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "inside ipacm log timestamp enable tag\n");
+					content = IPACM_read_content_element(xml_node);
+					config->ipacm_log_timestamp_enable = 0;
+
+					if (content!= NULL)
+					{
+						if(atoi(content)!=0)
+						{
+							config->ipacm_log_timestamp_enable = atoi(content);
+						}
+						IPACM_LOG(IPACM_LOG_DEBUG, "IPACMLog timestamp enable cfg val is: %u \n",config->ipacm_log_timestamp_enable);
+					}
+				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMFILEQUOTA_TAG))
 				{
 					IPACM_LOG(IPACM_LOG_DEBUG, "inside ipacm_logging Quota\n");

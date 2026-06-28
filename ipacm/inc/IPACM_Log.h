@@ -68,6 +68,7 @@ extern "C"
 #define IPACM_LOG_TIMESTAMP_BUF_LEN 30
 #define IPACM_DEF_LOG_LEVEL 8
 #define IPACM_DEF_SYSLOG_LEVEL 7
+#define IPACM_DEF_LOG_TIMESTAMP_ENABLE 1
 
 #define IPACMLOG_BUF_SZ_AFTER_CRASH_STR 1000
 #define IPACMLOG_RECENT_BUF_TO_SYNC 4096
@@ -107,6 +108,7 @@ enum ipacm_syslog_level_t {
 };
 extern uint8_t ipacm_global_log_level;
 extern uint8_t ipacm_global_syslog_level;
+extern bool ipacm_global_log_timestamp_enable;
 
 bool is_kernel_version_newer_than(char* version, const char* cmp_version);
 void get_kernel_version(char* kernel_ver);
@@ -129,15 +131,20 @@ void log_deinit();
 #define IPACM_LOG(incoming_log_level, fmt, ...) \
 	do { \
 		if ((incoming_log_level > ipacm_global_log_level) && (incoming_log_level > ipacm_global_syslog_level)) break; \
-		char __ipacm_log_buffer_send[IPACM_LOG_MAX_BUF_LEN]; \
 		char __ipacm_log_core_buf[IPACM_LOG_MAX_CORE_BUF_LEN]; \
-		char __ipacm_log_timestamp_buf[IPACM_LOG_TIMESTAMP_BUF_LEN]; \
 		snprintf(__ipacm_log_core_buf, IPACM_LOG_MAX_CORE_BUF_LEN, "%s:%d %s() " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_send_log_to_qxdm(__ipacm_log_core_buf); \
 		if (incoming_log_level <= ipacm_global_syslog_level) syslog(LOG_USER | incoming_log_level - 1, "%s", __ipacm_log_core_buf); \
 		if (incoming_log_level <= ipacm_global_log_level) \
 		{\
-			snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN, "%s %s", get_time_string(__ipacm_log_timestamp_buf, IPACM_LOG_TIMESTAMP_BUF_LEN), __ipacm_log_core_buf); \
+			char __ipacm_log_buffer_send[IPACM_LOG_MAX_BUF_LEN] = {0}; \
+			if(ipacm_global_log_timestamp_enable){\
+				char __ipacm_log_timestamp_buf[IPACM_LOG_TIMESTAMP_BUF_LEN] = {0}; \
+				snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN, "%s %s", get_time_string(__ipacm_log_timestamp_buf, IPACM_LOG_TIMESTAMP_BUF_LEN), __ipacm_log_core_buf); \
+			}\
+			else {\
+				snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN, " %s", __ipacm_log_core_buf); \
+			}\
 			printf("%s\n", __ipacm_log_buffer_send); \
 			ipacm_send_log_to_file(__ipacm_log_buffer_send); \
 			IPACM_DLT_LOG((incoming_log_level) + 2, __ipacm_log_buffer_send); \
@@ -146,11 +153,15 @@ void log_deinit();
 
 #define IPACM_LOG_PRINT_IN_PLACE(fmt, ...) \
 	do { \
-		char __ipacm_log_buffer_send[IPACM_LOG_MAX_BUF_LEN]; \
-		char __ipacm_log_timestamp_buf[IPACM_LOG_TIMESTAMP_BUF_LEN]; \
+		char __ipacm_log_buffer_send[IPACM_LOG_MAX_BUF_LEN] = {0}; \
 		printf(fmt, ##__VA_ARGS__); \
-		memset(__ipacm_log_buffer_send, 0, IPACM_LOG_MAX_BUF_LEN); \
-		snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(__ipacm_log_timestamp_buf, IPACM_LOG_TIMESTAMP_BUF_LEN), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		if (ipacm_global_log_timestamp_enable) { \
+			char __ipacm_log_timestamp_buf[IPACM_LOG_TIMESTAMP_BUF_LEN] = {0}; \
+			snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(__ipacm_log_timestamp_buf, IPACM_LOG_TIMESTAMP_BUF_LEN), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		}\
+		else {\
+			snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		} \
 		ipacm_send_log_to_file(__ipacm_log_buffer_send); \
 		IPACM_DLT_LOG((IPACM_LOG_DEBUG) + 2, __ipacm_log_buffer_send); \
 	} while (0);

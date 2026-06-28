@@ -247,6 +247,7 @@ if (!(a)) {                                                 \
 #define IPACM_NAD2V6_ENABLE_TAG              "IPACMNAD2V6Enable"
 #define IPACM_LOG_LEVEL_TAG                  "IPACMLogLevel"
 #define IPACM_SYSLOG_LEVEL_TAG               "IPACMSyslogLevel"
+#define IPACM_LOG_TIMESTAMP_ENABLE_TAG       "IPACMLogTimestampEnable"
 
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
@@ -411,6 +412,7 @@ typedef struct  _IPACM_conf_t
 	uint8_t max_file_size_quota;
 	uint8_t ipacm_log_level;
 	uint8_t ipacm_syslog_level;
+	bool ipacm_log_timestamp_enable;
 	bool ipv6_nat_enable;
 	int ipacm_l2tp_enable;
 	bool ipacm_mpdn_enable;

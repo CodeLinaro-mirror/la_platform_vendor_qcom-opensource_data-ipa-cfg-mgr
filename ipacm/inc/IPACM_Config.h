@@ -200,6 +200,7 @@ public:
 	int64_t max_file_size;
 	uint8_t ipacm_log_level;
 	uint8_t ipacm_syslog_level;
+	bool ipacm_log_timestamp_enable;
 
 	/* IPACM ipa_client map to rm_resource*/
 	ipa_rm_resource_name ipa_client_rm_map_tbl[IPA_CLIENT_MAX];

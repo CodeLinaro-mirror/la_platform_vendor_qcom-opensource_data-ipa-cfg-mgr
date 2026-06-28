@@ -578,6 +578,16 @@ int IPACM_Config::Init(void)
 		goto fail;
 	}
 
+	if(cfg->ipacm_log_timestamp_enable == 0 || cfg->ipacm_log_timestamp_enable == 1)
+	{
+		IPACM_LOG(IPACM_LOG_INFO, "ipacm timestamp enable is %d\n", cfg->ipacm_log_timestamp_enable);
+		ipacm_log_timestamp_enable = cfg->ipacm_log_timestamp_enable;
+	}
+	else {
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid timestamp enable value provided:%d, Setting default log level\n", cfg->ipacm_log_timestamp_enable);
+		ipacm_log_timestamp_enable = IPACM_DEF_LOG_TIMESTAMP_ENABLE;
+	}
+
 	if(cfg->max_file_size_quota > 100)
 	{
 		IPACM_LOG(IPACM_LOG_ERR, "Invalid Quota Set[%d], changing to default[%d]\n",

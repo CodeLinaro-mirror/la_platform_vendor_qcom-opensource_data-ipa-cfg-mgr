@@ -670,7 +670,6 @@ static int ipa_nl_sock_listener_start
 {
 	int i, ret;
 	IPACMDBG("Starting the netlink thread\n");
-	nl_lock = true;
 	while(true)
 	{
 	    for(i = 0; i < sk_fd_set->num_fd; i++ )
@@ -1377,7 +1376,7 @@ static int ipa_nl_decode_nlmsg
 	uint8_t nullMac[IPA_MAC_ADDR_SIZE];
 	uint32_t prefix_len = ~0;
 
-	ipacm_cmd_q_data evt_data;
+	ipacm_cmd_q_data evt_data = {};
 	ipacm_cmd_q_data vlan_event;
 	ipacm_event_data_all *data_all;
 	ipacm_event_data_fid *data_fid;
@@ -2718,7 +2717,10 @@ int ipa_nl_listener_init
 
 	memset(sk_info, 0, sizeof(ipa_nl_sk_info_t));
 	IPACMDBG_H("Entering IPA NL listener init\n");
-
+	if(pthread_mutex_lock(&nl_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+	}
 	if(ipa_nl_open_socket(sk_info, nl_type, nl_groups) >= 0)
 	{
 		IPACMDBG_H("IPA Open netlink socket succeeds\n");
@@ -2747,6 +2749,7 @@ int ipa_nl_listener_init
 		if (retry_count == max_retries) {
 			IPACMERR("Exceeded maximum retry attempts\n");
 			close(sk_info->sk_fd);
+			pthread_mutex_unlock(&nl_lock);
 			return IPACM_FAILURE;
 		}
 	}
@@ -2758,8 +2761,10 @@ int ipa_nl_listener_init
 	{
 		IPACMERR("cannot add nl routing sock for reading\n");
 		close(sk_info->sk_fd);
+		pthread_mutex_unlock(&nl_lock);
 		return IPACM_FAILURE;
 	}
+	pthread_mutex_unlock(&nl_lock);
 	ret_val = ipa_nl_sock_listener_start(sk_fdset);
 
 	if(ret_val != IPACM_SUCCESS)
@@ -2838,7 +2843,7 @@ int ipa_nl_route_recvmsg(int fd, struct msghdr *msg, char **result)
 	return len;
 }
 
-int ipa_nl_send_getroute(ipa_ip_type ip_type)
+int ipa_nl_send_getroute(ipa_ip_type ip_type, char *iface_name)
 {
 
 	ipacm_event_data_addr *data_addr = NULL;
@@ -2936,6 +2941,17 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 		IPACMDBG("rtm_family: %d\n", nl_route_info_get_route.metainfo.rtm_family);
 		IPACMDBG("param_mask: 0x%x\n", nl_route_info_get_route.attr_info.param_mask);
 
+		if(iface_name != NULL)
+		{
+			char oif_name[IF_NAME_LEN] = {0};
+			if((ipa_get_if_name(oif_name, nl_route_info_get_route.attr_info.oif_index) == IPACM_SUCCESS) &&
+				(memcmp(oif_name, iface_name, strlen(iface_name)) != 0))
+			{
+				h = NLMSG_NEXT(h, msglen);
+				continue;
+			}
+		}
+
 		/* take care of route add default route & uniroute */
 		if((AF_INET == nl_route_info_get_route.metainfo.rtm_family) &&
 			 (nl_route_info_get_route.metainfo.rtm_type == RTN_UNICAST) &&
@@ -2944,7 +2960,8 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 			  (nl_route_info_get_route.metainfo.rtm_protocol == RTPROT_STATIC))&&
 			 ((nl_route_info_get_route.metainfo.rtm_scope == RT_SCOPE_UNIVERSE)||
 			 (nl_route_info_get_route.metainfo.rtm_scope == RT_SCOPE_LINK))&&
-			 (nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN))
+			 ((nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN) ||
+			(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_COMPAT)))
 		{
 
 			if(nl_route_info_get_route.attr_info.param_mask & IPA_RTA_PARAM_DST)
@@ -3040,7 +3057,8 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 			  (nl_route_info_get_route.metainfo.rtm_protocol == RTPROT_KERNEL))&&
 			 ((nl_route_info_get_route.metainfo.rtm_scope == RT_SCOPE_UNIVERSE)||
 			 (nl_route_info_get_route.metainfo.rtm_scope == RT_SCOPE_LINK))&&
-			 (nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN))
+			 ((nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_MAIN) ||
+			(nl_route_info_get_route.metainfo.rtm_table == RT_TABLE_COMPAT)))
 		{
 			IPACMDBG("\n GOT valid v6-RTM_NEWROUTE event\n");
 			ret_val = ipa_get_if_name(dev_name, nl_route_info_get_route.attr_info.oif_index);
@@ -3562,7 +3580,7 @@ int ipa_nl_query_ip_addr_info(int af_family)
 	return 0;
 }
 
-int ipa_nl_query_newneigh(int af_family)
+int ipa_nl_query_newneigh(int af_family, char *iface_name)
 {
 	IPACMDBG("entered ipa_nl_send_getneigh \n");
 	int ret_val = IPACM_FAILURE, msglen = 0, nl_sock = 0;
@@ -3678,21 +3696,26 @@ int ipa_query_active_feature()
 
 void ipa_query_nl_getevents()
 {
-	while(!nl_lock);
 	IPACMDBG_H("Querying the netlink events\n");
+	if(pthread_mutex_lock(&nl_lock) != 0)
+  	{
+  		IPACMERR("Unable to lock the mutex\n");
+  		return;
+  	}
 	IPACMDBG("Handling ipacm_restart\n");
 	ipa_nl_query_getlink(AF_PACKET);
 	IPACMDBG("Send GETLINK is completed\n");
 	ipa_nl_query_ip_addr_info(AF_INET);
 	ipa_nl_query_ip_addr_info(AF_INET6);
 	IPACMDBG("Send GETADDR is completed\n");
-	ipa_nl_query_newneigh(AF_BRIDGE);
-	ipa_nl_query_newneigh(AF_INET6);
-	ipa_nl_query_newneigh(AF_INET);
+	ipa_nl_query_newneigh(AF_BRIDGE, NULL);
+	ipa_nl_query_newneigh(AF_INET6, NULL);
+	ipa_nl_query_newneigh(AF_INET, NULL);
 	IPACMDBG("Send GETNEIGH is completed\n");
-	ipa_nl_send_getroute(IPA_IP_v6);
-	ipa_nl_send_getroute(IPA_IP_v4);
+	ipa_nl_send_getroute(IPA_IP_v6, NULL);
+	ipa_nl_send_getroute(IPA_IP_v4, NULL);
 	IPACMDBG("Send GETROUTE is completed\n");
+	pthread_mutex_unlock(&nl_lock);
 	ipa_query_active_feature();
 	IPACMDBG_DMESG("IPACM process started, ipa path is re-established\n");
 }

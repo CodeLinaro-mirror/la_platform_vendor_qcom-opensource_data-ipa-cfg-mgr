@@ -1815,7 +1815,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (IPACM_SUCCESS == netlinks_query_thread)
+	if ((IPACM_SUCCESS == netlinks_query_thread) && IPACM_Iface::ipacmcfg->is_ipacm_restart)
 	{
 		ret = pthread_create(&netlinks_query_thread, NULL, netlink_events_query, NULL);
 		if (IPACM_SUCCESS != ret)
@@ -1836,7 +1836,8 @@ int main(int argc, char **argv)
 	pthread_join(netlink_thread, NULL);
 	pthread_join(monitor_thread, NULL);
 	pthread_join(ipa_driver_thread, NULL);
-	pthread_join(netlinks_query_thread, NULL);
+	if(IPACM_Iface::ipacmcfg->is_ipacm_restart)
+		pthread_join(netlinks_query_thread, NULL);
 
 	return IPACM_SUCCESS;
 }
@@ -1904,6 +1905,37 @@ void ipa_is_ipacm_running(void) {
 	}
 	else
 	{
+		char pid_buf[16];
+		int pid_len;
+		pid_t old_pid = 0;
+
+		pid_len = read(fd, pid_buf, sizeof(pid_buf) - 1);
+		if (pid_len > 0)
+		{
+			pid_buf[pid_len] = '\0';
+			old_pid = atoi(pid_buf);
+			if (old_pid != 0 && old_pid != getpid())
+			{
+				IPACM_Iface::ipacmcfg->is_ipacm_restart = true;
+				IPACMDBG_H("IPACM is restarted. Old PID: %d, New PID: %d\n", old_pid, getpid());
+			}
+		}
+
+		if (lseek(fd, 0, SEEK_SET) < 0)
+		{
+			IPACMERR("lseek failed on pid file");
+		}
+
+		if (ftruncate(fd, 0) < 0)
+		{
+			IPACMERR("ftruncate failed on pid file");
+		}
+
+		pid_len = snprintf(pid_buf, sizeof(pid_buf), "%d\n", getpid());
+		if (pid_len > 0 && write(fd, pid_buf, pid_len) != pid_len)
+		{
+			IPACMERR("write failed on pid file");
+		}
 		IPACMERR("PID %d is IPACM main process\n", getpid());
 		if (ftruncate(fd, 0) == -1) {
 			IPACMERR("ftruncate(%s) failed: %d - %s\n", IPACM_PID_FILE, errno, strerror(errno));

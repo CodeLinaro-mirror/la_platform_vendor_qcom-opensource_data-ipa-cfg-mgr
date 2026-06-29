@@ -509,6 +509,7 @@ public:
 
 	/* Indicates whether socksv5 is enabled or not. */
 	bool ipacm_socksv5_enable;
+	bool is_ipacm_restart;
 
 	/* Indicates whether l2tp is enabled or not. */
 	int ipacm_flt_enable;

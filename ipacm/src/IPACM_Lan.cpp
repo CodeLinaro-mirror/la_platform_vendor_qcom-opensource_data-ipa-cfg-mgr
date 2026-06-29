@@ -395,6 +395,78 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 				return;
 			}
+#ifdef FEATURE_L2TP
+			/* When an L2TP vlan interface (e.g. eth0.100) goes down,
+			 * IPACM_Neighbor clears that MAC from the neigh cache immediately.
+			 * The subsequent IPA_DEL_NEIGH_EVENT from the kernel then cannot
+			 * find the MAC and skips the IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT
+			 * posting, leaving L2TP rules installed.
+			 *
+			 * Handle it here on the ODU parent by iterating eth_clients matched
+			 * by if_index and invoking the same cleanup as
+			 * IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT would have done.
+			 *
+			 * Double-free is prevented because:
+			 * - uninstall_l2tp_rules() removes the eth_client entry from the
+			 *   array, so a second call (e.g. from a late NEIGH_IP_ADDR_DEL_EVENT)
+			 *   returns early (IPACM_INVALID_INDEX).
+			 * - eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL) is idempotent
+			 *   in IPACM_LanToLan. */
+			else if ((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP ||
+				IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E) &&
+				ipa_if_cate == ODU_IF &&
+				IPACM_Iface::ipacmcfg->check_l2tp_iface(data->iface_name))
+			{
+				IPACMDBG_H("L2TP vlan iface %s link down on ODU iface %s, cleaning rules\n",
+					data->iface_name, dev_name);
+				/* Iterate in reverse: uninstall_l2tp_rules() may compact the
+				 * eth_client array (num_eth_client--), so reverse order avoids
+				 * skipping the element that shifts into the deleted slot. */
+				for (int cnt = num_eth_client - 1; cnt >= 0; cnt--)
+				{
+					if (get_client_memptr(eth_client, cnt)->if_index == data->if_index &&
+						get_client_memptr(eth_client, cnt)->if_index_set)
+					{
+						IPACMDBG_H("L2TP link down: clean rules for "
+							"eth_client[%d] MAC %02x:%02x:%02x:%02x:%02x:%02x\n", cnt,
+							get_client_memptr(eth_client, cnt)->mac[0],
+							get_client_memptr(eth_client, cnt)->mac[1],
+							get_client_memptr(eth_client, cnt)->mac[2],
+							get_client_memptr(eth_client, cnt)->mac[3],
+							get_client_memptr(eth_client, cnt)->mac[4],
+							get_client_memptr(eth_client, cnt)->mac[5]);
+						if (IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP)
+						{
+							/* IPACM_L2TP: cross-interface LanToLan rules are owned
+							 * by IPACM_LanToLan; uninstall via bridge event. */
+							eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_v4,
+								get_client_memptr(eth_client, cnt)->mac, NULL,
+								data->iface_name);
+						}
+						else /* IPACM_L2TP_E2E */
+						{
+							/* IPACM_L2TP_E2E: per-client DL first/second pass
+							 * headers and routing rules live on this ODU instance;
+							 * uninstall them directly. */
+							ipacm_event_data_all del_data;
+							memset(&del_data, 0, sizeof(del_data));
+							memcpy(del_data.mac_addr,
+								get_client_memptr(eth_client, cnt)->mac,
+								sizeof(del_data.mac_addr));
+							del_data.if_index = (uint8_t)data->if_index;
+							strlcpy(del_data.iface_name, data->iface_name,
+								sizeof(del_data.iface_name));
+#ifdef IPA_L2TP_TUNNEL_UDP
+							del_data.iptype = IPA_IP_MAX;
+#else
+							del_data.iptype = IPA_IP_v4;
+#endif
+							uninstall_l2tp_rules(&del_data);
+						}
+					}
+				}
+			}
+#endif /* FEATURE_L2TP */
 		}
 		break;
 
@@ -1392,6 +1464,14 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 						)
 					{
 						uninstall_l2tp_rules(data);
+					}
+					/* we are handling all del neighbors in l2tp */
+					if((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E ||
+						IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) &&
+						data->iptype == IPA_IP_v6 && is_unique_local_ipv6_addr(data->ipv6_addr))
+					{
+						IPACM_Iface::ipacmcfg->del_l2tp_vlan_client_info(data);
+						IPACMDBG_H("del_l2tp_vlan_client_info from l2tp vlan list\n");
 					}
 				}
 #endif
@@ -2601,9 +2681,21 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		handle_eth_hdr_init(data->mac_addr, NULL, vlan_id, true, priority);
 	}
 
+	eth_index = get_eth_client_index(data->mac_addr, vlan_id);
+
 #ifdef IPA_L2TP_TUNNEL_UDP
 	if(!IPACM_Iface::ipacmcfg->check_l2tp_iface(data->iface_name))
 	{
+		/* If the interface is of type L2TP then get_eth_client_index
+		 * return INVALID is expected, For other vlan interface it is
+		 * not expected so at that time need to return IPACM failure
+		 */
+		if (eth_index == IPACM_INVALID_INDEX)
+		{
+			IPACMERR("eth client not found/attached \n");
+			return IPACM_FAILURE;
+		}
+
 		if(data_vlan->data_all.iptype == IPA_IP_v4)
 		{
 			IPACMDBG_H("construct ETH header and route rules \n");
@@ -2615,12 +2707,6 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		}
 		else
 		{
-			eth_index = get_eth_client_index(data->mac_addr, vlan_id);
-			if (eth_index == IPACM_INVALID_INDEX)
-			{
-				IPACMERR("eth client not found/attached \n");
-				return IPACM_FAILURE;
-			}
 			if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
 			   (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
 			   !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr)||
@@ -2643,6 +2729,17 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		}
 	}
 #else
+	/* In case on non L2TP if get_eth_client_index return
+	 * invalid then return failure
+	 * Moving the check here to avoid code duplicate
+	 * for both V4 and V6 scenario
+	 */
+	if (eth_index == IPACM_INVALID_INDEX)
+	{
+		IPACMERR("eth client not found/attached \n");
+		return IPACM_FAILURE;
+	}
+
 	if(data_vlan->data_all.iptype == IPA_IP_v4)
 	{
 		IPACMDBG_H("construct ETH header and route rules \n");
@@ -2654,12 +2751,6 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 	}
 	else
 	{
-		eth_index = get_eth_client_index(data->mac_addr, vlan_id);
-		if (eth_index == IPACM_INVALID_INDEX)
-		{
-			IPACMERR("eth client not found/attached \n");
-			return IPACM_FAILURE;
-		}
 		if(((get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[0] == data_vlan->data_all.ipv6_addr[0]) &&
 			  (get_client_memptr(eth_client, eth_index)->client_backhaul_prefix[1] == data_vlan->data_all.ipv6_addr[1]))||
 			  !IPACM_Wan::is_global_ipv6_addr(data_vlan->data_all.ipv6_addr)||
@@ -17164,6 +17255,7 @@ int IPACM_Lan::install_l2tp_udp_dl_rules(ipacm_event_data_all *data, int index, 
 {
 	l2tp_vlan_mapping_info info;
 	uint32_t v6_prefix[2];
+	uint8_t mac_addr[6]={0};
 
 	if(tx_prop == NULL)
 	{
@@ -17177,12 +17269,21 @@ int IPACM_Lan::install_l2tp_udp_dl_rules(ipacm_event_data_all *data, int index, 
 		return IPACM_FAILURE;
 	}
 
-	if(!info.vlan_id)
+	if((info.vlan_id == 0 || info.vlan_id >= L2TP_BRIDGE_VLAN_ID_START) ||
+		(memcmp(mac_addr, info.vlan_client_mac, sizeof(info.vlan_client_mac)) == 0) ||
+		(info.vlan_iface_ipv6_addr[0] == 0 && info.vlan_iface_ipv6_addr[1] == 0 &&
+		info.vlan_iface_ipv6_addr[2] == 0 && info.vlan_iface_ipv6_addr[3] == 0) ||
+		(info.vlan_client_ipv6_addr[0] == 0 && info.vlan_client_ipv6_addr[1] == 0 &&
+		info.vlan_client_ipv6_addr[2] == 0 && info.vlan_client_ipv6_addr[3] == 0))
 	{
-		IPACMERR("VLAN id is not populated.\n");
+		IPACMERR("Error in params\n");
+		IPACMERR("Vlan id : %d, mac : %02x:%02x:%02x:%02x:%02x:%02x\n", info.vlan_id, info.vlan_client_mac[0],
+			info.vlan_client_mac[1],info.vlan_client_mac[2],info.vlan_client_mac[3],info.vlan_client_mac[4],info.vlan_client_mac[5]);
+		IPACMERR("client v6 addr: 0x%08x:%08x:%08x:%08x and iface v6 addr 0x%08x:%08x:%08x:%08x\n", info.vlan_client_ipv6_addr[0],
+			info.vlan_client_ipv6_addr[1],info.vlan_client_ipv6_addr[2],info.vlan_client_ipv6_addr[3],info.vlan_iface_ipv6_addr[0],
+			info.vlan_iface_ipv6_addr[1],info.vlan_iface_ipv6_addr[2],info.vlan_iface_ipv6_addr[3]);
 		return IPACM_FAILURE;
 	}
-
 	is_l2tp_iface = true;
 
 	/* =========== install hdr template (Outer VLAN Header(18) + IPv6(40) + UDP(8) + L2TP(16) + inner ETH header(14) = 96 bytes) =========

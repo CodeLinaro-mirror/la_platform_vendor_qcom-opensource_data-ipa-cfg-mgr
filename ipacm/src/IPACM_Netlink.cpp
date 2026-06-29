@@ -1613,6 +1613,19 @@ static int ipa_nl_decode_nlmsg
 						data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
 						IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_route_info.attr_info.gateway_addr);
 
+						if(((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) ||
+							(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)) &&
+							((data_addr->ipv6_addr[0] & ipv6_unique_local_prefix_mask) == (ipv6_unique_local_prefix & ipv6_unique_local_prefix_mask)) &&
+							IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+						{
+							IPACMDBG(" updating the l2tp peer route_info\n");
+							ipacm_event_data_all data_all;
+							memset(&data_all,0,sizeof(ipacm_event_data_all));
+							memcpy(&data_all.iface_name, dev_name, sizeof(dev_name));
+							memcpy(&data_all.ipv6_addr, data_addr->ipv6_addr, sizeof(data_addr->ipv6_addr));
+							IPACM_Iface::ipacmcfg->handle_l2tp_client_gw_info(&data_all, data_addr->ipv6_addr_gw);
+						}
+
 						if(msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_COMPAT &&
 								strstr(dev_name, ETH_INTF) && IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 						{
@@ -1761,6 +1774,19 @@ static int ipa_nl_decode_nlmsg
 							data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
 							IPACM_NL_REPORT_ADDR( " ", msg_ptr->nl_route_info.attr_info.gateway_addr);
 							data_addr->iptype = IPA_IP_v6;
+
+							if(((IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP) ||
+				 			(IPACM_Iface::ipacmcfg->ipacm_l2tp_enable == IPACM_L2TP_E2E)) &&
+							((data_addr->ipv6_addr[0] & ipv6_unique_local_prefix_mask) == (ipv6_unique_local_prefix & ipv6_unique_local_prefix_mask)) &&
+							IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
+							{
+								IPACMDBG(" updating the l2tp peer route_info\n");
+								ipacm_event_data_all data_all;
+								memset(&data_all,0,sizeof(ipacm_event_data_all));
+								memcpy(&data_all.iface_name, dev_name, sizeof(dev_name));
+								memcpy(&data_all.ipv6_addr, data_addr->ipv6_addr, sizeof(data_addr->ipv6_addr));
+								IPACM_Iface::ipacmcfg->del_l2tp_client_gw_info(&data_all, data_addr->ipv6_addr_gw);
+							}
 						}
 						else
 						{
@@ -2074,8 +2100,9 @@ static int ipa_nl_decode_nlmsg
 #ifdef IPA_L2TP_TUNNEL_UDP
 								if(config->check_l2tp_iface(data_all->iface_name))
 								{
+									vlan_bridge_data.vlan_id = DUMMY_VLAN_ID_BASE+ msg_ptr->nl_neigh_info.master_interface_index;
 									config->add_l2tp_dummy_vlan_mapping(master_dev_name, data_all->iface_name,
-											msg_ptr->nl_neigh_info.metainfo.ndm_ifindex);
+											msg_ptr->nl_neigh_info.master_interface_index);
 									config->add_bridge_vlan_mapping(&vlan_bridge_data);
 									vlan_bridge_data.status = 1;
 									config->add_bridge_vlan_mapping(&vlan_bridge_data);

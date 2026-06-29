@@ -5817,7 +5817,11 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				{
 					IPACMERR("Failed to find vlan-l2tp mapping.\n");
 				}
-				if(info.mtu > pdn_mtu_sessions)
+				if(pdn_mtu_sessions==0)
+				{
+					pdn_mtu_sessions = info.mtu;
+				}
+				else if(info.mtu < pdn_mtu_sessions)
 				{
 					pdn_mtu_sessions = info.mtu;
 				}
@@ -5855,7 +5859,11 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				{
 					IPACMERR("Failed to find vlan-l2tp mapping.\n");
 				}
-				if(info.mtu > pdn_mtu_sessions)
+				if(pdn_mtu_sessions==0)
+				{
+					pdn_mtu_sessions = info.mtu;
+				}
+				else if(info.mtu < pdn_mtu_sessions)
 				{
 					pdn_mtu_sessions = info.mtu;
 				}

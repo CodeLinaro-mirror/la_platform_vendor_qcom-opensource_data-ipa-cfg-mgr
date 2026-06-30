@@ -18228,7 +18228,12 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 		{
 			pHeaderProcTable->proc_ctx[0].generic_params.output_dscp_pcp_update = 1;
 		}
-		eth_bridge_get_vlan_hdr_template_hdl(&hdr_template, vlan_id);
+		if (eth_bridge_get_vlan_hdr_template_hdl(&hdr_template, vlan_id) != IPACM_SUCCESS)
+		{
+			IPACMERR("Failed to get vlan hdr template for vlan_id %d\n", vlan_id);
+			res = IPACM_FAILURE;
+			goto end;
+		}
 	}
 	else
 		eth_bridge_get_hdr_template_hdl(&hdr_template);
@@ -22859,10 +22864,16 @@ void IPACM_Lan::eogre_clear_route_data(
 int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t vlan_id)
 {
 	struct ipa_ioc_copy_hdr sCopyHeader;
-	struct ipa_ioc_add_hdr hdr;
+	char vlan_hdr_name[IPA_RESOURCE_NAME_MAX];
 	uint8_t hdr_len;
 	struct ipa_ioc_add_hdr *pHeaderDescriptor = NULL;
 	int len = 0, idx = 0, j = 0;
+	/* tx_idx selects the tx_prop entry for the header template.
+	 * For WLAN svap/vlan the IPv4 header is at tx[2]; for all
+	 * other interfaces (including ETH) it is always at tx[0].
+	 * This must not be derived from the rx_prop loop's idx,
+	 * which would go out of bounds on ETH interfaces. */
+	int tx_idx = 0;
 
 	if(rx_prop != NULL)
 	{
@@ -22905,10 +22916,32 @@ int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t 
 		return IPACM_FAILURE;
 	}
 
-	memset(&hdr, 0, sizeof(hdr));
+	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2))
+		tx_idx = 2;
+	IPACMDBG_H("tx_idx %d idx %d\n", tx_idx, idx);
+
+	/* Build the VLAN header name that will be used for this vlan_id. */
+	snprintf(vlan_hdr_name, sizeof(vlan_hdr_name), "%s_ipv4_vlan%d", dev_name, vlan_id);
+	IPACMDBG_H("vlan_id %d: looking up hdr template name %s\n", vlan_id, vlan_hdr_name);
+
+	/* If the VLAN header template already exists (e.g. installed for a
+	 * previous client on the same VLAN), return it directly.  Creating it
+	 * again with the same name would fail and leave hdr_hdl unset. */
+	struct ipa_ioc_get_hdr get_hdr;
+	memset(&get_hdr, 0, sizeof(get_hdr));
+	strlcpy(get_hdr.name, vlan_hdr_name, sizeof(get_hdr.name));
+	if (m_header.GetHeaderHandle(&get_hdr) == true)
+	{
+		IPACMDBG_H("Reusing existing VLAN hdr template %s hdl=0x%x\n",
+			get_hdr.name, get_hdr.hdl);
+		*hdr_hdl = get_hdr.hdl;
+		return IPACM_SUCCESS;
+	}
+	IPACMDBG_H("VLAN hdr template %s not found, creating new entry\n", vlan_hdr_name);
+
 	memset(&sCopyHeader, 0, sizeof(sCopyHeader));
 	memcpy(sCopyHeader.name,
-			tx_prop->tx[idx].hdr_name,
+			tx_prop->tx[tx_idx].hdr_name,
 			sizeof(sCopyHeader.name));
 
 	IPACMDBG_H("header name: %s\n", sCopyHeader.name);
@@ -22939,10 +22972,9 @@ int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t 
 	pHeaderDescriptor->hdr[0].status = -1;
 	pHeaderDescriptor->hdr[0].hdr[hdr_len - 3] = (uint8_t)vlan_id & 0xFF;
 	pHeaderDescriptor->hdr[0].hdr[hdr_len - 4] = (uint8_t)(vlan_id >> 8) & 0xFF;
-	memset(pHeaderDescriptor->hdr[0].name, 0,
-					 sizeof(pHeaderDescriptor->hdr[0].name));
-	snprintf(pHeaderDescriptor->hdr[0].name, sizeof(pHeaderDescriptor->hdr[0].name),
-		"%s_ipv4_vlan%d", dev_name, vlan_id);
+	strlcpy(pHeaderDescriptor->hdr[0].name, vlan_hdr_name,
+		sizeof(pHeaderDescriptor->hdr[0].name));
+	IPACMDBG_H("Adding VLAN hdr template name %s vlan_id %d\n", vlan_hdr_name, vlan_id);
 	if(m_header.AddHeader(pHeaderDescriptor) == false ||
 			pHeaderDescriptor->hdr[0].status != 0)
 	{

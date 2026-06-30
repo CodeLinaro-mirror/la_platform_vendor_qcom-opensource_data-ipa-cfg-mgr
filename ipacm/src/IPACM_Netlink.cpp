@@ -59,6 +59,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #ifdef FEATURE_EoGRE
 #include <linux/ip.h>
 #include <linux/if_tunnel.h>
+#include <linux/ip6_tunnel.h>
 #endif
 
 #define DUMMY_RGIP_ADDRESS 169
@@ -726,6 +727,43 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 
 				IPACMDBG_H("GRE info v6: src addr:0x%x:%x:%x:%x, dst addr:0x%x:%x:%x:%x \n",
 							saddr6.s6_addr32[0],saddr6.s6_addr32[1],saddr6.s6_addr32[2],saddr6.s6_addr32[3],daddr6.s6_addr32[0],daddr6.s6_addr32[1],daddr6.s6_addr32[2],daddr6.s6_addr32[3]);
+			}
+
+			/* Learn encap_limit so IPACM can choose the correct IPoGRE
+			 * outer header template: non-zero encap_limit means the kernel
+			 * adds an 8-byte Destination Options extension header (RFC 2473)
+			 * making the outer IPv6+GRE header 52 bytes; zero means no
+			 * extension header, 44 bytes. Kernel default when the attribute
+			 * is absent is 4 (extension header present). */
+			if (greinfo[IFLA_GRE_ENCAP_LIMIT])
+			{
+				pConfig->encap_limit =
+					*(__u8 *)RTA_DATA(greinfo[IFLA_GRE_ENCAP_LIMIT]);
+				IPACMDBG_H("GRE encap_limit: %d\n", pConfig->encap_limit);
+			}
+			else
+			{
+				pConfig->encap_limit = 4; /* kernel default */
+				IPACMDBG_H("IFLA_GRE_ENCAP_LIMIT absent, using default encap_limit=4\n");
+
+			}
+
+			if (greinfo[IFLA_GRE_FLAGS])
+			{
+				__u16 gre_flags = *(__u16 *)RTA_DATA(greinfo[IFLA_GRE_FLAGS]);
+				IPACMDBG_H("IFLA_GRE_FLAGS: 0x%04x (CSUM=%d KEY=%d SEQ=%d IGN_ENCAP_LIMIT=%d)\n",
+					gre_flags,
+					(gre_flags & GRE_CSUM),
+					(gre_flags & GRE_KEY),
+					(gre_flags & GRE_SEQ),
+					(gre_flags & IP6_TNL_F_IGN_ENCAP_LIMIT));
+				pConfig->encap_enable = !(gre_flags & IP6_TNL_F_IGN_ENCAP_LIMIT);
+				IPACMDBG_H("encap_enable: %d\n", pConfig->encap_enable);
+			}
+			else
+			{
+				IPACMDBG_H("IFLA_GRE_FLAGS absent, no GRE flags set\n");
+				pConfig->encap_enable = true;
 			}
 
 			memcpy(&(pConfig->ipgre_info),&ipgre_info,sizeof(ipa_ipgre_info));

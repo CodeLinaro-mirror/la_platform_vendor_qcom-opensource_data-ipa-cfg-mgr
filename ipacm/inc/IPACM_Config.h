@@ -636,6 +636,8 @@ public:
 	 * or FEATURE_PMIPV6 due to the broken #ifdef guard at the call-site. */
 	char ipogre_tunnel_name[IPA_IFACE_NAME_LEN];
 #endif
+	int encap_limit;
+	bool encap_enable;
 	bool eth_pdu_enabled;
 	typedef struct ipgre_tunnel_id_info {
 		bool ipogre_enabled;

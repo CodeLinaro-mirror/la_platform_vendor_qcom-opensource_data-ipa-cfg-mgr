@@ -248,7 +248,8 @@ typedef struct v6_ipgre_hdr_s
  */
 #define IPV6_SRC_ADDR_IDX   2
 #define IPV6_DST_ADDR_IDX   6
-#define IPV6_GRE_PROT_IDX  12
+#define IPV6_GRE_PROT_IDX  10
+#define IPV6_GRE_PROT_IDX_OP  12
 #define IPV6_GRE_PMIP_PROT_IDX  10
 
 /* wan iface */
@@ -739,6 +740,7 @@ public:
 	static const uint8_t v6_gre_header[];
 	static const uint8_t v4_ipogre_header[];
 	static const uint8_t v6_ipogre_header[];
+	static const uint8_t v6_ipogre_header_op[];
 	static int GetMuxByAddr(
 		enum ipa_ip_type iptype,
 		void*            addr,

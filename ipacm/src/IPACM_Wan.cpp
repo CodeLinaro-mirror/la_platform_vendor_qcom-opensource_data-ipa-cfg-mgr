@@ -201,6 +201,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	memset(invalid_mac, 0, sizeof(invalid_mac));
 
 	is_xlat = false;
+	in_collision = false;
 	hdr_hdl_dummy_v6 = 0;
 	hdr_proc_hdl_dummy_v6 = 0;
 
@@ -819,25 +820,26 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			install_wan_filtering_rule(false);
 		}
 		num_dft_rt_v6++;
+		IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);
     	}
 	else
 	{
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
-	if(m_is_sta_mode == Q6_WAN)
-	{
-		/* add qmuxd mapping*/
-		rmnet_mux_id_info info;
-		info.ipv4_addr = data->ipv4_addr;
-		if(ext_prop != NULL)
-			info.mux_id = ext_prop->ext[0].mux_id;;
-		memcpy(info.iface_name, dev_name, sizeof(dev_name));
-		IPACM_Iface::ipacmcfg->add_mux_id_mapping(&info);
-	}
+		if(m_is_sta_mode == Q6_WAN)
+		{
+			/* add qmuxd mapping*/
+			rmnet_mux_id_info info;
+			info.ipv4_addr = data->ipv4_addr;
+			if(ext_prop != NULL)
+				info.mux_id = ext_prop->ext[0].mux_id;;
+			memcpy(info.iface_name, dev_name, sizeof(dev_name));
+			IPACM_Iface::ipacmcfg->add_mux_id_mapping(&info);
+		}
 #endif // defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 		if(wan_v4_addr_set)
 		{
 			/* check iface ipv4 same or not */
-			if(data->ipv4_addr == wan_v4_addr)
+			if((data->ipv4_addr == wan_v4_addr) && (data->ipv4_addr_mask == wan_v4_mask))
 			{
 				IPACMDBG_H("Already setup device (%s) ipv4 and it didn't change(0x%x)\n", dev_name, data->ipv4_addr);
 				return IPACM_SUCCESS;
@@ -845,19 +847,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			else
 			{
 				IPACMDBG_H(" device (%s) ipv4 addr is changed\n", dev_name);
-				/*Don't remove route for WAN IP in Collision mode
-				it may lead to stall as NAT entry is still pointing to
-				default route entry*/
-				if(in_collision)
-				{
-					curr_wan_ip = data->ipv4_addr;
-					public_wan_v4_addr = wan_v4_addr;
-					public_wan_v4_addr_set = true;
-					IPACMDBG_H("Received wan ipv4-addr:0x%x\n",data->ipv4_addr);
-					IPACMDBG_H("In Collision mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
-					return IPACM_SUCCESS;
-				}
-				if (!ip_pass_pdn_info.enable && !in_collision)
+				if (!ip_pass_pdn_info.enable)
 				{
 					/* Delete default v4 RT rule */
 					IPACMDBG_H("Delete default v4 routing rules\n");
@@ -879,10 +869,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					if ((m_is_sta_mode == Q6_WAN) && ip_pass_pdn_info.enable)
 					{
 						IPACMDBG_H("In IPPT mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
-					}
-					else if (in_collision)
-					{
-						IPACMDBG_H("In Collision mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
 					}
 					return IPACM_SUCCESS;
 				}
@@ -1064,8 +1050,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		}
 
 		/* Store the public ip address when in passthrough mode which will be used when wan is down. */
-		if (((m_is_sta_mode == Q6_WAN) && (ip_pass_pdn_info.enable && data->ipv4_addr == ip_pass_pdn_info.pdn_ip_addr)) ||
-			(in_collision))
+		if ((m_is_sta_mode == Q6_WAN) && (ip_pass_pdn_info.enable &&
+			data->ipv4_addr == ip_pass_pdn_info.pdn_ip_addr))
 		{
 			curr_wan_ip = data->ipv4_addr;
 			public_wan_v4_addr = wan_v4_addr;
@@ -1086,18 +1072,19 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		IPACMDBG_H("Received wan ipv4-addr:0x%x\n",wan_v4_addr);
 	}
 
-	set_swallow_pdn_up();
-	memset(&evt_data, 0, sizeof(evt_data));
-	dummy_cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
-	evt_data.event = IPA_SWALLOW_CHANGE_EVENT;
-	/* Dummy Data Ignored on received side */
-	evt_data.evt_data = (void *)dummy_cfg;
+	if(IPACM_Iface::ipacmcfg->sw_filter_cfg)
+	{
+		set_swallow_pdn_up();
+		memset(&evt_data, 0, sizeof(evt_data));
+		dummy_cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
+		evt_data.event = IPA_SWALLOW_CHANGE_EVENT;
+		/* Dummy Data Ignored on received side */
+		evt_data.evt_data = (void *)dummy_cfg;
 
-	IPACMDBG("Posting IPA_SWALLOW_CHANGE_EVENT\n");
-	/* Insert IPA_SWALLOW_CHANGE_EVENT to command queue */
-	IPACM_EvtDispatcher::PostEvt(&evt_data);
-
-	IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);
+		IPACMDBG("Posting IPA_SWALLOW_CHANGE_EVENT\n");
+		/* Insert IPA_SWALLOW_CHANGE_EVENT to command queue */
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+	}
 
 fail:
 	if(rt_rule)
@@ -1336,15 +1323,11 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("Checking IP collision for WAN interface %s with IP 0x%x, mask 0x%x\n",
 							dev_name, data->ipv4_addr, data->ipv4_addr_mask);
 
-				// Check for IPACM_cfg flag
-				if (IPACM_Iface::ipacmcfg->detect_and_handle_collision(dev_name,
-							data->ipv4_addr, data->ipv4_addr_mask))
+				if((data->iptype == IPA_IP_v4) &&
+					((data->ipv4_addr&IPV4_ADDR_LINKLOCAL_MASK) == IPV4_ADDR_LINKLOCAL))
 				{
-					in_collision = true;
-					IPACMDBG_H("IP collision enabled for interface %s\n", dev_name);
-				}
-				else {
-					in_collision = false;
+					IPACMDBG("Link local for wan instance is being ignored\n");
+					return;
 				}
 
 				IPACMDBG_H("Get IPA_ADDR_ADD_EVENT: IF ip type %d, incoming ip type %d\n", ip_type, data->iptype);
@@ -1368,6 +1351,12 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
  							IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: %d \n",
  							IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,data->if_index, is_xlat);
  						}
+						if(IPACM_Iface::ipacmcfg->detect_and_handle_collision(dev_name,
+									data->ipv4_addr, data->ipv4_addr_mask))
+						{
+							in_collision = true;
+							IPACMDBG_H("IP collision enabled for interface %s\n", dev_name);
+						}
 					}
 
 					handle_addr_evt(data);
@@ -1587,7 +1576,10 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					IPACMDBG_H("get default v4 route (dst:0.0.0.0)\n");
 
-					wan_v4_addr_gw = data->ipv4_addr_gw;
+					if(in_collision)
+						wan_v4_addr_gw = wan_v4_addr;
+					else
+						wan_v4_addr_gw = data->ipv4_addr_gw;
 					wan_v4_addr_gw_set = true;
 					wan_v4_is_default_gw = true;
 					IPACMDBG_H("adding routing table, dev (%s) ip-type(%d), default gw (%x)\n", dev_name,data->iptype, wan_v4_addr_gw);

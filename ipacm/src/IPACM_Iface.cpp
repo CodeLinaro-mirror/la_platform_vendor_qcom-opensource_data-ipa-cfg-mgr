@@ -494,7 +494,7 @@ void IPACM_Iface::iface_addr_query
 					struct sockaddr_in *net_mask = s4;
 					IPACMDBG_H("ipv4 netmask %s\n",inet_ntoa(s4->sin_addr));
 					iface_ipv4 = s4->sin_addr;
-					
+
 					if (curr_ip4_mask)
 					{
 						if(ntohl(iface_ipv4.s_addr) != (*curr_ip4_mask))
@@ -520,7 +520,7 @@ void IPACM_Iface::iface_addr_query
 							 * interface is created. While handling this NEWADDR, the
 							 * interface already has the dummy address.*/
 
-							if(!IPACM_Iface::ipacmcfg->is_ip_collision_enabled(ifa->ifa_name))
+							if((ntohl(iface_ipv4.s_addr) & IPV4_ADDR_LINKLOCAL_MASK) != IPV4_ADDR_LINKLOCAL)
 								*curr_ip4_addr = ntohl(iface_ipv4.s_addr);
 
 							freeifaddrs(myaddrs);

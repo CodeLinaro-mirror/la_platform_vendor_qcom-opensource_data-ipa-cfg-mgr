@@ -287,7 +287,7 @@ public:
 	/* add filtering rule and return handle to lan2lan controller */
 	int eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip_type iptype, uint32_t *flt_rule_hdl, uint16_t vlan_id = 0);
 
-	int install_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type iptype, bool is_vlan);
+	int install_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type iptype, bool is_vlan, uint16_t master_index = 0);
 
 	int delete_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type iptype);
 

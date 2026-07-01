@@ -258,6 +258,8 @@ public:
 
 	/* Query ipa_interface_index by given linux interface_index */
 	static int iface_ipa_index_query(int interface_index);
+	/* Query iface subnet IP/mask from linux interface_index via ioctl */
+	static int query_iface_master_subnet_ip_from_index(int interface_index, char *interface_name, ipa_private_subnet *private_subnet);
 
 	/* Query ipa_interface ipv4_addr by given linux interface_index */
 	static void iface_addr_query(int interface_index, bool post_new_addr_event = true,

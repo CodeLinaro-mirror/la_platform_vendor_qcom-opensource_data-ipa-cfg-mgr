@@ -3222,6 +3222,7 @@ process_v6:
 		    			 msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
 		    			 sizeof(data_all->mac_addr));
 			data_all->if_index = msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
+			data_all->master_if_index = msg_ptr->nl_neigh_info.master_interface_index;
 			strlcpy(data_all->iface_name, dev_name, sizeof(data_all->iface_name));
 
 			IPACMDBG_H("for IF %s, got ndm_family %d, ndm_state %d\n", dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_family,

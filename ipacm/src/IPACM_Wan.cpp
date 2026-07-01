@@ -3051,6 +3051,12 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					}
 					else if (data->iptype == IPA_IP_v6)
 					{
+						/* skip multicast addresses (ff00::/8) from NDP/NS solicited-node neighbors */
+						if ((data->ipv6_addr[0] >> 24) == 0xFF)
+						{
+							IPACMDBG_H("Ignore IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT for multicast IPv6 addr\n");
+							return;
+						}
 						for (int num_ipv6_addr = 0; num_ipv6_addr < num_dft_rt_v6; num_ipv6_addr++)
 						{
 							if ((ipv6_addr[num_ipv6_addr][0] == data->ipv6_addr[0]) &&
@@ -5735,6 +5741,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 				if (mape_wan_rt_rule_hdl_v6){
                   IPACMDBG_H("route rule already installed with the hdr hdl deleting that and installing with proc_ctx hdl\n");
                   m_routing.DeleteRoutingHdl(mape_wan_rt_rule_hdl_v6, IPA_IP_v6);
+                  mape_wan_rt_rule_hdl_v6 = 0;
                 }
 					rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
 			}
@@ -9658,6 +9665,21 @@ int IPACM_Wan::handle_down_evt()
 			}
 			dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+i] = 0;
 		}
+		if (IPACM_Iface::ipacmcfg->mape_enable && mape_wan_rt_rule_hdl_v6)
+		{
+			if (!active_v6)
+			{
+				IPACMDBG_H("Delete mape v6 routing rule hdl 0x%x\n", mape_wan_rt_rule_hdl_v6);
+				if (m_routing.DeleteRoutingHdl(mape_wan_rt_rule_hdl_v6, IPA_IP_v6) == false)
+				{
+					IPACMERR("mape v6 routing rule deletion failed!\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+				mape_wan_rt_rule_hdl_v6 = 0;
+			}
+		}
+
 #ifdef FEATURE_IPA_IPSEC
 		/* Delete default IPsec v6 RT rules */
 		IPACMDBG_H("Delete IPsec default v6 routing rules\n");
@@ -9723,9 +9745,6 @@ int IPACM_Wan::handle_down_evt()
 					pppoe_del_hdr_proc_ctx(IPA_IP_v6);
 			}
 #endif
-			if(IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)){
-				mape_del_hdr_proc_ctx(IPA_IP_MAX);
-			}
 		IPACMDBG_H("Delete %d out of %d client header\n", i,  num_wan_client);
 
 		if (get_client_memptr(wan_client, i)->ipv4_header_set == true)
@@ -9765,6 +9784,11 @@ int IPACM_Wan::handle_down_evt()
 		/* clear the map */
 		rt_hdl_v6_list[i].clear();
 	} /* end of for loop */
+
+	/* Delete MAP-E proc contexts once, outside the per-client loop */
+	if(IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)){
+		mape_del_hdr_proc_ctx(IPA_IP_MAX);
+	}
 
 	/* free the edm clients cache */
 	IPACMDBG_H("Free wan clients cache\n");
@@ -12683,6 +12707,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					rt_rule->rules[0].rt_rule_hdl;
 				if(is_mape_v4_interface){
 					IPACM_Wan::mape_wan_rt_rule_hdl_v4 = rt_rule->rules[0].rt_rule_hdl;
+					get_client_memptr(wan_client, wan_index)->route_rule_set_v4 = true;
 				}
 				IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
 						get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4, iptype);

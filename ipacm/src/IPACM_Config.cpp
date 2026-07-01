@@ -1852,6 +1852,20 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 #endif
+#ifdef FEATURE_L2TP
+	/* Query IPv6 addresses for this VLAN iface so that vlan_iface_ipv6_addr is
+	 * populated via handle_vlan_iface_info() before any SESSION_CREATE arrives.
+	 * Only done when L2TP is enabled — the decode path already applies the
+	 * ULA (fd::/8) check and is_added_vlan_iface() guard before calling
+	 * handle_vlan_iface_info(), so non-ULA addresses are silently ignored.
+	 * Passing data->name scopes the RTM_GETADDR dump to this interface only. */
+	if ((ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E))
+	{
+		IPACMDBG_H("Query IPv6 addr for vlan iface %s (L2TP enabled)\n", data->name);
+		ipa_nl_query_ip_addr_info(AF_INET6, data->name);
+	}
+#endif
+
 	/* Sending Getneigh to receive missing neighbor in case if missed early */
 	IPACMDBG_H("Query Getneigh for physical ifaces\n");
 	ipa_nl_query_newneigh(AF_BRIDGE, data->name);

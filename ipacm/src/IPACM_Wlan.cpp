@@ -1216,6 +1216,90 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		break;
 
+	case IPA_LAN_CLIENT_ADD_EVENT:
+		{
+			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			uint16_t vlan_id = 0;
+			ipacm_bridge bridge;
+			memset(&bridge, 0, sizeof(bridge));
+
+			/* Handle SVAP vlan sub-interface clients that have no IP yet.
+			 * Mirrors the IPACM_Lan IPA_LAN_CLIENT_ADD_EVENT handler: init
+			 * the WLAN header and post IPA_ETH_BRIDGE_CLIENT_ADD so the
+			 * LAN2LAN flt rule is installed immediately without waiting for
+			 * IP resolution. */
+			if (is_svap_iface() && is_vlan_event(data->iface_name))
+			{
+				if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+				{
+					if (!IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name))
+					{
+						IPACMDBG_H("ignoring neighbor of not added IF %s\n", data->iface_name);
+						break;
+					}
+					IPACMERR("failed getting vlan ID of iface %s\n", data->iface_name);
+					break;
+				}
+
+				if (IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping_from_vid(&bridge, vlan_id) != IPACM_SUCCESS)
+				{
+					IPACMDBG_H("no bridge for vlan (%s) vid (%d), ignoring\n", data->iface_name, vlan_id);
+					break;
+				}
+
+				wlan_index = get_wlan_client_index(data->mac_addr);
+				if (wlan_index == IPACM_INVALID_INDEX)
+				{
+					IPACMDBG_H("wlan client not found/attached\n");
+					break;
+				}
+
+				get_client_memptr(wlan_client, wlan_index)->vlan_id = vlan_id;
+				get_client_memptr(wlan_client, wlan_index)->is_vlan = true;
+
+				if (!get_client_memptr(wlan_client, wlan_index)->ipv4_hpc_set &&
+					handle_wlan_vlan_client_init(wlan_index, &bridge, vlan_id) == IPACM_FAILURE)
+				{
+					IPACMERR("handle_wlan_vlan_client_init failed for %s\n", data->iface_name);
+					break;
+				}
+
+				if (IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
+				{
+					IPACMDBG_H("Posting IPA_ETH_BRIDGE_CLIENT_ADD for SVAP vlan client MAC "
+						"%02x:%02x:%02x:%02x:%02x:%02x iface %s\n",
+						data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+						data->mac_addr[3], data->mac_addr[4], data->mac_addr[5],
+						data->iface_name);
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX,
+						data->mac_addr, NULL, data->iface_name, vlan_id);
+				}
+
+				/* AST/DP mode: install the LAN2LAN filter rule directly.
+				 * master_if_index is populated from RTM_NEWNEIGH NDA_MASTER
+				 * by the new-entry path in IPACM_Neighbor.
+				 * Delete any stale rule from a previous connection first.
+				 */
+				if (ast_update_needed() && data->master_if_index != 0)
+				{
+					int clnt = get_wlan_client_index(data->mac_addr, vlan_id);
+					if (clnt != IPACM_INVALID_INDEX)
+					{
+						if (get_client_memptr(wlan_client, clnt)->lan2lan_fl_rule_hdl_v4 != 0)
+							delete_wlan_client_lan2lan_flt_rule(data->mac_addr, IPA_IP_v4);
+						if (install_wlan_client_lan2lan_flt_rule(data->mac_addr, IPA_IP_v4,
+							get_client_memptr(wlan_client, clnt)->is_vlan,
+							data->master_if_index) == IPACM_SUCCESS)
+						{
+							IPACMDBG_H("AST: lan2lan flt rule installed for SVAP client %s\n",
+								data->iface_name);
+						}
+					}
+				}
+			}
+		}
+		break;
+
 	case IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT:
 		{
 			ipacm_event_new_neigh_vlan *new_neigh_data = (ipacm_event_new_neigh_vlan *)param;
@@ -11016,7 +11100,7 @@ int IPACM_Wlan::delete_sta_uplink_filter_rule
 	return ret;
 }
 
-int IPACM_Wlan::install_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type iptype, bool is_vlan)
+int IPACM_Wlan::install_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type iptype, bool is_vlan, uint16_t master_index)
 {
 	int len, res = IPACM_SUCCESS, clnt_indx, idx = 0;
 	struct ipa_flt_rule_add flt_rule_entry;
@@ -11032,13 +11116,27 @@ int IPACM_Wlan::install_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type i
 		return IPACM_FAILURE;
 	}
 
-	IPACMDBG_H("Received client MAC 0x%02x%02x%02x%02x%02x%02x with vlan:%d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], is_vlan);
+	IPACMDBG_H("Received client MAC 0x%02x%02x%02x%02x%02x%02x with vlan:%d master_index:%d\n",
+		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], is_vlan, master_index);
 
 	clnt_indx = get_wlan_client_index(mac);
 
 	if (clnt_indx == IPACM_INVALID_INDEX)
 	{
 		IPACMERR("wlan client not found/attached \n");
+		return IPACM_FAILURE;
+	}
+
+	if (iptype == IPA_IP_v4 && (get_client_memptr(wlan_client, clnt_indx)->lan2lan_fl_rule_hdl_v4 != 0))
+	{
+		IPACMDBG_H("client MAC 0x%02x%02x%02x%02x%02x%02x already has v4 rule installed\n",
+			mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+		return IPACM_FAILURE;
+	}
+	else if (iptype == IPA_IP_v6 && (get_client_memptr(wlan_client, clnt_indx)->lan2lan_fl_rule_hdl_v6 != 0))
+	{
+		IPACMDBG_H("client MAC 0x%02x%02x%02x%02x%02x%02x already has v6 rule installed\n",
+			mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 		return IPACM_FAILURE;
 	}
 
@@ -11150,16 +11248,41 @@ int IPACM_Wlan::install_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type i
 	flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 	if (iptype == IPA_IP_v4)
 	{
-		memset(&private_subnet, 0, sizeof (private_subnet));
-		if ((private_subnet = IPACM_Iface::ipacmcfg->getPrivateSubnet(get_client_memptr(wlan_client, clnt_indx)->v4_addr)) == NULL)
+		memset(&private_subnet, 0, sizeof(private_subnet));
+		if (master_index != 0)
 		{
-			IPACMERR("Failed to add client filtering rule for LAN2LAN traffic.\n");
-			res = IPACM_FAILURE;
-			goto end;
+			/* Static IP / SVAP case: derive subnet from the bridge interface
+			 * (master_if_index from RTM_NEWNEIGH NDA_MASTER) since the
+			 * client has no v4_addr set yet when this is called.
+			 */
+			char master_iface[IFNAMSIZ] = {0};
+			ipa_private_subnet master_subnet;
+			memset(&master_subnet, 0, sizeof(master_subnet));
+			if (IPACM_Iface::query_iface_master_subnet_ip_from_index(
+					master_index, master_iface, &master_subnet) != IPACM_SUCCESS)
+			{
+				IPACMERR("Failed to get subnet for master_index %d\n", master_index);
+				res = IPACM_FAILURE;
+				goto end;
+			}
+			IPACMDBG("master iface %s subnet 0x%x/0x%x\n", master_iface,
+				master_subnet.subnet_addr, master_subnet.subnet_mask);
+			flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = master_subnet.subnet_mask;
+			flt_rule_entry.rule.attrib.u.v4.dst_addr = master_subnet.subnet_addr;
 		}
+		else
+		{
+			if ((private_subnet = IPACM_Iface::ipacmcfg->getPrivateSubnet(
+					get_client_memptr(wlan_client, clnt_indx)->v4_addr)) == NULL)
+			{
+				IPACMERR("Failed to add client filtering rule for LAN2LAN traffic.\n");
+				res = IPACM_FAILURE;
+				goto end;
+			}
 
-		flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = private_subnet->subnet_mask;
-		flt_rule_entry.rule.attrib.u.v4.dst_addr = private_subnet->subnet_addr;
+			flt_rule_entry.rule.attrib.u.v4.dst_addr_mask = private_subnet->subnet_mask;
+			flt_rule_entry.rule.attrib.u.v4.dst_addr = private_subnet->subnet_addr;
+		}
 	}
 	else
 	{

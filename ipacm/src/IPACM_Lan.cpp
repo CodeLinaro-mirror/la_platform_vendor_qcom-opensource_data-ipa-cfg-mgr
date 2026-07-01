@@ -4832,7 +4832,7 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id, uint16_t vid)
 /* handle new_address event*/
 int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 {
-	struct ipa_ioc_add_rt_rule *rt_rule;
+	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry;
 	const int NUM_RULES = 1;
 	int num_ipv6_addr;
@@ -4948,6 +4948,19 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 			}
 		}
 
+		/* fe80::/10 filter rule installed in init_fl_rule() handles link-local
+		 * traffic. Skip the /128 RT rule for link-local addresses to avoid
+		 * redundancy; store the address for dedup. */
+		if (!IPACM_Wan::is_global_ipv6_addr(data->ipv6_addr))
+		{
+			IPACMDBG_H("Skip link-local RT rule for LAN/WLAN iface\n");
+			ipv6_addr[num_dft_rt_v6][0] = data->ipv6_addr[0];
+			ipv6_addr[num_dft_rt_v6][1] = data->ipv6_addr[1];
+			ipv6_addr[num_dft_rt_v6][2] = data->ipv6_addr[2];
+			ipv6_addr[num_dft_rt_v6][3] = data->ipv6_addr[3];
+			goto skip_v6_ll_rt;
+		}
+
 		rt_rule = (struct ipa_ioc_add_rt_rule *)
 			 calloc(1, sizeof(struct ipa_ioc_add_rt_rule) +
 							NUM_RULES * sizeof(struct ipa_rt_rule_add));
@@ -5016,6 +5029,7 @@ int IPACM_Lan::handle_addr_evt(ipacm_event_data_addr *data)
 			dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6],
 			dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6+1],num_dft_rt_v6);
 
+skip_v6_ll_rt:
 		if (num_dft_rt_v6 == 0)
 		{
 			/* Always adding tcp syn SW-exception rule for MSS clamping support */

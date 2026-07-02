@@ -60,10 +60,10 @@ void IPACM_Bridge::event_callback(ipa_cm_event_id event, void *param)
 							}
 							if(!skip_nat_set)
 							{
-								if(IPACM_Iface::ipacmcfg->AddPrivateSubnet(data->ipv4_addr, data->ipv4_addr_mask,
+								if(IPACM_Iface::ipacmcfg->AddPrivateSubnet((data->ipv4_addr & data->ipv4_addr_mask), data->ipv4_addr_mask,
 									 ipa_if_num, IPACM_Wan::wan_v4_collision_exists(data->ipv4_addr, data->ipv4_addr_mask)) == true)
 								{
-									bridge_ipv4_addr = data->ipv4_addr;
+									bridge_ipv4_addr = (data->ipv4_addr & data->ipv4_addr_mask);
 									IPACMDBG_H("Resetting IPACM bridge private subnet_addr as: 0x%x \n", bridge_ipv4_addr);
 								}
 								else

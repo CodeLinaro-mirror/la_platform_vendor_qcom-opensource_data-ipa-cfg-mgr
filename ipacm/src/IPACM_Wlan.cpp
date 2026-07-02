@@ -90,10 +90,9 @@ IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index) : IPACM_Lan(iface_name
 			free(iface_query);
 			iface_query = NULL;
 		}
-		delete this;
+		iface_valid = false;
 		return;
 	}
-
 	num_wifi_client = 0;
 	header_name_count = 0;
 	wlan_client = NULL;
@@ -121,6 +120,7 @@ IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index) : IPACM_Lan(iface_name
 		if (wlan_client == NULL)
 		{
 			IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory\n");
+			iface_valid = false;
 			return;
 		}
 		IPACM_LOG(IPACM_LOG_DEBUG, "index:%d constructor: Tx properties:%d\n", iface_index, iface_query->num_tx_props);
@@ -129,6 +129,7 @@ IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index) : IPACM_Lan(iface_name
 	if (Nat_App == NULL)
 	{
 		IPACM_LOG(IPACM_LOG_ERR, "unable to get Nat App instance \n");
+		iface_valid = false;
 		return;
 	}
 
@@ -155,6 +156,7 @@ IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index) : IPACM_Lan(iface_name
 	device_type = IPACM_CLIENT_DEVICE_TYPE_WLAN;
 
 	IPACM_LOG(IPACM_LOG_DEBUG, "Device type %d\n", device_type);
+	iface_valid = true;
 
 	return;
 }

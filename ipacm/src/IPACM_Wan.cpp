@@ -520,7 +520,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			if(m_header.GetHeaderHandle(&hdr) == false)
 			{
 				IPACMERR("Failed to get QMAP header.\n");
-				return IPACM_FAILURE;
+				res = IPACM_FAILURE;
+				goto fail;
 			}
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
 		}
@@ -726,7 +727,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					if (!flt_rule_after)
 					{
 						IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
-						return IPACM_FAILURE;
+						res = IPACM_FAILURE;
+						goto fail;
 					}
 					flt_rule_after->add_after_hdl = IPACM_Iface::odu_subnet_fl_rule_hdl[IPA_IP_v6];
 					flt_rule_after->commit = 1;
@@ -741,7 +743,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					if (!flt_rule)
 					{
 						IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
-						return IPACM_FAILURE;
+						res = IPACM_FAILURE;
+						goto fail;
 					}
 					flt_rule->global = false;
 					flt_rule->commit = 1;
@@ -779,6 +782,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					{
 						IPACMERR("Error Adding Filtering rule, aborting...\n");
 						free(flt_rule_after);
+						flt_rule_after = NULL;
 						res = IPACM_FAILURE;
 						goto fail;
 					}
@@ -789,6 +793,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 						IPACMDBG_H("IPv6 dest filter rule %d HDL:0x%x\n", num_ipv6_dest_flt_rule, ipv6_dest_flt_rule_hdl[num_ipv6_dest_flt_rule]);
 						num_ipv6_dest_flt_rule++;
 						free(flt_rule_after);
+						flt_rule_after = NULL;
 					}
 				}
 				else
@@ -797,7 +802,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					if (m_filtering.AddFilteringRule(flt_rule) == false)
 					{
 						IPACMERR("Error Adding Filtering rule, aborting...\n");
-						free(flt_rule);
 						res = IPACM_FAILURE;
 						goto fail;
 					}
@@ -808,6 +812,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 						IPACMDBG_H("IPv6 dest filter rule %d HDL:0x%x\n", num_ipv6_dest_flt_rule, ipv6_dest_flt_rule_hdl[num_ipv6_dest_flt_rule]);
 						num_ipv6_dest_flt_rule++;
 						free(flt_rule);
+						flt_rule = NULL;
 					}
 				}
 			}
@@ -913,7 +918,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			if(m_header.GetHeaderHandle(&hdr) == false)
 			{
 				IPACMERR("Failed to get QMAP header.\n");
-				return IPACM_FAILURE;
+				res = IPACM_FAILURE;
+				goto fail;
 			}
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
 			rt_rule_entry->rule.dst = IPA_CLIENT_APPS_WAN_CONS;
@@ -1087,6 +1093,12 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 	}
 
 fail:
+	if(flt_rule)
+		free(flt_rule);
+
+	if(flt_rule_after)
+		free(flt_rule_after);
+
 	if(rt_rule)
 		free(rt_rule);
 
@@ -5036,6 +5048,13 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 	}
 #endif
 
+	if((m_pFilteringTableafter == NULL) && (m_pFilteringTable == NULL))
+	{
+		IPACMERR("m_pFilteringTableafter and m_pFilteringTable are NULL, aborting...\n");
+		res = IPACM_FAILURE;
+		goto fail;
+	}
+
 	if (iptype == IPA_IP_v4)
 	{
 		if (rule_v4 == 0)
@@ -6800,7 +6819,8 @@ int IPACM_Wan::query_ext_prop()
 	{
 		fd = open(IPA_DEVICE_NAME, O_RDWR);
 		IPACMDBG_H("iface query-property \n");
-		if (0 == fd)
+		/* open() returns -1 on failure, not 0; fd==0 would be stdin which is valid */
+		if (fd < 0)
 		{
 			IPACMERR("Failed opening %s.\n", IPA_DEVICE_NAME);
 			return IPACM_FAILURE;
@@ -7310,7 +7330,8 @@ int IPACM_Wan::del_wan_firewall_rule(ipa_ip_type iptype)
 			IPACM_Wan::num_v6_flt_rule += IPACM_Iface::ipacmcfg->l2tp_client.size();
 		}
 #endif
-		if(IPACM_Wan::num_v6_flt_rule < IPA_MAX_FLT_RULE)
+		/* Ensure num_v6_flt_rule is non-negative before using as array index */
+		if(IPACM_Wan::num_v6_flt_rule >= 0 && IPACM_Wan::num_v6_flt_rule < IPA_MAX_FLT_RULE)
                 {
 #ifdef FEATURE_VLAN_MPDN
 			memset(&IPACM_Wan::pdn_flt_rule_v6[IPACM_Wan::num_v6_flt_rule], 0,

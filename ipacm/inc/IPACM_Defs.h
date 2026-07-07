@@ -795,6 +795,7 @@ typedef struct _svap_vlan_hpc_hdl
 	uint32_t hpc_hdr_hdl;
 	uint16_t outer_vlan_id;
 	uint32_t template_hdr_hdl;
+	bool pcp_mrkng;
 }svap_vlan_hpc_hdl;
 
 struct ext_router_prefix_info

@@ -83,6 +83,9 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 	int i, m_fd_odu, ret = IPACM_SUCCESS;
 	eth_client_len = 0;
 	is_l2tp_iface = false;
+
+	memset(&xlat_ctx, 0, sizeof(xlat_context));
+
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	int max_clients = (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable) ? IPA_MAX_NUM_HW_PATH_CLIENTS:
 		IPA_MAX_NUM_ETH_CLIENTS;
@@ -276,7 +279,6 @@ IPACM_Lan::IPACM_Lan(int iface_index) : IPACM_Iface(iface_index)
 		install_l2tp_ul_hdr_proc_ctx();
 	}
 #endif
-	memset(&xlat_ctx, 0, sizeof(xlat_context));
 
 	return;
 }

@@ -1109,7 +1109,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 
 		/* setup same rule for v6_wan table*/
 		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name, sizeof(rt_rule->rt_tbl_name));
-		if(IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,MAPE_IFACE_NAME)==0)){
+		if(IPACM_Iface::ipacmcfg->mape_enable && IS_MAPE_IFACE(dev_name)){
 			 rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
 		}
 		IPACMDBG_H("mape_wan_rt_rule_hdl_v6 0x%x \n",mape_wan_rt_rule_hdl_v6);
@@ -1128,7 +1128,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			}
 		}
 
-		if ( IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,MAPE_IFACE_NAME)==0) && is_global_ipv6_addr(data->ipv6_addr)) {
+		if ( IPACM_Iface::ipacmcfg->mape_enable && IS_MAPE_IFACE(dev_name) && is_global_ipv6_addr(data->ipv6_addr)) {
 			mape_wan_rt_rule_hdl_v6 = rt_rule_entry->rt_rule_hdl;
 			IPACMDBG_H(" updating mape_wan_rt_rule_hdl_v6 0x%x \n",mape_wan_rt_rule_hdl_v6);
 		} else {
@@ -1197,7 +1197,7 @@ skip_v6_ll_rt:
 					if(sta_ipv6_pdn_index == -1)
 					{
 						//add this prefix to no_offload_ipv6_prefix
-						if (!IPACM_Iface::ipacmcfg->mape_enable || strcmp(dev_name, MAPE_IFACE_NAME) != 0) {
+						if (!IPACM_Iface::ipacmcfg->mape_enable || !IS_MAPE_IFACE(dev_name)) {
 							IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_prefix);
 						}
 						IPACMERR("No Free index available!\n");
@@ -1208,7 +1208,7 @@ skip_v6_ll_rt:
 				memcpy(ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
 				ipv6_to_iface[sta_ipv6_pdn_index].pIface = this;
 				ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 = false;
-				if (!IPACM_Iface::ipacmcfg->mape_enable || strcmp(dev_name, MAPE_IFACE_NAME) != 0) {
+				if (!IPACM_Iface::ipacmcfg->mape_enable || !IS_MAPE_IFACE(dev_name)) {
 					IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix);
 				}
 				IPACMDBG_H("index %d prefix: 0x%08x%08x\n", sta_ipv6_pdn_index,
@@ -1217,7 +1217,7 @@ skip_v6_ll_rt:
 			}
 #endif
 			/* Check to handle the race-cond, if route_add recevied before handle_addr_evt */
-			if(IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,MAPE_IFACE_NAME)==0)){
+			if(IPACM_Iface::ipacmcfg->mape_enable && IS_MAPE_IFACE(dev_name)){
 				memcpy(IPACM_Wan::mape_wan_ipv6_addr, data->ipv6_addr, sizeof(data->ipv6_addr));
 				/* If BR neigh was already resolved before CE IPv6 arrived, the
 				 * existing client slot has a plain (non-MAPE) header.  Tear it
@@ -1658,7 +1658,7 @@ skip_v6_ll_rt:
 		}
 
 		IPACMDBG_H("Received wan ipv4-addr:0x%x\n",wan_v4_addr);
-		if(IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,MAPE_IFACE_NAME)==0)){
+		if(IPACM_Iface::ipacmcfg->mape_enable && IS_MAPE_IFACE(dev_name)){
 			IPACMDBG_H(" mape enabled updating mape_wan_ipv4_addr \n");
 			IPACM_Wan::mape_wan_ipv4_addr = wan_v4_addr;
 			IPACMDBG_H(" mape ipv4 addr 0x%x \n",IPACM_Wan::mape_wan_ipv4_addr);
@@ -1931,7 +1931,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		qos_param_info *qos_param;
 		qos_param = (qos_param_info *)param;
 
-		if(strcmp(dev_name,MAPE_IFACE_NAME)==0){
+		if(IS_MAPE_IFACE(dev_name)){
 			IPACMDBG_H("Received event on MAPE Wan, handling this in physical iface so ignoring \n");
 			return;
 		}
@@ -1967,7 +1967,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			qos_param = (qos_delete_param_info *)param;
 			IPACMDBG_H("Received and will process an IPA_QOS_RULE_DEL_EVENT\n");
 
-			if(strcmp(dev_name,MAPE_IFACE_NAME)==0){
+			if(IS_MAPE_IFACE(dev_name)){
 				IPACMDBG_H("Received event on MAPE Wan, handling this in physical iface so ignoring \n");
 				return;
 			}
@@ -2518,7 +2518,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			MapeFMR* fmr_rule;
 
-			if (IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,MAPE_IFACE_NAME)==0) && !IPACM_Wan::mape_rules_initialized ) {
+			if (IPACM_Iface::ipacmcfg->mape_enable && IS_MAPE_IFACE(dev_name) && !IPACM_Wan::mape_rules_initialized ) {
 				IPACMDBG_H(" MAPE enabled reading from mape rules file \n");
 				IPACM_Wan::read_from_mape_rules_file();
 				IPACM_Wan::mape_rules_initialized = true;
@@ -2550,7 +2550,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 					if (IPACM_Iface::ipacmcfg->mape_enable &&
 						(IPACM_Iface::ipacmcfg->mape_wan_iface_table_index < IPA_MAX_IFACE_ENTRIES) &&
-						(strcmp(dev_name, MAPE_IFACE_NAME) == 0))
+						IS_MAPE_IFACE(dev_name))
 					{
 						int eth0_if_index = -1;
 						const char *eth0_name = IPACM_Iface::ipacmcfg->iface_table[
@@ -15012,7 +15012,7 @@ int IPACM_Wan::query_mtu_size()
 
 	if(IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0))
 	{
-		strlcpy(if_mtu.ifr_name, MAPE_IFACE_NAME, IFNAMSIZ);
+		strlcpy(if_mtu.ifr_name, IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].iface_name, IFNAMSIZ);
 	} else {
 		strlcpy(if_mtu.ifr_name, dev_name, IFNAMSIZ);
 	}

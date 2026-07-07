@@ -87,7 +87,19 @@ extern "C"
 	((mac)[0] == IPV4_MCAST_MAC_BYTE0 && (mac)[1] == IPV4_MCAST_MAC_BYTE1 && \
 	 (mac)[2] == IPV4_MCAST_MAC_BYTE2)
 #define ETH_PHY_IFACE_LEN 5
-#define MAPE_IFACE_NAME "map-mape"
+#define MAPE_IFACE_PREFIX  "map-"
+#define MAPE_IFACE_PREFIX2 "mape"
+/* Check if an interface name matches a MAP-E prefix ("map-" or "mape").
+ * strlen() is used instead of sizeof()-1 to derive the prefix length from
+ * the string content with proper null termination, not the compile-time
+ * buffer size. Implemented as an inline function so 'name' is evaluated
+ * only once, avoiding the double-evaluation pitfall of a macro. */
+static inline bool is_mape_iface(const char *name)
+{
+    return strncmp(name, MAPE_IFACE_PREFIX,  strlen(MAPE_IFACE_PREFIX))  == 0 ||
+           strncmp(name, MAPE_IFACE_PREFIX2, strlen(MAPE_IFACE_PREFIX2)) == 0;
+}
+#define IS_MAPE_IFACE(name) is_mape_iface(name)
 
 #define IF_NAME_LEN 16
 #define IPA_MAX_FILE_LEN  64

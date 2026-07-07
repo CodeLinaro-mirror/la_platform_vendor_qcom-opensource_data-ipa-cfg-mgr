@@ -132,18 +132,19 @@ void log_deinit();
 	do { \
 		if ((incoming_log_level > ipacm_global_log_level) && (incoming_log_level > ipacm_global_syslog_level)) break; \
 		char __ipacm_log_core_buf[IPACM_LOG_MAX_CORE_BUF_LEN]; \
-		snprintf(__ipacm_log_core_buf, IPACM_LOG_MAX_CORE_BUF_LEN, "%s:%d %s() " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		__ipacm_log_core_buf[0] = (char)('0' + (uint8_t)incoming_log_level); \
+		snprintf(__ipacm_log_core_buf+1, IPACM_LOG_MAX_CORE_BUF_LEN-1 , "%s:%d %s() " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_send_log_to_qxdm(__ipacm_log_core_buf); \
-		if (incoming_log_level <= ipacm_global_syslog_level) syslog(LOG_USER | incoming_log_level - 1, "%s", __ipacm_log_core_buf); \
+		if (incoming_log_level <= ipacm_global_syslog_level) syslog(LOG_USER | incoming_log_level - 1, "%s", __ipacm_log_core_buf+1); \
 		if (incoming_log_level <= ipacm_global_log_level) \
 		{\
 			char __ipacm_log_buffer_send[IPACM_LOG_MAX_BUF_LEN] = {0}; \
 			if(ipacm_global_log_timestamp_enable){\
 				char __ipacm_log_timestamp_buf[IPACM_LOG_TIMESTAMP_BUF_LEN] = {0}; \
-				snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN, "%s %s", get_time_string(__ipacm_log_timestamp_buf, IPACM_LOG_TIMESTAMP_BUF_LEN), __ipacm_log_core_buf); \
+				snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN, "%s %s", get_time_string(__ipacm_log_timestamp_buf, IPACM_LOG_TIMESTAMP_BUF_LEN), __ipacm_log_core_buf+1); \
 			}\
 			else {\
-				snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN, " %s", __ipacm_log_core_buf); \
+				snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN, " %s", __ipacm_log_core_buf+1); \
 			}\
 			printf("%s\n", __ipacm_log_buffer_send); \
 			ipacm_send_log_to_file(__ipacm_log_buffer_send); \

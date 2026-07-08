@@ -116,8 +116,10 @@ typedef struct {
 struct MapRule {
 	std::vector<MapeFMR> fmr_rules;
 	uint32_t br_ipaddr[4];
+	uint32_t br_ll_ipaddr[4];
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
 	bool draft03;
+	bool br_static_route_pending;
 };
 
 class IPACM_Wan;

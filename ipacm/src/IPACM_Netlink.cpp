@@ -2443,9 +2443,9 @@ int recv_genl(struct nlmsghdr *nlh, ipa_nl_l2tp_info_t *l2tp_attr_info)
 		IPACMDBG_H("received data_conn_id=%u\n",data32);
 	}
 
-	if(attrs[L2TP_ATTR_SESSION_ID])
+	if(attrs[L2TP_ATTR_PEER_SESSION_ID])
 	{
-		data32 = nla_get_u32(attrs[L2TP_ATTR_SESSION_ID]);
+		data32 = nla_get_u32(attrs[L2TP_ATTR_PEER_SESSION_ID]);
 		l2tp_attr_info->session_id = data32;
 		IPACMDBG_H("received session id=%u\n",data32);
 	}

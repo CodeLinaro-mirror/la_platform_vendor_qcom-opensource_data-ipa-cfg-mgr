@@ -2991,6 +2991,22 @@ process_v6:
 			}
 			IPACMDBG("Neighbour event with interface index %d master interface index %d family %d\n", msg_ptr->nl_neigh_info.metainfo.ndm_ifindex, msg_ptr->nl_neigh_info.master_interface_index, msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 
+			if(msg_ptr->nl_neigh_info.metainfo.ndm_state == NUD_NOARP)
+			{
+				IPACMDBG_H("RTM_NEWNEIGH received with NOARP. Ignoring\n");
+				return IPACM_SUCCESS;;
+			}
+			if (IS_IPV6_MCAST_MAC(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data))
+			{
+				IPACMDBG_H("RTM_NEWNEIGH received with IPv6 multicast mac address. Ignoring\n");
+				return IPACM_SUCCESS;
+			}
+			if (IS_IPV4_MCAST_MAC(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data))
+			{
+				IPACMDBG_H("RTM_NEWNEIGH received with IPv4 multicast mac address. Ignoring\n");
+				return IPACM_SUCCESS;
+			}
+
 			if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != 0) && (msg_ptr->nl_neigh_info.master_interface_index == 0) &&
 								(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family != 0))
 			{
@@ -3173,6 +3189,16 @@ process_v6:
 			{
 			  IPACMDBG_H("RTM_DELNEIGH received with NULL MAC\n");
 			  return IPACM_SUCCESS;
+			}
+			if (IS_IPV6_MCAST_MAC(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data))
+			{
+				IPACMDBG_H("RTM_DELNEIGH received with IPv6 multicast mac address. Ignoring\n");
+				return IPACM_SUCCESS;
+			}
+			if (IS_IPV4_MCAST_MAC(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data))
+			{
+				IPACMDBG_H("RTM_DELNEIGH received with IPv4 multicast mac address. Ignoring\n");
+				return IPACM_SUCCESS;
 			}
 
 			/* insert to command queue */

@@ -1008,6 +1008,20 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				break;
 			}
 		}
+
+		/* For ETH/STA backhaul, the fe80::/10 filter rule installed in
+		 * init_fl_rule() handles link-local traffic. Skip the specific
+		 * /128 RT rule to avoid redundancy; store the address for dedup. */
+		if (m_is_sta_mode != Q6_WAN && !is_global_ipv6_addr(data->ipv6_addr))
+		{
+			IPACMDBG_H("Skip link-local RT rule for ETH/STA backhaul\n");
+			ipv6_addr[num_dft_rt_v6][0] = data->ipv6_addr[0];
+			ipv6_addr[num_dft_rt_v6][1] = data->ipv6_addr[1];
+			ipv6_addr[num_dft_rt_v6][2] = data->ipv6_addr[2];
+			ipv6_addr[num_dft_rt_v6][3] = data->ipv6_addr[3];
+			goto skip_v6_ll_rt;
+		}
+
 		rt_rule = (struct ipa_ioc_add_rt_rule *)
 			calloc(1, sizeof(struct ipa_ioc_add_rt_rule) +
 				NUM_RULES * sizeof(struct ipa_rt_rule_add));
@@ -1112,32 +1126,23 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		}
 #endif
 		IPACMDBG_H("Now the number of modem ipv6 pdn is %d, num_dft_rt_v6 %d.\n", num_ipv6_modem_pdn, num_dft_rt_v6);
-		/* add default filtering rules when wan-iface get global v6-prefix,
+skip_v6_ll_rt:
+		/* For ETH/STA backhaul: install filter rules on first IPv6 event (link-local)
+		 * so fe80::/10 is covered before the global address arrives.
+		 * For Q6 backhaul: install filter rules on second IPv6 event (global address).
 		 */
-		if (num_dft_rt_v6 == 1)
+		if (num_dft_rt_v6 == 0 && m_is_sta_mode != Q6_WAN)
 		{
-			if(m_is_sta_mode == Q6_WAN)
-			{
-				num_ipv6_modem_pdn++;
-				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
-				init_fl_rule_ex(data->iptype);
-			}
-			else
-			{
-				num_ipv6_sta_pdn++;
-				IPACMDBG_H("Now the number of STA ipv6 pdn is %d.\n", num_ipv6_sta_pdn);
-				init_fl_rule(data->iptype);
-			}
+			num_ipv6_sta_pdn++;
+			IPACMDBG_H("Install v6 filter rules on first addr event, STA pdn count: %d.\n", num_ipv6_sta_pdn);
+			init_fl_rule(data->iptype);
 		}
 
-		/* Add default filtering rules when wan-iface get link local when eth_wan_pppoe_enable */
-		if(!is_global_ipv6_addr(data->ipv6_addr) && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
+		if (num_dft_rt_v6 == 1 && m_is_sta_mode == Q6_WAN)
 		{
-			if(m_is_sta_mode != Q6_WAN)
-			{
-				IPACMDBG_H("Add dft rule with link local addr handling, Now the number of STA ipv6 pdn is %d.\n", num_ipv6_sta_pdn);
-				init_fl_rule(data->iptype);
-			}
+			num_ipv6_modem_pdn++;
+			IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
+			init_fl_rule_ex(data->iptype);
 		}
 
 		/* store ipv6 prefix if the ipv6 address is not link local */
@@ -3687,10 +3692,13 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 #ifdef FEATURE_IPA_IPSEC
 	case IPA_IPSEC_LAN_CLIENT_ROUTE_ADD_EVENT:
 		{
-			ipa_ip_type iptype = *(ipa_ip_type *)param;
-			IPACMDBG_H("New client RT rule added. Calling installWanPostIpsecRt(%s)\n", iptype == IPA_IP_v4 ? "IPA_IP_v4" : "IPA_IP_v6");
-			if (installWanPostIpsecRt(iptype) != IPACM_SUCCESS)
-				IPACMERR("installWanPostIpsecRt(%s) failed\n", iptype == IPA_IP_v4 ? "IPA_IP_v4" : "IPA_IP_v6");
+			if (m_is_sta_mode == Q6_WAN && is_default_gateway) {
+				IPACMDBG_H(" IPA_WAN_Q6 Installing IPsec rules \n");
+				ipa_ip_type iptype = *(ipa_ip_type *)param;
+				IPACMDBG_H("New client RT rule added. Calling installWanPostIpsecRt(%s)\n", iptype == IPA_IP_v4 ? "IPA_IP_v4" : "IPA_IP_v6");
+				if (installWanPostIpsecRt(iptype) != IPACM_SUCCESS)
+					IPACMERR("installWanPostIpsecRt(%s) failed\n", iptype == IPA_IP_v4 ? "IPA_IP_v4" : "IPA_IP_v6");
+			}
 		}
 		break;
 #endif

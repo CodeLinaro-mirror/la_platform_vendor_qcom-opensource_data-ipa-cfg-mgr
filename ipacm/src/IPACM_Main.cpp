@@ -906,7 +906,8 @@ void* ipa_driver_msg_notifier(void *param)
 		case IPA_PER_CLIENT_STATS_CONNECT_EVENT:
 			IPACMDBG_H("Received IPA_PER_CLIENT_STATS_CONNECT_EVENT\n");
 #ifdef IPA_HW_FNR_STATS
-			if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+			if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1 ||
+					IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_2)
 			{
 				/* Mode 1: payload is ipa_lan_client_msg_vlan (has vlan_id) */
 				memcpy(&event_lan_client_vlan, buffer + sizeof(struct ipa_msg_meta),
@@ -945,7 +946,8 @@ void* ipa_driver_msg_notifier(void *param)
 		case IPA_PER_CLIENT_STATS_DISCONNECT_EVENT:
 			IPACMDBG_H("Received IPA_PER_CLIENT_STATS_DISCONNECT_EVENT\n");
 #ifdef IPA_HW_FNR_STATS
-			if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1)
+			if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1 ||
+					IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_2)
 			{
 				memcpy(&event_lan_client_vlan, buffer + sizeof(struct ipa_msg_meta),
 					sizeof(struct ipa_lan_client_msg_vlan));

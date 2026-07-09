@@ -1144,6 +1144,22 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				ipa_nl_query_newneigh(AF_INET);
 				IPACMDBG_H("Query Getneigh for v6\n");
 				ipa_nl_query_newneigh(AF_INET6);
+#ifdef FEATURE_VLAN_MPDN
+				if (IPACM_Iface::ipacmcfg->eth_vlan_wan_enable &&
+					IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name != NULL &&
+					strncmp(dev_name, IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name,
+							strnlen(dev_name, sizeof(dev_name))) == 0)
+				{
+					IPACMDBG_H("eth_vlan_wan_enable: %d, eth_lan_wan_iface_name: %s, "
+							"iface: %s, query getroute for iptype: %d\n",
+							IPACM_Iface::ipacmcfg->eth_vlan_wan_enable,
+							IPACM_Iface::ipacmcfg->eth_lan_wan_iface_name,
+							dev_name, data->iptype);
+					/* to handle if we have missed new route events before
+					 * creation of interface */
+					ipa_nl_send_getroute(data->iptype);
+				}
+#endif
 			}
 		}
 		break;

@@ -244,27 +244,39 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 	{
 		if(is_sta)
 		{
-			if(pdn_count_sta >= IPA_MAX_WLAN_STA_IFACES)
+			/* Multiple VLANs may ride on the SAME STA (wlan0) public IP.
+			 * Before allocating a new NAT PDN slot, check whether this pub_ip
+			 * already has one.
+			 */
+			if(ipa_nat_get_pdn_index(pub_ip, &pdn_index) >= 0)
 			{
-				IPACMERR("Max STA PDNs (%d) already allocated, rejecting ip 0x%X\n",
-					IPA_MAX_WLAN_STA_IFACES, pub_ip);
-				return IPACM_FAILURE;
+				IPACMDBG_H("STA pdn already exists at index %d for ip 0x%X - reusing\n",
+					pdn_index, pub_ip);
 			}
-			pdn_index = pdn_count_sta;
-			entry.public_ip = pub_ip;
-			entry.src_metadata = 0;
-			entry.is_sta = true;
-			ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
+			else
+			{
+				if(pdn_count_sta >= IPA_MAX_WLAN_STA_IFACES)
+				{
+					IPACMERR("Max STA PDNs (%d) already allocated, pdn_count_sta=%d, rejecting ip 0x%X\n",
+						IPA_MAX_WLAN_STA_IFACES, pdn_count_sta, pub_ip);
+					return IPACM_FAILURE;
+				}
+				pdn_index = pdn_count_sta;
+				entry.public_ip = pub_ip;
+				entry.src_metadata = 0;
+				entry.is_sta = true;
+				ret = ipa_nat_alloc_pdn(&entry, &pdn_index);
 
-			if(ret)
-			{
-				IPACMERR("Unable to allocate PDN %d for STA ip 0x%X Error: %d\n",
-					pdn_index, pub_ip, ret);
-				return ret;
+				if(ret)
+				{
+					IPACMERR("Unable to allocate PDN %d for STA ip 0x%X Error: %d\n",
+						pdn_index, pub_ip, ret);
+					return ret;
+				}
+				pdn_count_sta++;
+				IPACMDBG_H("STA PDN allocated at index %d, pdn_count_sta=%d\n",
+					pdn_index, pdn_count_sta);
 			}
-			pdn_count_sta++;
-			IPACMDBG_H("STA PDN allocated at index %d, pdn_count_sta=%d\n",
-				pdn_index, pdn_count_sta);
 		}
 		else
 		{

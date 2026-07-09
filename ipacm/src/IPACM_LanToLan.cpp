@@ -494,14 +494,17 @@ void IPACM_LanToLan::handle_client_cross_proc_ctx(ipacm_event_eth_bridge *data)
 			{
 				if(it1->get_iface_pointer() == data->p_iface)
 					continue;
+				is_present = false;
 				if(front_iface.m_is_cross_proc_ctx_handled == true)
 				{
 					for(mac_itr = front_iface.m_is_cross_proc_ctx_client_handled.begin();mac_itr != front_iface.m_is_cross_proc_ctx_client_handled.end();mac_itr++)
 					{
 						if(!memcmp(data->mac_addr, mac_itr->mac_addr, sizeof(data->mac_addr)))
-						is_present = true;
-						IPACMERR("client RT rules already handled for mac %x:%x:%x:%x:%x:%x\n", data->mac_addr[0],data->mac_addr[1],data->mac_addr[2],data->mac_addr[3],data->mac_addr[4],data->mac_addr[5]);
-						return;
+						{
+							is_present = true;
+							IPACMERR("client RT rules already handled for mac %x:%x:%x:%x:%x:%x\n", data->mac_addr[0],data->mac_addr[1],data->mac_addr[2],data->mac_addr[3],data->mac_addr[4],data->mac_addr[5]);
+							break;
+						}
 					}
 				}
 				if(!front_iface.get_is_vlan() && it1->get_is_vlan() &&  (front_iface.m_is_cross_proc_ctx_handled == false || (front_iface.m_is_cross_proc_ctx_handled == true && is_present == false)))
@@ -542,14 +545,17 @@ void IPACM_LanToLan::handle_client_cross_proc_ctx(ipacm_event_eth_bridge *data)
 					}
 				}
 			}
+			is_present = false;
 			if(front_iface.m_is_cross_proc_ctx_handled == true)
 			{
 				for(mac_itr = front_iface.m_is_cross_proc_ctx_client_handled.begin();mac_itr != front_iface.m_is_cross_proc_ctx_client_handled.end();mac_itr++)
 				{
 					if(!memcmp(data->mac_addr, mac_itr->mac_addr, sizeof(data->mac_addr)))
-					is_present = true;
-					IPACMERR("client RT rules already handled for mac %x:%x:%x:%x:%x:%x\n", data->mac_addr[0],data->mac_addr[1],data->mac_addr[2],data->mac_addr[3],data->mac_addr[4],data->mac_addr[5]);
-					return;
+					{
+						is_present = true;
+						IPACMERR("client RT rules already handled for mac %x:%x:%x:%x:%x:%x\n", data->mac_addr[0],data->mac_addr[1],data->mac_addr[2],data->mac_addr[3],data->mac_addr[4],data->mac_addr[5]);
+						break;
+					}
 				}
 			}
 
@@ -559,7 +565,7 @@ void IPACM_LanToLan::handle_client_cross_proc_ctx(ipacm_event_eth_bridge *data)
 				/* add client specific filtering rule on new interface for matching vlan ids*/
 				front_iface.add_all_inter_interface_client_flt_rule(IPA_IP_v4, Ids);
 				front_iface.add_all_inter_interface_client_flt_rule(IPA_IP_v6, Ids);
-				memcmp(client_cross_proc_ctx_info.mac_addr, data->mac_addr, sizeof(data->mac_addr));
+				memcpy(client_cross_proc_ctx_info.mac_addr, data->mac_addr, sizeof(data->mac_addr));
 				front_iface.m_is_cross_proc_ctx_client_handled.push_front(client_cross_proc_ctx_info);
 				if(front_iface.m_is_cross_proc_ctx_handled != true)
 					front_iface.m_is_cross_proc_ctx_handled = true;

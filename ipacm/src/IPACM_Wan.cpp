@@ -96,6 +96,21 @@ const uint8_t IPACM_Wan::v4_ipogre_header[] = {
 
 const uint8_t IPACM_Wan::v6_ipogre_header[] = {
 	0x60, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x2f, 0x40, // 0x2f Protocol (Generic Routing Encapsulation)
+	0x00, 0x00, 0x00, 0x00, // src address here
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, // dest address here
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	// GRE header here
+	0x00, 0x00, 0x00, 0x00,
+};
+
+const uint8_t IPACM_Wan::v6_ipogre_header_op[] = {
+	0x60, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x3c, 0x40, // 0x3c Protocol (destination option) hop limit to 64
 	0x00, 0x00, 0x00, 0x00, // src address here
 	0x00, 0x00, 0x00, 0x00,
@@ -16684,9 +16699,20 @@ int IPACM_Wan::ipgre_make_hdr_for_add_ctx(
 		v6_ipgre_hdr_t* hdr = (v6_ipgre_hdr_t*) hdr_data_buf;
 		if(IPACM_Iface::ipacmcfg->ipogre_enabled)
 		{
-			memcpy(hdr_data_buf, v6_ipogre_header, sizeof(v6_ipogre_header));
-			hdr_data_len = sizeof(v6_ipogre_header);
-			hdr->words[IPV6_GRE_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v6);
+			if(IPACM_Iface::ipacmcfg->encap_enable)
+			{
+				memcpy(hdr_data_buf, v6_ipogre_header_op, sizeof(v6_ipogre_header_op));
+				hdr_data_len = sizeof(v6_ipogre_header_op);
+				hdr->words[IPV6_GRE_PROT_IDX_OP] = htonl(GRE_PROTOCOL_TYPE_v6);
+				/* Patch the encap limit value into the Destination Options header */
+				hdr_data_buf[44] = (uint8_t)IPACM_Iface::ipacmcfg->encap_limit;
+			}
+			else
+			{
+				memcpy(hdr_data_buf, v6_ipogre_header, sizeof(v6_ipogre_header));
+				hdr_data_len = sizeof(v6_ipogre_header);
+				hdr->words[IPV6_GRE_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v6);
+			}
 		}
 		else
 		{
@@ -16761,7 +16787,13 @@ int IPACM_Wan::ipgre_make_hdr_for_add_ctx(
 	else{
 					v6_ipgre_hdr_t* hdr2 = (v6_ipgre_hdr_t*) hdr_data_buf;
 					if(IPACM_Iface::ipacmcfg->ipogre_enabled)
-						hdr2->words[IPV6_GRE_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v4);
+					{
+						if(IPACM_Iface::ipacmcfg->encap_enable)
+							hdr2->words[IPV6_GRE_PROT_IDX_OP] = htonl(GRE_PROTOCOL_TYPE_v4);
+						else
+							hdr2->words[IPV6_GRE_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v4);
+
+					}
 					else
 						hdr2->words[IPV6_GRE_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v4_WITH_KEY);  //V6 tunnel carrying v4 payload
 	}

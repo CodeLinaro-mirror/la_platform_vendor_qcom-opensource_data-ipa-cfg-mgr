@@ -3636,7 +3636,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
 					rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] = 0;
 					rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] = 0;
-					rt_rule_entry->at_rear = false;
+					rt_rule_entry->at_rear = true;
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif
@@ -3783,7 +3783,7 @@ PostWanUpV6:
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 					rt_rule_entry->rule.attrib.u.v4.src_addr      = wan_v4_addr;
 					rt_rule_entry->rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
-					rt_rule_entry->at_rear = false;
+					rt_rule_entry->at_rear = true;
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif
@@ -10338,6 +10338,10 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				rt_rule_entry->rule.hdr_hdl = get_client_memptr(wan_client, wan_index)->hdr_hdl_v4;
 				rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(wan_client, wan_index)->v4_addr;
 				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+				rt_rule_entry->rule.attrib.u.v4.src_addr      = wan_v4_addr;
+				rt_rule_entry->rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
+				rt_rule_entry->at_rear = false;
 #ifdef FEATURE_IPA_V3
 				rt_rule_entry->rule.hashable = true;
 #endif
@@ -10388,6 +10392,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
 					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
 					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+					rt_rule_entry->at_rear = false;
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif

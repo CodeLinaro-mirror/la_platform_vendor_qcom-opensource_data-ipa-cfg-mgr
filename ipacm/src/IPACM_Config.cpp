@@ -1426,9 +1426,14 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	bridge_vlan_mapping_info new_mapping;
 	ipacm_bridge *bridge = NULL;
+	ipacm_event_eth_bridge *evt_data_eth_bridge = NULL;
+	ipacm_cmd_q_data eth_bridge_evt = {};
+	bool bridge_dummy_vid_mapping = false, is_found = false;
+
 	char iface_name[IPA_IFACE_NAME_LEN] = {0};
 	int ret = IPACM_FAILURE;
 	bool new_entry = false;
+	std::list<std::array<char, IPA_RESOURCE_NAME_MAX>> iface_list;
 #ifdef IPA_L2TP_TUNNEL_UDP
 	list<l2tp_vlan_mapping_info>::iterator it_l2tp_mapping;
 #endif
@@ -1445,14 +1450,15 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 	{
 		if(it_mapping->bridge_if_index == data->master_if_index)
 		{
-	        	if(is_dummy_VID(data->vlan_id))
+			if(is_dummy_VID(data->vlan_id))
 			{
 				if((data->vlan_id != it_mapping->bridge_associated_VID) || !is_dummy_VID(it_mapping->bridge_associated_VID))
-            			{
-                			continue;
-                		}
+				{
+					continue;
+				}
 			} else if(is_dummy_VID(it_mapping->bridge_associated_VID))
 			{
+				bridge_dummy_vid_mapping = true;
 				continue;
 			}
 
@@ -1477,12 +1483,19 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 				goto bail;
 			}
 
-			IPACMERR("The bridge %s was added before with vlan id %d\n", data->bridge_name,
-				it_mapping->bridge_associated_VID);
-			goto bail;
+			if(it_mapping->bridge_associated_VID == data->vlan_id)
+			{
+				is_found = true;
+				continue;
+			}
 		}
 	}
-
+	if(is_found)
+	{
+		IPACMERR("The bridge %s was added before with vlan id %d\n", data->bridge_name,
+				data->vlan_id);
+		goto bail;
+	}
 	if (data->status == 1)
 	{
 		IPACMERR("No partial entry with vlan got added, Discarding the bridge data update\n");
@@ -1505,6 +1518,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 		}
 
 		m_bridge_vlan_mapping.push_front(new_mapping);
+		new_entry = true;
 		pthread_mutex_unlock(&vlan_l2tp_lock);
 		bridge = get_vlan_bridge(data->bridge_name);
 		if(bridge &&(!is_dummy_VID(data->vlan_id) || check_l2tp_bridge_vlan_id(data->vlan_id)))
@@ -1514,10 +1528,49 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 			bridge->associate_VID = data->vlan_id;
 		}
 		IPACMDBG_H("added partial Entry with master interface index %d, VID %d\n", data->master_if_index, data->vlan_id);
-		return;
+		goto neigh_query;
 	}
+
 bail:
 	pthread_mutex_unlock(&vlan_l2tp_lock);
+
+	/* dummy mapping is already presents, so wlan AP on demand bridge mapping recieved
+	before actual iface vlan bridge mapping, so we need to post the  IPA_ETH_BRIDGE_ADD_VLAN_ID
+	event to install the lantolan rules between wlan AP to assosiate bridge vlan interface*/
+	if(bridge_dummy_vid_mapping)
+	{
+#ifdef FEATURE_VLAN_MPDN
+		get_ifaces_from_vid(data->vlan_id, iface_list);
+
+		for (const auto& iface : iface_list)
+		{
+			evt_data_eth_bridge =
+				(ipacm_event_eth_bridge *)calloc(1, sizeof(ipacm_event_eth_bridge));
+
+			if (evt_data_eth_bridge == NULL)
+			{
+				IPACMERR("Failed to allocate memory.\n");
+				continue;
+			}
+
+			strlcpy(evt_data_eth_bridge->iface_name,
+					iface.data(),
+					sizeof(evt_data_eth_bridge->iface_name));
+
+			evt_data_eth_bridge->VlanID = data->vlan_id;
+
+			eth_bridge_evt.evt_data = (void *)evt_data_eth_bridge;
+			eth_bridge_evt.event = IPA_ETH_BRIDGE_ADD_VLAN_ID;
+
+			IPACMDBG_H("Posting event %s %s\n",
+					IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event),
+					iface.data());
+			IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
+		}
+
+#endif
+	}
+neigh_query:
 	if(new_entry)
 	{
 		IPACMDBG_H("Querying the neighbors fo bridge %s\n",
@@ -2743,8 +2796,32 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids)
 
 	return ret;
 }
-
 #endif
+
+
+void IPACM_Config::get_ifaces_from_vid(
+    uint16_t vlan_id,
+    std::list<std::array<char, IPA_RESOURCE_NAME_MAX>>& iface_list)
+{
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACMERR("Unable to lock the mutex\n");
+		return;
+	}
+	for (auto it_vlan = m_vlan_iface.begin();
+			it_vlan != m_vlan_iface.end();
+			++it_vlan)
+	{
+		if (it_vlan->vlan_id == vlan_id)
+		{
+			std::array<char, IPA_RESOURCE_NAME_MAX> iface = {};
+			memcpy(iface.data(), it_vlan->vlan_iface_name, sizeof(it_vlan->vlan_iface_name));
+			IPACMDBG_H("copied  %s iface to the list\n", it_vlan->vlan_iface_name);
+			iface_list.push_back(iface);
+		}
+	}
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+}
 
 #if defined(FEATURE_L2TP)
 void IPACM_Config::add_l2tp_vlan_mapping(l2tp_session_info *data)

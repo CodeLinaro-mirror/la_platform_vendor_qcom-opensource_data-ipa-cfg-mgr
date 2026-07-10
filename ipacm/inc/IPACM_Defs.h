@@ -198,6 +198,9 @@ extern "C"
 
 extern bool ipacm_restarted;
 
+#ifndef IPA_MAX_WLAN_STA_IFACES
+#define IPA_MAX_WLAN_STA_IFACES 2
+#endif
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/
@@ -565,6 +568,7 @@ typedef struct _ipacm_ifacemgr_data
 	ipacm_wan_iface_type if_type;
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 	char iface_name[IPA_IFACE_NAME_LEN];
+	bool mlo_enabled;
 }ipacm_ifacemgr_data;
 
 struct ipa_vlan_iface_info

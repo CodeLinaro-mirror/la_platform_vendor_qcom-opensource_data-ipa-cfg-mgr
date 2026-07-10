@@ -438,7 +438,11 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			memset(data_fid,0,sizeof(ipacm_event_data_fid));
 			strlcpy(data_fid->iface_name, event_wlan->name, IPA_IFACE_NAME_LEN);
-			ipa_get_if_index(event_wlan->name, &(data_fid->if_index));
+			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data_fid->if_index)))
+			{
+				data_fid->if_index = event_wlan->if_index;
+				IPACMDBG_H("Using WLAN_AP_DISCONNECT if_index: %d\n",event_wlan->if_index);
+			}
 			evt_data.event = IPA_WLAN_LINK_DOWN_EVENT;
 			evt_data.evt_data = data_fid;
 			break;
@@ -556,13 +560,13 @@ void* ipa_driver_msg_notifier(void *param)
 				IPACMERR("unable to allocate memory for event_wlan data\n");
 				goto done;
 			}
+			memset(data, 0, sizeof(ipacm_event_data_mac));
 			strlcpy(data->iface_name, event_wlan->name, IPA_IFACE_NAME_LEN);
 			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data->if_index)))
 			{
 				data->if_index = event_wlan->if_index;
 				IPACMDBG_H("Using WLAN_CLIENT_DISCONNECT if_index: %d\n",event_wlan->if_index);
 			}
-			memset(data, 0, sizeof(ipacm_event_data_mac));
 			memcpy(data->mac_addr, event_wlan->mac_addr, sizeof(event_wlan->mac_addr));
 			evt_data.event = IPA_WLAN_CLIENT_DEL_EVENT;
 			evt_data.evt_data = data;

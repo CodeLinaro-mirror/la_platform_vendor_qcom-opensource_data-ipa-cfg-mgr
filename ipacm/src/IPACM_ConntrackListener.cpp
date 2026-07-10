@@ -1329,43 +1329,61 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		}
 		else
 		{
-			if(vlan_pdns[0].public_ip == vlanup_data->ipv4_addr)
+			/* vlan_pdns[] is shared with WWAN PDNs; with dual WLAN STA (wlan0+wlan1)
+			 * each STA may occupy any free slot — scan the full table. */
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
-				available_idx = -1;
-				for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+				if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
 				{
-					if (vlanup_data->VlanID == vlan_pdns[0].associated_VIDs[i])
+					available_idx = -1;
+					for(int j = 0; j < IPA_MAX_NUM_HW_PDNS; j++)
 					{
-						IPACMDBG_H("found existing PDN entry in 0, with vlan %d\n",
-								vlanup_data->VlanID);
-						return;
+						if(vlanup_data->VlanID == vlan_pdns[i].associated_VIDs[j])
+						{
+							IPACMDBG_H("found existing PDN entry in %d, with vlan %d\n",
+									i, vlanup_data->VlanID);
+							return;
+						}
+						else if((vlan_pdns[i].associated_VIDs[j] == 0) && (available_idx == -1))
+						{
+							available_idx = j;
+						}
 					}
-					else if((vlan_pdns[0].associated_VIDs[i] == 0) && (available_idx == -1))
+					if(available_idx != -1)
 					{
-						available_idx = i;
+						IPACMDBG_H("found existing PDN in slot %d, adding VLAN %d at vlan-idx %d\n",
+							i, vlanup_data->VlanID, available_idx);
+						vlan_pdns[i].associated_VIDs[available_idx] = vlanup_data->VlanID;
+						vlan_pdns[i].VID_cnt++;
+						IPACMDBG_H("Now no of vlans mapped to PDN slot %d is %d\n",
+								i, vlan_pdns[i].VID_cnt);
+						goto sta_flush_temp;
 					}
-				}
-				if (available_idx != -1)
-				{
-					IPACMDBG_H("found existing PDN entry in 0, but got new VLAN id. "
-						   "Adding vlan %d to the entry to pdn vlan index is %d\n",
-						vlanup_data->VlanID, available_idx);
-					vlan_pdns[0].associated_VIDs[available_idx] = vlanup_data->VlanID;
-					vlan_pdns[0].VID_cnt++;
-					IPACMDBG_H("Now no of vlans mapped to PDN entry in 0 is %d\n",
-							vlan_pdns[0].VID_cnt);
+					/* same IP but no free VID slot — not expected; fall through to error */
+					IPACMERR("No free VID slot in existing STA PDN slot %d\n", i);
 					return;
 				}
 			}
-			if(vlan_pdns[0].public_ip == 0)
+
+			/* new STA public IP: allocate the first free slot in the shared table. */
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
-				IPACMDBG_H("found empty PDN entry in 0 index num_vlan_pdns %d\n", num_vlan_pdns);
-				vlan_pdns[0].VID_cnt = 0;
-				vlan_pdns[0].public_ip = vlanup_data->ipv4_addr;
-				vlan_pdns[0].associated_VIDs[vlan_pdns[0].VID_cnt] = vlanup_data->VlanID;
-				vlan_pdns[0].VID_cnt++;
-				num_vlan_pdns++;
+				if(vlan_pdns[i].public_ip == 0)
+				{
+					IPACMDBG_H("Allocating STA PDN slot %d for ip=0x%X vid=%d\n",
+						i, vlanup_data->ipv4_addr, vlanup_data->VlanID);
+					vlan_pdns[i].VID_cnt = 0;
+					vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
+					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] = vlanup_data->VlanID;
+					vlan_pdns[i].VID_cnt++;
+					num_vlan_pdns++;
+					goto sta_flush_temp;
+				}
 			}
+			IPACMERR("No free PDN slot for STA ip=0x%X\n", vlanup_data->ipv4_addr);
+			return;
+
+sta_flush_temp:
 			IPACMDBG_H("PDN table added successfully for STA\n");
 			if(!isNatThreadStart)
 			{
@@ -2256,10 +2274,15 @@ int v6_conntracks_callback(enum nf_conntrack_msg_type type,struct nf_conntrack *
 void* query_conntracks(void *arguments)
 {
 	int ret;
-	struct nfct_handle *handle;
+	struct nfct_handle *handle = NULL;
 	struct nf_conntrack *ct;
 	struct query_nl_conntrack *args = (struct query_nl_conntrack *)arguments;
 	int family;
+
+	if (args == NULL) {
+		IPACMERR("query_conntracks: NULL arguments\n");
+		goto exit;
+	}
 
 	IPACMDBG_H("quering ct for ipv4 %d \n",args->is_ipv4);
 	IPACMDBG_H("quering ct for ipv6 %d \n",args->is_ipv6);
@@ -2313,14 +2336,15 @@ void* query_conntracks(void *arguments)
 	nfct_close(handle);
 
 exit:
-	if(args->is_ipv4)
-		IPACMDBG_H("Exited the conntrack query thread created for IPv4: 0x%X\n", args->ipv4_addr);
-	else if(args->is_ipv6)
-		IPACMDBG("Exited the conntrack query thread created for IPv6: 0x%08x:%08x:%08x:%08x\n", args->ipv6_addr[0],
-						args->ipv6_addr[1], args->ipv6_addr[2],
-						args->ipv6_addr[3]);
-	if(args)
+	if (args) {
+		if(args->is_ipv4)
+			IPACMDBG_H("Exited the conntrack query thread created for IPv4: 0x%X\n", args->ipv4_addr);
+		else if(args->is_ipv6)
+			IPACMDBG("Exited the conntrack query thread created for IPv6: 0x%08x:%08x:%08x:%08x\n", args->ipv6_addr[0],
+						args->ipv6_addr[1], args->ipv6_addr[2], args->ipv6_addr[3]);
+
 		free(args);
+	}
 	pthread_exit((void*) 0);
 	return 0;
 }
@@ -3393,8 +3417,13 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		{
 #ifdef FEATURE_VLAN_MPDN
 			status = 0;
-			/* check if this is an embedded traffic to a secondary PDN */
-			for(i = 1; i < IPA_MAX_NUM_HW_PDNS; i++)
+			/* Slot 0 may hold a WLAN STA PDN (mux_id==0) that is distinct
+			 * from wan_ipaddr (e.g. wlan0/STA1 when wlan1/STA2 is the last
+			 * tracked WAN). In that case scan from 0; otherwise keep the
+			 * legacy start of 1 so WWAN-only paths are unaffected. */
+			int pdn_scan_start = (vlan_pdns[0].public_ip != 0 &&
+					vlan_pdns[0].public_ip != wan_ipaddr) ? 0 : 1;
+			for(i = pdn_scan_start; i < IPA_MAX_NUM_HW_PDNS; i++)
 			{
 				/* check if we already got vlan_pdn_up event for this ip */
 				if(vlan_pdns[i].public_ip == orig_src_ip)
@@ -3477,7 +3506,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		 }
 
 		 /* Suppressing NAT entry for Q6 WAN connections when IP Pass not enabled. */
-		 if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v5_5)
+		 if ((!ip_pass_enable) && (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v5_5))
 			  goto IGNORE;
 
 		 IPACMDBG_H("For embedded connections add dummy nat rule\n");

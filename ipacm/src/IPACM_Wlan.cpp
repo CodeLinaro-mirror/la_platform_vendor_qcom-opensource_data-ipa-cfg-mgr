@@ -206,7 +206,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
-			if ((ipa_interface_index == ipa_if_num) && (!strncmp(data->iface_name,dev_name, strlen(dev_name))))
+			if ((ipa_interface_index == ipa_if_num) && (!strcmp(data->iface_name, get_is_mlo_link() ? get_mlo_link_name() : dev_name)))
 			{
 				IPACMDBG_H("Received IPA_WLAN_LINK_DOWN_EVENT\n");
 				handle_down_evt();
@@ -272,7 +272,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_LAN_DELETE_SELF:
 	{
 		ipacm_event_data_fid *data = (ipacm_event_data_fid *)param;
-		if((data->if_index == ipa_if_num) && (!strncmp(data->iface_name, dev_name, strlen(dev_name))))
+		if((data->if_index == ipa_if_num) && (!strcmp(data->iface_name, get_is_mlo_link() ? get_mlo_link_name() : dev_name)))
 		{
 			IPACMDBG_H("Now the number of wlan AP iface is %d\n", IPACM_Wlan::num_wlan_ap_iface);
 
@@ -874,7 +874,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			ipacm_event_data_wlan_ex *data = (ipacm_event_data_wlan_ex *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			IPACMDBG_H("Received IPA_WLAN_CLIENT_ADD_EVENT_EX %d %s %s\n",ipa_interface_index,data->iface_name,dev_name);
-			if ((ipa_interface_index == ipa_if_num) && (!strncmp(data->iface_name, dev_name, strlen(dev_name))))
+			if ((ipa_interface_index == ipa_if_num) && (!strcmp(data->iface_name, get_is_mlo_link() ? get_mlo_link_name() : dev_name)))
 			{
 				IPACMDBG_H("Received IPA_WLAN_CLIENT_ADD_EVENT\n");
 				handle_wlan_client_init_ex(data);
@@ -888,7 +888,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
 
-			if (ipa_interface_index == ipa_if_num)
+			if ((ipa_interface_index == ipa_if_num) && (!strcmp(data->iface_name, get_is_mlo_link() ? get_mlo_link_name() : dev_name)))
 			{
 				IPACMDBG_H("Received IPA_WLAN_CLIENT_DEL_EVENT\n");
 #ifdef IPA_VLAN_PRIORITY
@@ -929,7 +929,13 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Received IPA_LAN_CLIENT_ADD_EVENT\n");
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			IPACMDBG_H("check iface %s category: %d\n", dev_name, ipa_if_cate);
-			if (ipa_interface_index == ipa_if_num)
+
+			/* For MLO, both wlan0_0 and wlan0_1 share the same ipa_if_num.
+			 * Only the instance that handled the WLAN association event for this
+			 * client (and therefore has it in its wlan_client list) should process
+			 * this neighbor event; the other link instance skips it.
+			 */
+			if ((ipa_interface_index == ipa_if_num) && (get_wlan_client_index(data->mac_addr) != IPACM_INVALID_INDEX))
 			{
 #ifdef IPA_VLAN_PRIORITY
 				if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority))
@@ -1044,7 +1050,8 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		{
 			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
-			if (ipa_interface_index == ipa_if_num)
+
+			if ((ipa_interface_index == ipa_if_num) && (get_wlan_client_index(data->mac_addr) != IPACM_INVALID_INDEX))
 			{
 				IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT\n");
 
@@ -1218,7 +1225,10 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	{
 		ipacm_event_data_mac *data = (ipacm_event_data_mac *)param;
 		ipa_interface_index = iface_ipa_index_query(data->if_index);
-		if (ipa_interface_index == ipa_if_num)
+
+		/* For MLO, both wlan0_0 and wlan0_1 share the same ipa_if_num.
+		 * Only the instance that owns this client should reserve stats indices. */
+		if ((ipa_interface_index == ipa_if_num) && (get_wlan_client_index(data->mac_addr) != IPACM_INVALID_INDEX))
 		{
 			IPACMDBG_H("Received IPA_LAN_CLIENT_CONNECT_EVENT wlan\n");
 
@@ -1261,7 +1271,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 	{
 		ipacm_event_data_mac *data = (ipacm_event_data_mac *)param;
 		ipa_interface_index = iface_ipa_index_query(data->if_index);
-		if (ipa_interface_index == ipa_if_num)
+		if ((ipa_interface_index == ipa_if_num) && (get_wlan_client_index(data->mac_addr) != IPACM_INVALID_INDEX))
 		{
 			IPACMDBG_H("Received IPA_LAN_CLIENT_DISCONNECT_EVENT\n");
 			IPACM_Wlan::handle_lan_client_disconnect(data->mac_addr);

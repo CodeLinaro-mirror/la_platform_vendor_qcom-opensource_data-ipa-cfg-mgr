@@ -122,8 +122,8 @@ int	IPACM_Wan::ipa_if_num_tether_v6[IPA_MAX_IFACE_ENTRIES];
 ipacm_ipv4_wan_iface IPACM_Wan::ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
 ipacm_ipv6_wan_iface IPACM_Wan::ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
 uint8_t IPACM_Wan::num_offloaded_pdns = 0;
-int IPACM_Wan::wlan_v4_vlan_index = -1;
-int IPACM_Wan::wlan_v6_vlan_index = -1;
+int IPACM_Wan::wlan_v4_vlan_index[IPA_MAX_WLAN_STA_IFACES] = {-1,-1};
+int IPACM_Wan::wlan_v6_vlan_index[IPA_MAX_WLAN_STA_IFACES] = {-1,-1};
 int IPACM_Wan::eth_sta_v4_vlan_index = -1;
 int IPACM_Wan::eth_sta_v6_vlan_index = -1;
 #endif
@@ -201,6 +201,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	memset(invalid_mac, 0, sizeof(invalid_mac));
 
 	is_xlat = false;
+	in_collision = false;
 	hdr_hdl_dummy_v6 = 0;
 	hdr_proc_hdl_dummy_v6 = 0;
 
@@ -819,25 +820,26 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			install_wan_filtering_rule(false);
 		}
 		num_dft_rt_v6++;
+		IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);
     	}
 	else
 	{
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
-	if(m_is_sta_mode == Q6_WAN)
-	{
-		/* add qmuxd mapping*/
-		rmnet_mux_id_info info;
-		info.ipv4_addr = data->ipv4_addr;
-		if(ext_prop != NULL)
-			info.mux_id = ext_prop->ext[0].mux_id;;
-		memcpy(info.iface_name, dev_name, sizeof(dev_name));
-		IPACM_Iface::ipacmcfg->add_mux_id_mapping(&info);
-	}
+		if(m_is_sta_mode == Q6_WAN)
+		{
+			/* add qmuxd mapping*/
+			rmnet_mux_id_info info;
+			info.ipv4_addr = data->ipv4_addr;
+			if(ext_prop != NULL)
+				info.mux_id = ext_prop->ext[0].mux_id;;
+			memcpy(info.iface_name, dev_name, sizeof(dev_name));
+			IPACM_Iface::ipacmcfg->add_mux_id_mapping(&info);
+		}
 #endif // defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 		if(wan_v4_addr_set)
 		{
 			/* check iface ipv4 same or not */
-			if(data->ipv4_addr == wan_v4_addr)
+			if((data->ipv4_addr == wan_v4_addr) && (data->ipv4_addr_mask == wan_v4_mask))
 			{
 				IPACMDBG_H("Already setup device (%s) ipv4 and it didn't change(0x%x)\n", dev_name, data->ipv4_addr);
 				return IPACM_SUCCESS;
@@ -845,19 +847,7 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			else
 			{
 				IPACMDBG_H(" device (%s) ipv4 addr is changed\n", dev_name);
-				/*Don't remove route for WAN IP in Collision mode
-				it may lead to stall as NAT entry is still pointing to
-				default route entry*/
-				if(in_collision)
-				{
-					curr_wan_ip = data->ipv4_addr;
-					public_wan_v4_addr = wan_v4_addr;
-					public_wan_v4_addr_set = true;
-					IPACMDBG_H("Received wan ipv4-addr:0x%x\n",data->ipv4_addr);
-					IPACMDBG_H("In Collision mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
-					return IPACM_SUCCESS;
-				}
-				if (!ip_pass_pdn_info.enable && !in_collision)
+				if (!ip_pass_pdn_info.enable)
 				{
 					/* Delete default v4 RT rule */
 					IPACMDBG_H("Delete default v4 routing rules\n");
@@ -879,10 +869,6 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 					if ((m_is_sta_mode == Q6_WAN) && ip_pass_pdn_info.enable)
 					{
 						IPACMDBG_H("In IPPT mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
-					}
-					else if (in_collision)
-					{
-						IPACMDBG_H("In Collision mode, Storing previous wan ipv4-addr:0x%x\n",public_wan_v4_addr);
 					}
 					return IPACM_SUCCESS;
 				}
@@ -1064,8 +1050,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		}
 
 		/* Store the public ip address when in passthrough mode which will be used when wan is down. */
-		if (((m_is_sta_mode == Q6_WAN) && (ip_pass_pdn_info.enable && data->ipv4_addr == ip_pass_pdn_info.pdn_ip_addr)) ||
-			(in_collision))
+		if ((m_is_sta_mode == Q6_WAN) && (ip_pass_pdn_info.enable &&
+			data->ipv4_addr == ip_pass_pdn_info.pdn_ip_addr))
 		{
 			curr_wan_ip = data->ipv4_addr;
 			public_wan_v4_addr = wan_v4_addr;
@@ -1086,18 +1072,19 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		IPACMDBG_H("Received wan ipv4-addr:0x%x\n",wan_v4_addr);
 	}
 
-	set_swallow_pdn_up();
-	memset(&evt_data, 0, sizeof(evt_data));
-	dummy_cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
-	evt_data.event = IPA_SWALLOW_CHANGE_EVENT;
-	/* Dummy Data Ignored on received side */
-	evt_data.evt_data = (void *)dummy_cfg;
+	if(IPACM_Iface::ipacmcfg->sw_filter_cfg)
+	{
+		set_swallow_pdn_up();
+		memset(&evt_data, 0, sizeof(evt_data));
+		dummy_cfg = (IPACM_swallow_t *)calloc(1, sizeof(IPACM_swallow_t));
+		evt_data.event = IPA_SWALLOW_CHANGE_EVENT;
+		/* Dummy Data Ignored on received side */
+		evt_data.evt_data = (void *)dummy_cfg;
 
-	IPACMDBG("Posting IPA_SWALLOW_CHANGE_EVENT\n");
-	/* Insert IPA_SWALLOW_CHANGE_EVENT to command queue */
-	IPACM_EvtDispatcher::PostEvt(&evt_data);
-
-	IPACMDBG_H("number of default route rules %d\n", num_dft_rt_v6);
+		IPACMDBG("Posting IPA_SWALLOW_CHANGE_EVENT\n");
+		/* Insert IPA_SWALLOW_CHANGE_EVENT to command queue */
+		IPACM_EvtDispatcher::PostEvt(&evt_data);
+	}
 
 fail:
 	if(rt_rule)
@@ -1336,15 +1323,11 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("Checking IP collision for WAN interface %s with IP 0x%x, mask 0x%x\n",
 							dev_name, data->ipv4_addr, data->ipv4_addr_mask);
 
-				// Check for IPACM_cfg flag
-				if (IPACM_Iface::ipacmcfg->detect_and_handle_collision(dev_name,
-							data->ipv4_addr, data->ipv4_addr_mask))
+				if((data->iptype == IPA_IP_v4) &&
+					((data->ipv4_addr&IPV4_ADDR_LINKLOCAL_MASK) == IPV4_ADDR_LINKLOCAL))
 				{
-					in_collision = true;
-					IPACMDBG_H("IP collision enabled for interface %s\n", dev_name);
-				}
-				else {
-					in_collision = false;
+					IPACMDBG("Link local for wan instance is being ignored\n");
+					return;
 				}
 
 				IPACMDBG_H("Get IPA_ADDR_ADD_EVENT: IF ip type %d, incoming ip type %d\n", ip_type, data->iptype);
@@ -1368,6 +1351,12 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
  							IPACMDBG_H("WAN-LTE (%s) link up, iface: %d is_xlat: %d \n",
  							IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,data->if_index, is_xlat);
  						}
+						if(IPACM_Iface::ipacmcfg->detect_and_handle_collision(dev_name,
+									data->ipv4_addr, data->ipv4_addr_mask))
+						{
+							in_collision = true;
+							IPACMDBG_H("IP collision enabled for interface %s\n", dev_name);
+						}
 					}
 
 					handle_addr_evt(data);
@@ -1587,7 +1576,10 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					IPACMDBG_H("get default v4 route (dst:0.0.0.0)\n");
 
-					wan_v4_addr_gw = data->ipv4_addr_gw;
+					if(in_collision)
+						wan_v4_addr_gw = wan_v4_addr;
+					else
+						wan_v4_addr_gw = data->ipv4_addr_gw;
 					wan_v4_addr_gw_set = true;
 					wan_v4_is_default_gw = true;
 					IPACMDBG_H("adding routing table, dev (%s) ip-type(%d), default gw (%x)\n", dev_name,data->iptype, wan_v4_addr_gw);
@@ -2368,18 +2360,15 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 
 int IPACM_Wan::get_wan_v4_index(ipacm_wan_iface_type sta_mode)
 {
-	if(sta_mode == WLAN_WAN)
-		return IPACM_Wan::wlan_v4_vlan_index;
-	else if(sta_mode == ECM_WAN)
+
+	if(sta_mode == ECM_WAN)
 		return IPACM_Wan::eth_sta_v4_vlan_index;
 	return IPACM_FAILURE;
 }
 
 int IPACM_Wan::get_wan_v6_index(ipacm_wan_iface_type sta_mode)
 {
-	if(sta_mode == WLAN_WAN)
-		return IPACM_Wan::wlan_v6_vlan_index;
-	else if(sta_mode == ECM_WAN)
+	if(sta_mode == ECM_WAN)
 		return IPACM_Wan::eth_sta_v6_vlan_index;
 	return IPACM_FAILURE;
 }
@@ -2389,20 +2378,21 @@ void IPACM_Wan::get_vlan_association_info(ipacm_vlan_association_info* vlan_info
 	bool v4_found = false;
 	bool v6_found = false;
 
-	vlan_info->v6_idx[WLAN_WAN] = IPACM_Wan::get_wan_v6_index(WLAN_WAN);
-	vlan_info->v4_idx[WLAN_WAN] = IPACM_Wan::get_wan_v4_index(WLAN_WAN);
 	vlan_info->v6_idx[ECM_WAN] = IPACM_Wan::get_wan_v6_index(ECM_WAN);
 	vlan_info->v4_idx[ECM_WAN] = IPACM_Wan::get_wan_v4_index(ECM_WAN);
 
 	/* check if vlan-id associated with wlan/eth-STA wan index for ipv4 */
-	if((vlan_info->v4_idx[WLAN_WAN] >= 0) && ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].VID_cnt > 0)
+	for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES && !v4_found; slot++)
 	{
-		for (int vlan_idx = 0; vlan_idx < ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].VID_cnt; vlan_idx++)
+		int idx = IPACM_Wan::wlan_v4_vlan_index[slot];
+		if(idx < 0) continue;
+		for(int vlan_idx = 0; vlan_idx < ipv4_to_iface[idx].VID_cnt; vlan_idx++)
 		{
-			if(ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].associated_VIDs[vlan_idx] == vlan_info->vlan_id)
+			if(ipv4_to_iface[idx].associated_VIDs[vlan_idx] == vlan_info->vlan_id)
 			{
-				IPACMDBG_H("VlanID found in associated_VIDs in V4 WLAN STA BH\n");
+				IPACMDBG_H("VlanID found in slot %d V4 WLAN STA BH\n", slot);
 				vlan_info->v4_association = WLAN_WAN;
+				vlan_info->v4_idx[WLAN_WAN] = idx;
 				vlan_info->v4_vlan_idx[WLAN_WAN] = vlan_idx;
 				v4_found = true;
 				break;
@@ -2426,14 +2416,17 @@ void IPACM_Wan::get_vlan_association_info(ipacm_vlan_association_info* vlan_info
 	}
 
 	/* check if vlan-id associated with wlan/eth-STA wan index for ipv6 */
-	if((vlan_info->v6_idx[WLAN_WAN] >= 0) && ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].VID_cnt > 0)
+	for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES && !v6_found; slot++)
 	{
-		for (int vlan_idx = 0; vlan_idx < ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].VID_cnt; vlan_idx++)
+		int idx = IPACM_Wan::wlan_v6_vlan_index[slot];
+		if(idx < 0) continue;
+		for(int vlan_idx = 0; vlan_idx < ipv6_to_iface[idx].VID_cnt; vlan_idx++)
 		{
-			if(ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].associated_VIDs[vlan_idx] == vlan_info->vlan_id)
+			if(ipv6_to_iface[idx].associated_VIDs[vlan_idx] == vlan_info->vlan_id)
 			{
-				IPACMDBG_H("VlanID found in associated_VIDs in V6 STA BH\n");
+				IPACMDBG_H("VlanID found in slot %d V6 WLAN STA BH\n", slot);
 				vlan_info->v6_association = WLAN_WAN;
+				vlan_info->v6_idx[WLAN_WAN] = idx;
 				vlan_info->v6_vlan_idx[WLAN_WAN] = vlan_idx;
 				v6_found = true;
 				goto end;
@@ -2462,9 +2455,16 @@ void IPACM_Wan::get_vlan_association_info(ipacm_vlan_association_info* vlan_info
 	{
 		for(int pdn_idx = 0; pdn_idx < IPA_MAX_NUM_SW_PDNS; pdn_idx++)
 		{
-			for(int vlan_idx = 0;(pdn_idx != vlan_info->v4_idx[WLAN_WAN] &&
-					pdn_idx != vlan_info->v4_idx[ECM_WAN]) &&
-					!v4_found && vlan_idx < ipv4_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+			/* skip indices belonging to any WLAN slot or ECM */
+			bool is_wlan_v4 = false, is_wlan_v6 = false;
+			for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES; slot++)
+			{
+				if(IPACM_Wan::wlan_v4_vlan_index[slot] == pdn_idx) is_wlan_v4 = true;
+				if(IPACM_Wan::wlan_v6_vlan_index[slot] == pdn_idx) is_wlan_v6 = true;
+			}
+			for(int vlan_idx = 0;
+				!is_wlan_v4 && pdn_idx != vlan_info->v4_idx[ECM_WAN] &&
+				!v4_found && vlan_idx < ipv4_to_iface[pdn_idx].VID_cnt; vlan_idx++)
 			{
 				if(ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] == vlan_info->vlan_id)
 				{
@@ -2476,9 +2476,9 @@ void IPACM_Wan::get_vlan_association_info(ipacm_vlan_association_info* vlan_info
 					break;
 				}
 			}
-			for(int vlan_idx = 0;(pdn_idx != vlan_info->v6_idx[WLAN_WAN] &&
-				pdn_idx != vlan_info->v6_idx[ECM_WAN]) &&
-			 	!v6_found && vlan_idx < ipv6_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+			for(int vlan_idx = 0;
+				!is_wlan_v6 && pdn_idx != vlan_info->v6_idx[ECM_WAN] &&
+				!v6_found && vlan_idx < ipv6_to_iface[pdn_idx].VID_cnt; vlan_idx++)
 			{
 				if(ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == vlan_info->vlan_id)
 				{
@@ -2583,7 +2583,6 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 					}
 				}
 			}
-
 			if((ipv6_to_iface[pdn_idx].pIface && ipv6_to_iface[pdn_idx].pIface->m_is_sta_mode == Q6_WAN) &&
 				!isVlanWanUP_V6() && !(IPACM_Wan::backhaul_is_sta_mode == false && wan_up_v6))
 			{
@@ -2698,8 +2697,18 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 			if(m_is_sta_mode == WLAN_WAN)
 			{
 				vlan_data->mux_id = 0;
-				IPACM_Wan::wlan_v6_vlan_index = pdn_idx;
-				IPACMDBG_H("IPACM_Wan::wlan_v6_vlan_index: %d\n", IPACM_Wan::wlan_v6_vlan_index);
+				for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES; slot++)
+				{
+					if(IPACM_Wan::wlan_v6_vlan_index[slot] == -1)
+					{
+						IPACM_Wan::wlan_v6_vlan_index[slot] = pdn_idx;
+						IPACMDBG_H("IPACM_Wan::wlan_v6_vlan_index[%d]: %d\n",
+							slot, IPACM_Wan::wlan_v6_vlan_index[slot]);
+						break;
+					}
+					if(slot == IPA_MAX_WLAN_STA_IFACES - 1)
+						IPACMERR("No free wlan_v6_vlan_index slot for pdn_idx %d\n", pdn_idx);
+				}
 			}
 			else if(m_is_sta_mode == ECM_WAN)
 			{
@@ -2758,8 +2767,18 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 			{
 				vlan_data->ipv4_addr = wan_v4_addr;
 				vlan_data->mux_id = 0;
-				IPACM_Wan::wlan_v4_vlan_index = pdn_idx;
-				IPACMDBG_H("IPACM_Wan::wlan_v4_vlan_index: %d\n", IPACM_Wan::wlan_v4_vlan_index);
+				for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES; slot++)
+				{
+					if(IPACM_Wan::wlan_v4_vlan_index[slot] == -1)
+					{
+						IPACM_Wan::wlan_v4_vlan_index[slot] = pdn_idx;
+						IPACMDBG_H("IPACM_Wan::wlan_v4_vlan_index[%d]: %d\n",
+							slot, IPACM_Wan::wlan_v4_vlan_index[slot]);
+						break;
+					}
+					if(slot == IPA_MAX_WLAN_STA_IFACES - 1)
+						IPACMERR("No free wlan_v4_vlan_index slot for pdn_idx %d\n", pdn_idx);
+				}
 			}
 			else if(m_is_sta_mode == ECM_WAN)
 			{
@@ -2878,8 +2897,35 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 			}
 			else if(vlan_info->v6_association == WLAN_WAN)
 			{
-				IPACMERR("v6 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
-				goto fail;
+				if(vlan_info->v6_idx[WLAN_WAN] == sta_ipv6_pdn_index)
+				{
+					IPACMERR("v6 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
+					goto fail;
+				}
+				IPACMDBG_H("Backhaul switch from STA to STA (Dual STA) - V6\n");
+				if(ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].wan_up_vlan_v6 &&
+					vlan_info->v6_vlan_idx[WLAN_WAN] >= 0)
+				{
+					post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[WLAN_WAN],
+							 vlan_info->v6_vlan_idx[WLAN_WAN], data->VlanID, false);
+					if(vlan_info->v4_association == WLAN_WAN && ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].wan_up_vlan &&
+						vlan_info->v4_vlan_idx[WLAN_WAN] >= 0)
+							post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[WLAN_WAN],
+							 	vlan_info->v4_vlan_idx[WLAN_WAN], data->VlanID, false);
+					if((vlan_info->v4_idx[WLAN_WAN] == -1 || ((vlan_info->v4_idx[WLAN_WAN] >= 0) &&
+						ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].wan_up_vlan == false)) &&
+					   ((vlan_info->v6_idx[WLAN_WAN] >= 0) &&
+						ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].wan_up_vlan_v6 == false) &&
+					   (num_offloaded_pdns > 0))
+					{
+						num_offloaded_pdns--;
+						IPACMDBG_H("Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
+					}
+				}
+				else
+				{
+					IPACMDBG_H("Already posted IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) and (v4) for old STA\n");
+				}
 			}
 			else if(vlan_info->v4_association == WLAN_WAN)
 			{
@@ -3165,8 +3211,35 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 			}
 			else if(vlan_info->v4_association == WLAN_WAN)
 			{
-				IPACMERR("v4 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
-				goto fail;
+				if(vlan_info->v4_idx[WLAN_WAN] == sta_ipv4_pdn_index)
+				{
+					IPACMERR("v4 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
+					goto fail;
+				}
+				IPACMDBG_H("Backhaul switch from STA to STA (Dual STA) - V4\n");
+				if(ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].wan_up_vlan &&
+					vlan_info->v4_vlan_idx[WLAN_WAN] >= 0)
+				{
+					post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[WLAN_WAN],
+						 vlan_info->v4_vlan_idx[WLAN_WAN], data->VlanID, false);
+					if(vlan_info->v6_association == WLAN_WAN && ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].wan_up_vlan_v6 &&
+						vlan_info->v6_vlan_idx[WLAN_WAN] >= 0)
+						post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[WLAN_WAN],
+						 vlan_info->v6_vlan_idx[WLAN_WAN], data->VlanID, false);
+					if(((vlan_info->v4_idx[WLAN_WAN] >= 0) &&
+						ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].wan_up_vlan == false) &&
+					    (vlan_info->v6_idx[WLAN_WAN] == -1 || ((vlan_info->v6_idx[WLAN_WAN] >= 0) &&
+						ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].wan_up_vlan_v6 == false)) &&
+					     (num_offloaded_pdns > 0))
+					{
+						num_offloaded_pdns--;
+						IPACMDBG_H("Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
+					}
+				}
+				else
+				{
+					IPACMDBG_H("Already posted IPA_HANDLE_WAN_VLAN_PDN_DOWN (v4) and (v6) for old STA\n");
+				}
 			}
 			else if(vlan_info->v6_association == WLAN_WAN)
 			{
@@ -3495,6 +3568,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			IPACMDBG_H(" WAN instance is in STA mode \n");
 
 			/* Do not install route rules if this WLAN PDN is already up */
+			/* both wlan0 and wlan1: skip if src-prefix rule already installed */
 			if (ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 == true)
 			{
 				IPACMDBG_H("WLAN V6 WAN [%d] is already up with prefix: 0x%08x%08x\n",
@@ -3541,16 +3615,16 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-
-					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0;
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+					rt_rule_entry->rule.attrib.u.v6.src_addr[0] = ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix[0];
+					rt_rule_entry->rule.attrib.u.v6.src_addr[1] = ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix[1];
+					rt_rule_entry->rule.attrib.u.v6.src_addr[2] = 0;
+					rt_rule_entry->rule.attrib.u.v6.src_addr[3] = 0;
+					rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+					rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+					rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] = 0;
+					rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] = 0;
+					rt_rule_entry->at_rear = false;
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif
@@ -3650,6 +3724,7 @@ PostWanUpV6:
 			//Construct STA header 1st
 
 			/* Do not install route rules if V4 WLAN PDN is already up */
+			/* both wlan0 and wlan1: skip if src-IP rule already installed */
 			if (ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan == true)
 			{
                                 IPACMDBG_H("WLAN V4 WAN [%d] is already up with address: 0x%X\n",
@@ -3693,14 +3768,14 @@ PostWanUpV6:
 					memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-
-					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-					rt_rule_entry->rule.attrib.u.v4.dst_addr      = 0;
-					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+					rt_rule_entry->rule.attrib.u.v4.src_addr      = wan_v4_addr;
+					rt_rule_entry->rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
+					rt_rule_entry->at_rear = false;
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif
-					if (false == m_routing.AddRoutingRule(rt_rule))
+					if(false == m_routing.AddRoutingRule(rt_rule))
 					{
 						IPACMERR("Routing rule addition failed!\n");
 						ret = IPACM_FAILURE;
@@ -8197,6 +8272,18 @@ int IPACM_Wan::handle_down_evt()
 		}
 		ipv4_to_iface[sta_ipv4_pdn_index].ipv4_addr = 0;
 		ipv4_to_iface[sta_ipv4_pdn_index].pIface = NULL;
+		if(m_is_sta_mode == WLAN_WAN)
+		{
+			for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES; slot++)
+			{
+				if(IPACM_Wan::wlan_v4_vlan_index[slot] == sta_ipv4_pdn_index)
+				{
+					IPACM_Wan::wlan_v4_vlan_index[slot] = -1;
+					IPACMDBG_H("Cleared wlan_v4_vlan_index[%d]\n", slot);
+					break;
+				}
+			}
+		}
 		sta_ipv4_pdn_index = -1;
 		wan_v4_addr_set = false;
 		wan_v4_addr = 0;
@@ -8220,6 +8307,18 @@ int IPACM_Wan::handle_down_evt()
 		IPACMDBG_H("finished delete default v6 RT rules\n ");
 		ipv6_to_iface[sta_ipv6_pdn_index].pIface = NULL;
 		memset(&ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
+		if(m_is_sta_mode == WLAN_WAN)
+		{
+			for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES; slot++)
+			{
+				if(IPACM_Wan::wlan_v6_vlan_index[slot] == sta_ipv6_pdn_index)
+				{
+					IPACM_Wan::wlan_v6_vlan_index[slot] = -1;
+					IPACMDBG_H("Cleared wlan_v6_vlan_index[%d]\n", slot);
+					break;
+				}
+			}
+		}
 		sta_ipv6_pdn_index = -1;
 		memset(ipv6_addr, 0, sizeof(uint32_t)*(MAX_DEFAULT_v6_ROUTE_RULES*4));
 	}

@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
  * disclaimer below) provided that the following conditions are met:
@@ -33,6 +30,10 @@
  * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 #include "IPACM_Conntrack_NATApp.h"
 #include "IPACM_ConntrackClient.h"
@@ -70,6 +71,8 @@ NatApp *NatApp::pInstance = NULL;
 bool NatApp::kernel_ver_updated = false;
 bool NatApp::is_kernel_ver_upgraded = false;
 
+int cur_nat_entries = 0;
+int cur_ct_entries = 0;
 NatApp::NatApp()
 {
 	max_entries = 0;
@@ -79,7 +82,7 @@ NatApp::NatApp()
 
 	nat_table_hdl = 0;
 	pub_ip_addr = 0;
-
+	pdn_count_sta = 0;
 	curCnt = 0;
 
 	pALGPorts = NULL;
@@ -210,13 +213,17 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 		if(!is_sta)
 		{
 			entry.src_metadata = GenerateMetdata(mux_id);
-			/* Modify PDN 1 so it will hold the mux ID in the src metadata field */
-			pdn_index = 1;
+			/* WWAN PDNs start after STA-reserved slots 0..(IPA_MAX_WLAN_STA_IFACES-1) */
+			pdn_index = IPA_MAX_WLAN_STA_IFACES;
 		}
 		else
 		{
-			/* Modify PDN 0 so it will hold the mux ID in the src metadata field */
-			pdn_index = 0;
+			if(pdn_count_sta >= IPA_MAX_WLAN_STA_IFACES)
+			{
+				IPACMERR("Max STA PDNs (%d) already allocated\n", IPA_MAX_WLAN_STA_IFACES);
+				return IPACM_FAILURE;
+			}
+			pdn_index = pdn_count_sta;
 			entry.src_metadata = 0;
 			entry.is_sta = true;
 		}
@@ -227,12 +234,23 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 			IPACMERR("unable to modify PDN %d entry Error:%d\n", pdn_index, ret);
 			return ret;
 		}
+		if(is_sta)
+		{
+			pdn_count_sta++;
+			IPACMDBG_H("STA PDN at index %d, pdn_count_sta=%d\n", pdn_index, pdn_count_sta);
+		}
 	}
 	else
 	{
 		if(is_sta)
 		{
-			pdn_index = 0;
+			if(pdn_count_sta >= IPA_MAX_WLAN_STA_IFACES)
+			{
+				IPACMERR("Max STA PDNs (%d) already allocated, rejecting ip 0x%X\n",
+					IPA_MAX_WLAN_STA_IFACES, pub_ip);
+				return IPACM_FAILURE;
+			}
+			pdn_index = pdn_count_sta;
 			entry.public_ip = pub_ip;
 			entry.src_metadata = 0;
 			entry.is_sta = true;
@@ -240,9 +258,13 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 
 			if(ret)
 			{
-				IPACMERR("Unable to modify PDN 0 entry Error: %d\n", ret);
+				IPACMERR("Unable to allocate PDN %d for STA ip 0x%X Error: %d\n",
+					pdn_index, pub_ip, ret);
 				return ret;
 			}
+			pdn_count_sta++;
+			IPACMDBG_H("STA PDN allocated at index %d, pdn_count_sta=%d\n",
+				pdn_index, pdn_count_sta);
 		}
 		else
 		{
@@ -278,6 +300,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 				IPACMERR("STA backhaul: connection using ALG Port, ignore\n");
 				memset(&cache[cnt], 0, sizeof(cache[cnt]));
 				curCnt--;
+				cur_nat_entries--;
 				continue;
 			}
 
@@ -285,6 +308,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 				IPACMERR("IP Pass enabled: connection using dummy Nat, ignore\n");
 				memset(&cache[cnt], 0, sizeof(cache[cnt]));
 				curCnt--;
+				cur_nat_entries--;
 				continue;
 			}
 
@@ -311,6 +335,7 @@ int NatApp::AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass)
 					IPACMERR("unable to add the rule delete from cache\n");
 					memset(&cache[cnt], 0, sizeof(cache[cnt]));
 					curCnt--;
+					cur_nat_entries--;
 					continue;
 				}
 				IPACMDBG("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
@@ -381,6 +406,7 @@ int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 					IPACMERR("STA backhaul: connection using ALG Port, ignore\n");
 					memset(&cache[cnt], 0, sizeof(cache[cnt]));
 					curCnt--;
+					cur_nat_entries--;
 					continue;
 				}
 
@@ -401,6 +427,7 @@ int NatApp::AddTable(uint32_t pub_ip, uint8_t mux_id, bool is_sta)
 					IPACMERR("unable to add the rule delete from cache\n");
 					memset(&cache[cnt], 0, sizeof(cache[cnt]));
 					curCnt--;
+					cur_nat_entries--;
 					continue;
 				}
 				IPACMDBG("cache entry %d rule handle %d\n", cnt, cache[cnt].rule_hdl);
@@ -426,6 +453,7 @@ void NatApp::Reset()
 
 	nat_table_hdl = 0;
 	pub_ip_addr = 0;
+	pdn_count_sta = 0;
 	/* NAT tbl deleted, reset enabled bit */
 	for(cnt = 0; cnt < max_entries; cnt++)
 	{
@@ -471,6 +499,12 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 	{
 		IPACMERR(" couldn't deallocate PDN in index %d\n",pdn_index);
 		return IPACM_FAILURE;
+	}
+
+	if(pdn_index < IPA_MAX_WLAN_STA_IFACES && pdn_count_sta > 0)
+	{
+		pdn_count_sta--;
+		IPACMDBG_H("STA PDN index %d removed, pdn_count_sta=%d\n", pdn_index, pdn_count_sta);
 	}
 
 	ret = ipa_nat_get_pdn_count(&pdn_cnt);
@@ -614,18 +648,18 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 	for(; cnt < max_entries; cnt++)
 	{
 		if(cache[cnt].private_ip == rule->private_ip &&
-			 cache[cnt].target_ip == rule->target_ip &&
-			 cache[cnt].private_port ==  rule->private_port  &&
-			 cache[cnt].target_port == rule->target_port &&
-			 cache[cnt].protocol == rule->protocol &&
-			 cache[cnt].dst_only == rule->dst_only &&
-			 cache[cnt].src_only == rule->src_only)
+				cache[cnt].target_ip == rule->target_ip &&
+				cache[cnt].private_port ==  rule->private_port  &&
+				cache[cnt].target_port == rule->target_port &&
+				cache[cnt].protocol == rule->protocol &&
+				cache[cnt].dst_only == rule->dst_only &&
+				cache[cnt].src_only == rule->src_only)
 		{
 
 			if(cache[cnt].enabled == true)
 			{
 				log_nat(cache[cnt].protocol,cache[cnt].private_ip,cache[cnt].target_ip,cache[cnt].private_port,\
-					cache[cnt].public_port,cache[cnt].target_port,cache[cnt].src_only,cache[cnt].dst_only,"for deletion\n");
+						cache[cnt].public_port,cache[cnt].target_port,cache[cnt].src_only,cache[cnt].dst_only,"for deletion\n");
 				if(ipa_nat_del_ipv4_rule(nat_table_hdl, cache[cnt].rule_hdl) < 0)
 				{
 					IPACMERR("%s() %d deletion failed\n", __FUNCTION__, __LINE__);
@@ -647,10 +681,11 @@ int NatApp::DeleteEntry(const nat_table_entry *rule)
 			{
 				memset(&cache[cnt], 0, sizeof(cache[cnt]));
 				curCnt--;
+				cur_nat_entries--;
 			}
 			break;
-					}
-				}
+		}
+	}
 
 	return 0;
 }
@@ -1020,6 +1055,7 @@ int NatApp::AddEntry(const nat_table_entry *rule, bool isVlan)
 #endif
 			cache[cnt].ip_pass_entry = rule->ip_pass_entry;
 			curCnt++;
+			cur_nat_entries++;
 		}
 
 	}
@@ -1335,6 +1371,7 @@ int NatApp::ResetPwrSaveIf(uint32_t client_lan_ip)
 				IPACMERR("unable to add the rule delete from cache\n");
 				memset(&cache[cnt], 0, sizeof(cache[cnt]));
 				curCnt--;
+				cur_nat_entries--;
 				continue;
 			}
 
@@ -1598,6 +1635,7 @@ int NatApp::DelDummyNatEntries(uint32_t ip_addr)
 					IPACMDBG("delete the rule\n");
 					memset(&cache[cnt], 0, sizeof(cache[cnt]));
 					curCnt--;
+					cur_nat_entries--;
 					tmp++;
 				}
 			}
@@ -1637,6 +1675,7 @@ int NatApp::DelEntriesOnSTAClntDiscon(uint32_t ip_addr)
 
 			memset(&cache[cnt], 0, sizeof(cache[cnt]));
 			curCnt--;
+			cur_nat_entries--;
 		}
 	}
 
@@ -1702,6 +1741,7 @@ void NatApp::CacheEntry(const nat_table_entry *rule)
 			cache[cnt].dst_nat = rule->dst_nat;
 			cache[cnt].ip_pass_entry = rule->ip_pass_entry;
 			curCnt++;
+			cur_nat_entries++;
 		}
 
 	}
@@ -2984,6 +3024,7 @@ int NatBase::AddTable(const uint32_t v6_prefix[2])
 					IPACMERR("unable to add the rule delete from cache\n");
 					entry.Clear();
 					--m_curCnt;
+					--cur_ct_entries;
 					continue;
 				}
 				entry.DebugDump("On wan-iface reset added below rule successfully\n");
@@ -3034,6 +3075,7 @@ int NatBase::DeleteTable(const uint32_t v6_prefix[2],int num_v6_vlan_pdns)
 					IPACMERR("unable to delete the rule delete from cache\n");
 					entry.Clear();
 					--m_curCnt;
+					--cur_ct_entries;
 					continue;
 				}
 
@@ -3163,6 +3205,7 @@ int NatBase::AddEntry(const NatEntryBase& entry)
 	}
 	IPACMDBG_H("\n");
 	++m_curCnt;
+	++cur_ct_entries;
 	IPACMDBG_H("return\n");
 	return 0;
 }
@@ -3235,6 +3278,7 @@ void NatBase::DeleteEntry(const NatEntryBase& entry)
 		{
 			entryDelete->Clear();
 			--m_curCnt;
+			--cur_ct_entries;
 		}
 	}
 	IPACMDBG_H("return\n");
@@ -3272,6 +3316,7 @@ void NatBase::CacheEntry(const NatEntryBase& entry)
 
 	*new_entry = entry;
 	++m_curCnt;
+	++cur_ct_entries;
 	IPACMDBG_H("Cached rule successfully\n");
 }
 
@@ -3562,6 +3607,7 @@ int NatBase::ResetPwrSaveIf(const IpAddress& client_lan_ip)
 			IPACMERR("unable to add the rule delete from cache\n");
 			curr.Clear();
 			--m_curCnt;
+			--cur_ct_entries;
 			continue;
 		}
 		curr.m_enabled = true;
@@ -3656,6 +3702,7 @@ int NatBase::DelEntriesOnSTAClntDiscon(const IpAddress& client_lan_ip)
 
 		curr.Clear();
 		--m_curCnt;
+		--cur_ct_entries;
 	}
 
 	IPACMDBG_H("Deleted %d entries\n", (tmp - m_curCnt));
@@ -3686,6 +3733,7 @@ void NatBase::DelEntriesOnWanDown()
 
 		curr.Clear();
 		--m_curCnt;
+		--cur_ct_entries;
 	}
 
 	IPACMDBG_H("Deleted %d entries\n", (tmp - m_curCnt));

@@ -1251,7 +1251,6 @@ static int ipa_nl_decode_nlmsg
 						IPACM_EVENT_COPY_ADDR_v4( data_addr->ipv4_addr, msg_ptr->nl_addr_info.attr_info.prefix_addr);
 						data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
 						prefix_len = ((prefix_len >> (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen)) << (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen));
-						data_addr->ipv4_addr = (data_addr->ipv4_addr & prefix_len);
 						data_addr->ipv4_addr_mask = prefix_len;
 
 					}
@@ -1325,7 +1324,6 @@ static int ipa_nl_decode_nlmsg
 						IPACM_EVENT_COPY_ADDR_v4( data_addr->ipv4_addr, msg_ptr->nl_addr_info.attr_info.prefix_addr);
 						data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
 						prefix_len = ((prefix_len >> (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen)) << (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen));
-						data_addr->ipv4_addr = (data_addr->ipv4_addr & prefix_len);
 						data_addr->ipv4_addr_mask = prefix_len;
 						data_addr->if_index = msg_ptr->nl_addr_info.metainfo.ifa_index;
 						strlcpy(data_addr->iface_name, dev_name, sizeof(data_addr->iface_name));
@@ -1965,6 +1963,9 @@ static int ipa_nl_decode_nlmsg
 					IPACMDBG_H("RTM_NEWNEIGH received with ipv4 brodcast mac address. So Ignoring\n");
 					goto next_msg;
 				}
+
+				memset(&vlan_event, 0, sizeof(vlan_event));
+
 				if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != 0) && (msg_ptr->nl_neigh_info.master_interface_index == 0) &&
 						(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family != 0))
 				{
@@ -1981,7 +1982,7 @@ static int ipa_nl_decode_nlmsg
 				}
 				if((vlan_event.event == IPA_ADD_BRIDGE_VLAN_BR_INTF) || (vlan_event.event == IPA_ADD_BRIDGE_VLAN_PHY_INTF))
 				{
-					vlan_data = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+					vlan_data = (ipacm_event_data_all *)calloc(1, sizeof(ipacm_event_data_all));
 					if(vlan_data == NULL)
 					{
 						IPACMERR("unable to allocate memory for vlan_data\n");
@@ -3449,12 +3450,18 @@ end:
 	return ret_val;
 }
 
-int ipa_nl_query_ip_addr_info(int af_family)
+int ipa_nl_query_ip_addr_info(int af_family, const char *dev_name)
 {
 	ssize_t msglen = 0, nl_sock = 0;
 	ssize_t msgsent_len = 0;
 	char *buf = NULL;
-	nl_request_t nl_request;
+	/* Use a local struct with ifaddrmsg as payload — RTM_GETADDR requires
+	 * struct ifaddrmsg at NLMSG_DATA(nlh), not rtmsg.  Keeping this local
+	 * avoids touching nl_request_t which other callers depend on. */
+	struct {
+		struct nlmsghdr  nlh;
+		struct ifaddrmsg ifa;
+	} nl_request;
 	struct sockaddr_nl nladdr;
 	struct msghdr msg;
 	struct iovec iov;
@@ -3490,10 +3497,32 @@ int ipa_nl_query_ip_addr_info(int af_family)
 	nl_request.nlh.nlmsg_seq = time(NULL);
 	nl_request.nlh.nlmsg_pid = 0;
 
-
-	nl_request.rtm.rtm_family = af_family;
+	nl_request.ifa.ifa_family = af_family;
+	if (dev_name)
+	{
+		unsigned int idx = if_nametoindex(dev_name);
+		if (idx == 0)
+		{
+			IPACMERR("if_nametoindex failed for %s: %s\n", dev_name, strerror(errno));
+			ret_val = IPACM_FAILURE;
+			goto end;
+		}
+		nl_request.ifa.ifa_index = idx;
+		IPACMDBG_H("Query addr for iface %s (idx %u) af_family %d\n",
+			dev_name, nl_request.ifa.ifa_index, af_family);
+	}
+	else
+	{
+		IPACMDBG_H("Query addr for all ifaces af_family %d\n", af_family);
+	}
 
 	msgsent_len = send(nl_sock, &nl_request, sizeof(nl_request), 0);
+	if (msgsent_len < 0 || (size_t)msgsent_len != sizeof(nl_request))
+	{
+		IPACMERR("Failed to send netlink request for addr info: %s\n", strerror(errno));
+		ret_val = IPACM_FAILURE;
+		goto end;
+	}
 
 	msg = {
 		.msg_name = &nladdr,
@@ -3513,7 +3542,7 @@ int ipa_nl_query_ip_addr_info(int af_family)
 
 	IPACMDBG("Route msg_len : %d\n", msglen);
 
-	ret_val = ipa_nl_decode_nlmsg((const char*)buf, msglen, msg_ptr, NULL);
+	ret_val = ipa_nl_decode_nlmsg((const char*)buf, msglen, msg_ptr, (char *)dev_name);
 	if (IPACM_SUCCESS != ret_val) {
 		IPACMERR("Failed to decode rtm link message\n");
 		goto end;

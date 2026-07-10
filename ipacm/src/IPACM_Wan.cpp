@@ -10990,6 +10990,29 @@ int IPACM_Wan::handle_down_evt_ex()
 		handle_software_routing_disable();
 	}
 
+#ifdef FEATURE_IPA_IPSEC
+	/* Defensive cleanup: delete any remaining IPSec post-policy RT rules
+	 * not removed by handle_route_del_evt_ex (e.g. abrupt link-down). */
+	for (int ip = IPA_IP_v4; ip < IPA_IP_MAX; ip++)
+	{
+		if (num_ipsec_post_pol_rt[ip] > 0)
+		{
+			IPACMDBG_H("Cleaning %d remaining IPSec post-pol RT rules for ip-type %d\n",
+				num_ipsec_post_pol_rt[ip], ip);
+			for (int j = 0; j < num_ipsec_post_pol_rt[ip]; j++)
+			{
+				IPACMDBG_H("Deleting Route hdl:(0x%x) with ip type: %d\n",
+					ipsec_post_pol_rt_hdls[ip][j], ip);
+				if (false == m_routing.DeleteRoutingHdl(
+						ipsec_post_pol_rt_hdls[ip][j], (ipa_ip_type)ip))
+					IPACMERR("Routing rule deletion failed at j=%d, continue.\n", j);
+				ipsec_post_pol_rt_hdls[ip][j] = 0xFFFFFFFFu;
+			}
+			num_ipsec_post_pol_rt[ip] = 0;
+		}
+	}
+#endif
+
 fail:
 	if (tx_prop != NULL)
 	{
@@ -11064,6 +11087,17 @@ int IPACM_Wan::installWanPostIpsecRt(ipa_ip_type ipType)
 	if (commit_delete && num_rules == 0) {
 		IPACMDBG_H("No DL rules yet. Just commit the deletion.\n");
 		m_routing.Commit(ipType);
+		return IPACM_SUCCESS;
+	}
+
+	/* Skip installing new rules if WAN for this IP type is already down.
+	 * Old rules (if any) were already cleaned above; commit the deletion. */
+	if ((ipType == IPA_IP_v4 && !wan_up) ||
+		(ipType == IPA_IP_v6 && !wan_up_v6)) {
+		IPACMDBG_H("WAN %s not active, skip installing post-IPSec RT rules\n",
+			ipType == IPA_IP_v4 ? "IPA_IP_v4" : "IPA_IP_v6");
+		if (commit_delete)
+			m_routing.Commit(ipType);
 		return IPACM_SUCCESS;
 	}
 

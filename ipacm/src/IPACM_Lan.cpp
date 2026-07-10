@@ -1559,32 +1559,31 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					it = neigh_cache.begin();
 					while (it != neigh_cache.end())
 					{
-						if (it->ipv6_addr[0] == data_wan->ipv6_prefix[0] && it->ipv6_addr[1] == data_wan->ipv6_prefix[1])
+						/* In both LTE and WLAN down receiving vlan id 0 but as
+						prefix is different clearing neigh cache entry for prefix*/
+						if(data->VlanID == 0)
 						{
-							/* In both LTE and WLAN down receiving vlan id 0 but as
-							prefix is different clearing neigh cache entry for prefix*/
-							if(data->VlanID == 0)
+							it = neigh_cache.erase(it);
+						}
+						else
+						{
+							vlan_id = 0;
+							if(IPACM_Iface::ipacmcfg->get_vlan_id(it->iface_name, &vlan_id))
+							{
+								IPACMERR("failed to get iface vlan ID\n");
+								it++;
+								continue;
+							}
+
+							if(data->VlanID == vlan_id)
 							{
 								it = neigh_cache.erase(it);
 							}
-							else if(data->VlanID != 0)
+							else
 							{
-								vlan_id = 0;
-								if(IPACM_Iface::ipacmcfg->get_vlan_id(it->iface_name, &vlan_id))
-								{
-									IPACMERR("failed to get iface vlan ID\n");
-									it++;
-									continue;
-								}
-
-								if(data->VlanID == vlan_id)
-								{
-									it = neigh_cache.erase(it);
-								}
+								it++;
 							}
 						}
-						else
-							it++;
 					}
 				}
 			}

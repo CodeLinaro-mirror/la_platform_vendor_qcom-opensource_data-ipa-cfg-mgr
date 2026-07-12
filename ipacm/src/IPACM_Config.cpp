@@ -2343,6 +2343,13 @@ void IPACM_Config::post_eth_bridge_add_vlan_id_event(const char *iface_name)
         IPACMERR("Invalid iface name received.\n");
         return;
     }
+
+    if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+    {
+        IPACMERR("Unable to lock the mutex\n");
+        return;
+    }
+
     for(it_vlan = m_vlan_iface.begin(); it_vlan != m_vlan_iface.end(); it_vlan++)
     {
         if (strstr(it_vlan->vlan_iface_name, iface_name))
@@ -2351,6 +2358,7 @@ void IPACM_Config::post_eth_bridge_add_vlan_id_event(const char *iface_name)
             if(evt_data_eth_bridge == NULL)
             {
                 IPACMERR("Failed to allocate memory.\n");
+                pthread_mutex_unlock(&vlan_l2tp_lock);
                 return;
             }
             memset(&eth_bridge_evt, 0, sizeof(ipacm_cmd_q_data));
@@ -2368,6 +2376,7 @@ void IPACM_Config::post_eth_bridge_add_vlan_id_event(const char *iface_name)
             IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
         }
     }
+    pthread_mutex_unlock(&vlan_l2tp_lock);
 }
 
 void IPACM_Config::get_vlan_mode_ifaces()

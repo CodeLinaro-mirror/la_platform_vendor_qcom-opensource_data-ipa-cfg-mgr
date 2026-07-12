@@ -1919,6 +1919,14 @@ int IPACM_Lan::handle_l2tp_neigh(ipacm_event_data_all *data)
 #ifdef IPA_L2TP_TUNNEL_UDP
 		if(install_l2tp_udp_dl_rules(data, index, data->iptype) != IPACM_SUCCESS)
 		{
+			/* Added nat supported list for ipv6
+			to add the prefix to CT supported list
+			to up the wan PDN and updated the wan prefix in client structure*/
+			if(data->iptype == IPA_IP_v6)
+			{
+				IPACMDBG("Adding client v6 prefix to CT supported list.\n");
+				HandleNeighIpAddrAddEvt(data);
+			}
 			IPACMERR("Failed to add l2tp dl rules.\n");
 			return IPACM_FAILURE;
 		}

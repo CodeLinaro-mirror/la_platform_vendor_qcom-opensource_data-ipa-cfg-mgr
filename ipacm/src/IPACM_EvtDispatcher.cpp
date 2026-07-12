@@ -192,11 +192,12 @@ int IPACM_EvtDispatcher::deregistr(IPACM_Listener *param)
 			{
 				head = head->next;
 			}
-			else if(tmp->next == NULL)
-			{
-				prev->next = NULL;
-			}
-			else
+			/* Only dereference prev if it is non-NULL (i.e., tmp is not the head node).
+			 * prev is guaranteed non-NULL here because tmp != head means we have
+			 * already traversed at least one node, updating prev along the way.
+			 * The tmp->next == NULL case is handled by this same assignment,
+			 * since it just sets prev->next to NULL in that case. */
+			else if(prev != NULL)
 			{
 				prev->next = tmp->next;
 			}

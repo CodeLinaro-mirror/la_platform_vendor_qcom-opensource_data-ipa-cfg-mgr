@@ -554,13 +554,14 @@ void* ipa_driver_msg_notifier(void *param)
 			IPACMDBG_H("Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 event_wlan->mac_addr[0], event_wlan->mac_addr[1], event_wlan->mac_addr[2],
 							 event_wlan->mac_addr[3], event_wlan->mac_addr[4], event_wlan->mac_addr[5]);
-			data = (ipacm_event_data_mac *)malloc(sizeof(ipacm_event_data_mac));
+			/* Use calloc instead of malloc to ensure zero-initialization of heap memory,
+			 * preventing use of uninitialized memory values */
+			data = (ipacm_event_data_mac *)calloc(1, sizeof(ipacm_event_data_mac));
 			if (data == NULL)
 			{
 				IPACMERR("unable to allocate memory for event_wlan data\n");
 				goto done;
 			}
-			memset(data, 0, sizeof(ipacm_event_data_mac));
 			strlcpy(data->iface_name, event_wlan->name, IPA_IFACE_NAME_LEN);
 			if(IPACM_FAILURE == ipa_get_if_index(event_wlan->name, &(data->if_index)))
 			{
@@ -1217,7 +1218,9 @@ void *l2tp_process(void *param)
 
 int main(int argc, char **argv)
 {
-	int ret;
+	/* Initialize ret to IPACM_SUCCESS to prevent use of uninitialized variable
+	 * if no pthread_create call is made (e.g., all thread tids are already non-zero) */
+	int ret = IPACM_SUCCESS;
 
 #ifdef FEATURE_IPACM_RESTART
 	FILE *fp = NULL;

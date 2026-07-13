@@ -7982,6 +7982,7 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 	get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4 = false;
 	get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6 = 0;
 	free(get_client_memptr(wlan_client, clt_indx)->p_hdr_info);
+	get_client_memptr(wlan_client, clt_indx)->p_hdr_info = NULL;
 	get_client_memptr(wlan_client, clt_indx)->ta_peer_id = 0;
 	get_client_memptr(wlan_client, clt_indx)->vlan_id = 0;
 	get_client_memptr(wlan_client, clt_indx)->is_vlan = 0;
@@ -8258,6 +8259,7 @@ int IPACM_Wlan::handle_wlan_primary_client_down_evt(uint8_t *mac_addr)
 	}
 
 	free(get_primary_client_memptr(wlan_primary_client, primary_clt_indx)->p_hdr_info);
+	get_primary_client_memptr(wlan_primary_client, primary_clt_indx)->p_hdr_info = NULL;
 
 	while (get_primary_client_memptr(wlan_primary_client, primary_clt_indx)->num_vlan_clients > 0)
 	{
@@ -11225,6 +11227,12 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 		return IPACM_FAILURE;
 	}
 
+	if (data == NULL) {
+		IPACMERR("p_hdr_info is NULL for client_idx %d, cannot init vlan client\n", client_idx);
+		res = IPACM_FAILURE;
+		goto end;
+	}
+
 	if (tx_prop != NULL)
 	{
 		len = sizeof(struct ipa_ioc_add_hdr) + (1 * sizeof(struct ipa_hdr_add));
@@ -11872,6 +11880,10 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 
 	/* Post the delayed IPA_ETH_BRIDGE_CLIENT_ADD event*/
 	cached_data = get_client_memptr(wlan_client, wlan_index)->p_hdr_info;
+	if (cached_data == NULL) {
+		IPACMDBG_H("p_hdr_info is NULL for wlan_index %d, skip bridge event\n", wlan_index);
+		return 0;
+	}
 	for (int i = 0; i < cached_data->num_of_attribs; i++) {
 		if (!is_svap_iface() && !is_vlan_iface()) {
 			IPACMDBG_H("Wlan iface is NON-SVAP, break\n");

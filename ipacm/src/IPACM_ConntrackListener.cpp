@@ -2392,12 +2392,12 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			{
 				iptodot("vlan client ip", repl_src_ip);
 				iptodot("pdn ip",orig_dst_ip)
-				IPACM_LOG(IPACM_LOG_INFO, "src NAT: can't add more PDN, clientIP: %d, pdnIp: %d\n", repl_src_ip, orig_dst_ip);
+				IPACM_LOG(IPACM_LOG_INFO, "src NAT: can't add more PDN, clientIP: 0x%x, pdnIp: 0x%x\n", repl_src_ip, orig_dst_ip);
 				return;
 			}
 			iptodot("vlan client ip", repl_src_ip);
 			iptodot("pdn ip", orig_dst_ip);
-			IPACM_LOG(IPACM_LOG_INFO, "IsVlanUp %d, clientIP: %d, pdnIp: %d\n", nat_entry.IsVlanUp, repl_src_ip, orig_dst_ip);
+			IPACM_LOG(IPACM_LOG_INFO, "IsVlanUp %d, clientIP: 0x%x, pdnIp: 0x%x\n", nat_entry.IsVlanUp, repl_src_ip, orig_dst_ip);
 		}
 		public_ip = orig_dst_ip;
 #endif
@@ -2432,12 +2432,12 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			{
 				iptodot("vlan client ip", orig_src_ip);
 				iptodot("pdn ip",repl_dst_ip)
-				IPACM_LOG(IPACM_LOG_INFO, "dst NAT: can't add more PDN, clientIP: %d, pdnIp: %d\n", orig_src_ip, repl_dst_ip);
+				IPACM_LOG(IPACM_LOG_INFO, "dst NAT: can't add more PDN, clientIP: 0x%x, pdnIp: 0x%x\n", orig_src_ip, repl_dst_ip);
 				return;
 			}
 			iptodot("vlan client ip ", orig_src_ip);
 			iptodot("pdn ip ", repl_dst_ip)
-			IPACM_LOG(IPACM_LOG_INFO, "IsVlanUp %d, clientIP: %d, pdnIp: %d\n", nat_entry.IsVlanUp, orig_src_ip, repl_dst_ip);
+			IPACM_LOG(IPACM_LOG_INFO, "IsVlanUp %d, clientIP: 0x%x, pdnIp: 0x%x\n", nat_entry.IsVlanUp, orig_src_ip, repl_dst_ip);
 		}
 		public_ip = repl_dst_ip;
 #endif

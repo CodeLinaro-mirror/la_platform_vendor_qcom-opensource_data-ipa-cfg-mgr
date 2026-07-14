@@ -1258,7 +1258,7 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					/* Associate with IP and construct RT-rule */
 					if (handle_eth_client_ipaddr(data) == IPACM_FAILURE)
 					{
-						IPACM_LOG(IPACM_LOG_ERR, "Failed handle_eth_client_ipaddr\n");
+						IPACM_LOG(IPACM_LOG_DEBUG, "Failed handle_eth_client_ipaddr\n");
 						return;
 					}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
@@ -4652,7 +4652,7 @@ int IPACM_Lan::handle_eth_client_ipaddr(ipacm_event_data_all *data)
 			   /* check if client got new IPv4 address*/
 			   if(data->ipv4_addr == get_client_memptr(eth_client, clnt_indx)->v4_addr)
 			   {
-				IPACM_LOG(IPACM_LOG_INFO, "Already setup ipv4 addr for client:%d, ipv4 address didn't change\n", clnt_indx);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Already setup ipv4 addr for client:%d, ipv4 address didn't change\n", clnt_indx);
 				 return IPACM_FAILURE;
 			   }
 			   else

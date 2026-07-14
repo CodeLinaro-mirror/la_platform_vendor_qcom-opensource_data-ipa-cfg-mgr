@@ -323,7 +323,7 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 						{
 							*mux_id = 0;
 						}
-						IPACM_LOG(IPACM_LOG_INFO, "V4: Found Mux ID: %d for VLAN ID: %d\n", mux_id, vlan_id);
+						IPACM_LOG(IPACM_LOG_INFO, "V4: Found Mux ID: %d for VLAN ID: %d\n", *mux_id, vlan_id);
 						return IPACM_SUCCESS;
 					}
 				}
@@ -351,7 +351,7 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 						{
 							*mux_id = 0;
 						}
-						IPACM_LOG(IPACM_LOG_INFO, "V4: Found Mux ID: %d for VLAN ID: %d\n", mux_id, vlan_id);
+						IPACM_LOG(IPACM_LOG_INFO, "V4: Found Mux ID: %d for VLAN ID: %d\n", *mux_id, vlan_id);
 						return IPACM_SUCCESS;
 					}
 				}

@@ -10084,6 +10084,11 @@ int IPACM_Lan::config_wan_frag_firewall_rule_ul_ex(ul_firewall_t *ul_firewall, i
 	ul_firewall->ul_frag_handle = m_pFilteringTable->rules[0].flt_rule_hdl;
 	ul_firewall->ul_frag_installed = true;
 #endif
+	if(m_pFilteringTable)
+	{
+		free(m_pFilteringTable);
+		m_pFilteringTable = NULL;
+	}
 	return IPACM_SUCCESS;
 }
 

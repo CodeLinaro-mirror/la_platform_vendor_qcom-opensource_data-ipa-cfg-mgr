@@ -18162,6 +18162,17 @@ int IPACM_Lan::install_uplink_filter_rule
 	}
 #ifdef IPA_HW_FNR_STATS
 	bool hw_fnr_stats_support = IPACM_Iface::ipacmcfg->hw_fnr_stats_support;
+	/* The MPDN per-client XLAT insertion path (handle_mpdn_ul_xlat_filter_rule_per_client)
+	 * chains rules using xlat_ctx.ul_rule_id_hdl_map, which is only populated when the
+	 * device is in VLAN mode with MPDN enabled. On a non-VLAN device that map stays empty,
+	 * so the chained insert of the 2nd+ XLAT rule anchors on a zero handle and fails with
+	 * "Bad add_after_hdl = 0". On non-VLAN devices the base per-client install already
+	 * embeds the XLAT rules, so the MPDN insertion path must be skipped there. */
+	bool is_dev_in_mpdn_vlan_mode = false;
+#ifdef FEATURE_VLAN_MPDN
+	is_dev_in_mpdn_vlan_mode = IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) &&
+		IPACM_Iface::ipacmcfg->ipacm_mpdn_enable;
+#endif //FEATURE_VLAN_MPDN
 #endif //IPA_HW_FNR_STATS
 	for (i = 0; i < num_eth_client; i++)
 		{
@@ -18192,7 +18203,13 @@ int IPACM_Lan::install_uplink_filter_rule
 						if (is_xlat && get_client_memptr(eth_client, i)->ipv4_xlat_ul_rules_set == false &&
 							vlan_id == get_client_memptr(eth_client, i)->vlan_id)
 						{
-							if (get_pdn_xlat_ctx_per_client(i, xlat_mux_id, vlan_id) == IPACM_FAILURE)
+							if (!is_dev_in_mpdn_vlan_mode)
+							{
+								/* Non-VLAN device: base per-client install already embedded the
+								 * XLAT rules, skip the MPDN chained-insertion path. */
+								IPACMDBG_H("Non-VLAN device, XLAT rules already installed by base per-client rule, skip MPDN insertion\n");
+							}
+							else if (get_pdn_xlat_ctx_per_client(i, xlat_mux_id, vlan_id) == IPACM_FAILURE)
 							{
 								add_pdn_xlat_ctx_per_client(i, xlat_mux_id, vlan_id);
 								if (handle_mpdn_ul_xlat_filter_rule_per_client(i, IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
@@ -18240,7 +18257,13 @@ int IPACM_Lan::install_uplink_filter_rule
 							get_client_memptr(eth_client, i)->vlan_id);
 						if (is_xlat && vlan_id == get_client_memptr(eth_client, i)->vlan_id)
 						{
-							if (get_pdn_xlat_ctx_per_client(i, xlat_mux_id, vlan_id) == IPACM_FAILURE)
+							if (!is_dev_in_mpdn_vlan_mode)
+							{
+								/* Non-VLAN device: base per-client install already embedded the
+								 * XLAT rules, skip the MPDN chained-insertion path. */
+								IPACMDBG_H("Non-VLAN device, XLAT rules already installed by base per-client rule, skip MPDN insertion\n");
+							}
+							else if (get_pdn_xlat_ctx_per_client(i, xlat_mux_id, vlan_id) == IPACM_FAILURE)
 							{
 								add_pdn_xlat_ctx_per_client(i, xlat_mux_id, vlan_id);
 								if (handle_mpdn_ul_xlat_filter_rule_per_client(i,

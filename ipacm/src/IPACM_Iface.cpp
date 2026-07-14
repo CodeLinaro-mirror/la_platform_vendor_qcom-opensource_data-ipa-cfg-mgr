@@ -193,7 +193,7 @@ int IPACM_Iface::handle_software_routing_enable(void)
 	flt_rule_entry.status = -1;
 	flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
 #ifdef FEATURE_IPA_V3
-	flt_rule_entry.rule.hashable = true;
+	flt_rule_entry.rule.hashable = false;
 #endif
 	memcpy(&flt_rule_entry.rule.attrib,
 				 &rx_prop->rx[idx].attrib,

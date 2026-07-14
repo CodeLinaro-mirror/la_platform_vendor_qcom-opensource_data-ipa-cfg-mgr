@@ -548,8 +548,10 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 				break;
 			}
 			IPACMDBG("Received IPA_HANDLE_RGIP_DEL event\n");
-
-			nat_inst->RemovePdn(IPACM_Iface::ipacmcfg->rgip_ip);
+			uint32_t *rgip_del_data = (uint32_t *)data;
+			uint32_t del_ip = rgip_del_data ? *rgip_del_data : IPACM_Iface::ipacmcfg->rgip_ip;
+			IPACMDBG_H("IPA_HANDLE_RGIP_DEL: removing PDN for ip 0x%x\n", del_ip);
+			nat_inst->RemovePdn(del_ip);
 			IPACM_Iface::ipacmcfg->rgip_ip = 0;
 			rgip_addr = 0;
 			break;

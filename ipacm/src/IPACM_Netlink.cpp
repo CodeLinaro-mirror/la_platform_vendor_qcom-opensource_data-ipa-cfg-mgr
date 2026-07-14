@@ -1508,6 +1508,29 @@ static int ipa_nl_decode_nlmsg
 					if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name,
 						sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
 					{
+						/* Query the IP currently assigned to the interface. If it is a dummy
+						 * 169.x.x.x address, update rgip_ip with the stored rgip_ip_ippt so
+						 * that IPA_HANDLE_RGIP_DEL is processed with the correct IP. */
+						uint32_t queried_ip = 0;
+						int query_fd = socket(AF_INET, SOCK_DGRAM, 0);
+						if (query_fd >= 0)
+						{
+							struct ifreq ifr_query;
+							memset(&ifr_query, 0, sizeof(ifr_query));
+							strlcpy(ifr_query.ifr_name, dev_name, IFNAMSIZ);
+							if (ioctl(query_fd, SIOCGIFADDR, &ifr_query) == 0)
+							{
+								queried_ip = ntohl(((struct sockaddr_in *)&ifr_query.ifr_addr)->sin_addr.s_addr);
+							}
+							close(query_fd);
+						}
+						if ((queried_ip >> 24) == DUMMY_RGIP_ADDRESS)
+						{
+							IPACMDBG_H("RGIP iface %s link down but current ip 0x%x is dummy "
+									"(169.x.x.x), use stored ip 0x%x for IPA_HANDLE_RGIP_DEL\n",
+									dev_name, queried_ip, IPACM_Iface::ipacmcfg->rgip_ip_ippt);
+							IPACM_Iface::ipacmcfg->rgip_ip = IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+						}
 						IPACMDBG_H("RGIP iface %s link down, post IPA_HANDLE_RGIP_DEL\n", dev_name);
 						ipacm_cmd_q_data rgip_evt_data;
 						uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
@@ -1519,7 +1542,10 @@ static int ipa_nl_decode_nlmsg
 						{
 							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
 							rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
-							*rgip_v4 = 0;
+							*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip != 0 ?
+								IPACM_Iface::ipacmcfg->rgip_ip :
+								IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+							IPACMDBG_H("IPA_HANDLE_RGIP_DEL (link down) with ip 0x%x\n", *rgip_v4);
 							rgip_evt_data.evt_data = rgip_v4;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
 						}
@@ -1684,7 +1710,10 @@ static int ipa_nl_decode_nlmsg
 						{
 							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
 							rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
-							*rgip_v4 = 0;
+							*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip != 0 ?
+								IPACM_Iface::ipacmcfg->rgip_ip :
+								IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+							IPACMDBG_H("IPA_HANDLE_RGIP_DEL (link down lower) with ip 0x%x\n", *rgip_v4);
 							rgip_evt_data.evt_data = rgip_v4;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
 						}
@@ -1755,7 +1784,10 @@ static int ipa_nl_decode_nlmsg
 						{
 							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
 							rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
-							*rgip_v4 = 0;
+							*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip != 0 ?
+								IPACM_Iface::ipacmcfg->rgip_ip :
+								IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+							IPACMDBG_H("IPA_HANDLE_RGIP_DEL (iface delete) with ip 0x%x\n", *rgip_v4);
 							rgip_evt_data.evt_data = rgip_v4;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
 						}
@@ -2075,7 +2107,10 @@ static int ipa_nl_decode_nlmsg
 						{
 							memset(&rgip_evt_del_data, 0, sizeof(rgip_evt_del_data));
 							rgip_evt_del_data.event = IPA_HANDLE_RGIP_DEL;
-							*rgip_v4_del = 0;
+							*rgip_v4_del = IPACM_Iface::ipacmcfg->rgip_ip != 0 ?
+								IPACM_Iface::ipacmcfg->rgip_ip :
+								IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+							IPACMDBG_H("IPA_HANDLE_RGIP_DEL (addr del) with ip 0x%x\n", *rgip_v4_del);
 							rgip_evt_del_data.evt_data = rgip_v4_del;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_del_data);
 						}

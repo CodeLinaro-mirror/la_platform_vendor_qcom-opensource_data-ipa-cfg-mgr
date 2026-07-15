@@ -47,6 +47,7 @@
 #include "IPACM_EvtDispatcher.h"
 #include "IPACM_Iface.h"
 #include "IPACM_Wan.h"
+#include "IPACM_Netlink.h"
 
 void ParseCTV6Message(struct nf_conntrack *ct);
 
@@ -418,6 +419,8 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			wan_data = static_cast<const ipacm_event_iface_up*>(data);
 			static_cast<Ipv6IpAddress&>(wan_ipaddr_v6).CreateFromArray(wan_data->ipv6_addr, false);
 			TriggerWANUp_v6(wan_data);
+			IPACMDBG_H("Query Getneigh for v6 \n");
+			ipa_nl_query_newneigh(AF_INET6);
 		}
 		break;
 

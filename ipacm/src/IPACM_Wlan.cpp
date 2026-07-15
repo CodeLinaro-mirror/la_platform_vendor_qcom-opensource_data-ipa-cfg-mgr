@@ -10058,7 +10058,7 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 	int clnt_indx;
 	uint8_t num_offset_meq_128;
 	struct ipa_ipfltr_mask_eq_128 *offset_meq_128 = NULL;
-	int total_rules = 0, v6_xlat_ul_rules = 0;
+	int total_rules = 0, v6_xlat_ul_rules = 0, v6_meta_ul_rules = 0;
 	enum ipa_flt_action action_cache;
 
 	IPACMDBG_H("Set modem UL flt rules\n");
@@ -10114,6 +10114,20 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 		total_rules = total_rules + v6_xlat_ul_rules;
 		IPACMDBG("Need %d additional XLAT rules\n", v6_xlat_ul_rules);
 	}
+
+	/* for IPv6 duplicate modem UL rules once more for metadata 0xfe */
+	if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable &&
+		IPACM_Iface::ipacmcfg->IsIpv6CTEnabled())
+	{
+		for(i = 0; i < prop->num_ext_props; i++)
+			if(prop->prop[i].action != IPA_PASS_TO_EXCEPTION)
+				v6_meta_ul_rules++;
+
+		total_rules = total_rules + v6_meta_ul_rules;
+		IPACMDBG_H("Need %d additional v6 metadata 0xfe rules, total_rules %d\n",
+				   v6_meta_ul_rules, total_rules);
+	}
+
 	clnt_indx = get_wlan_client_index(mac_addr, vlan_id);
 
 	if (clnt_indx == IPACM_INVALID_INDEX)
@@ -10205,12 +10219,6 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 	}
 	else if(iptype == IPA_IP_v6)
 	{
-#ifdef FEATURE_IPV6_NAT
-		/* for v6 nat, second pass should go directly to RT block */
-		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
-			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-		else
-#endif
 			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
 				IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
 	}
@@ -10383,17 +10391,20 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 			}
 		}
 
-		memcpy((void *)pFilteringTable->rules + (index * sizeof(struct ipa_flt_rule_add_v2)),
+		memcpy((void *)pFilteringTable->rules + (index *
+			sizeof(struct ipa_flt_rule_add_v2)),
 			&flt_rule_entry, sizeof(flt_rule_entry));
 		index++;
 
-		//for IPv6CT enabled and XLAT, add a duplicate rule above that will let XLAT packets go to routing instead of NAT
+		/* for IPv6CT enabled and XLAT, add a duplicate rule above that will
+		   let XLAT packets go to routing instead of NAT */
 		if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
 			prop->prop[cnt].action != IPA_PASS_TO_EXCEPTION)
 		{
 			// duplicate the old rule to new index and update the priority
 			SET_FLT_RULE_PRIORITY(flt_rule_entry, total_rules, index);
-			memcpy((void *)pFilteringTable->rules + (index * sizeof(struct ipa_flt_rule_add_v2)),
+			memcpy((void *)pFilteringTable->rules + (index *
+				sizeof(struct ipa_flt_rule_add_v2)),
 				&flt_rule_entry, sizeof(flt_rule_entry));
 
 			//change old rule to pass to route and non hashable
@@ -10411,7 +10422,8 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 			if (meq32_n + 1 > IPA_IPFLTR_NUM_MEQ_32_EQNS)
 			{
 				IPACMERR("Can't add another meq_32 equation to this rule");
-				memcpy((void *)pFilteringTable->rules + (index * sizeof(struct ipa_flt_rule_add_v2)),
+				memcpy((void *)pFilteringTable->rules + (index *
+					sizeof(struct ipa_flt_rule_add_v2)),
 					&flt_rule_entry, sizeof(flt_rule_entry));
 				continue;
 			}
@@ -10428,12 +10440,49 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client_v2
 
 			flt_rule_entry.rule.eq_attrib.num_offset_meq_32++;
 
-			// overwrite the old rule and increment the rule count and update the priority to one less than original rule
+			/* overwrite the old rule and increment the rule count and
+			   update the priority to one less than original rule */
 			SET_FLT_RULE_PRIORITY(flt_rule_entry, total_rules, index - 1);
-			memcpy((void *)pFilteringTable->rules + ((index -1) * sizeof(struct ipa_flt_rule_add_v2)),
+			memcpy((void *)pFilteringTable->rules + ((index -1) *
+				sizeof(struct ipa_flt_rule_add_v2)),
 				&flt_rule_entry, sizeof(flt_rule_entry));
 			index++;
 			flt_rule_entry.rule.action = action_cache;
+		}
+
+		/* for IPv6, duplicate rule once more with metadata 0xfe */
+		if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable &&
+			IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
+			prop->prop[cnt].action != IPA_PASS_TO_EXCEPTION)
+		{
+			/* load catchall, shift it to index, then build 0xfe rule at index-1 */
+			memcpy(&flt_rule_entry,
+				(void *)pFilteringTable->rules + ((index - 1) *
+				sizeof(struct ipa_flt_rule_add_v2)),
+				sizeof(flt_rule_entry));
+			SET_FLT_RULE_PRIORITY(flt_rule_entry, total_rules, index);
+			memcpy((void *)pFilteringTable->rules + (index *
+				sizeof(struct ipa_flt_rule_add_v2)),
+				&flt_rule_entry, sizeof(flt_rule_entry));
+
+			SET_FLT_RULE_PRIORITY(flt_rule_entry, total_rules, index - 1);
+			flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+			flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 9);
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.value =
+				(flt_rule_entry.rule.eq_attrib.metadata_meq32.value &
+				~(IPv6NAT_UL_METADATA_MASK << IPv6NAT_UL_METADATA_SHIFT)) |
+				(IPv6NAT_UL_METADATA_VALUE << IPv6NAT_UL_METADATA_SHIFT);
+			flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |=
+				(IPv6NAT_UL_METADATA_MASK << IPv6NAT_UL_METADATA_SHIFT);
+
+			memcpy((void *)pFilteringTable->rules + ((index - 1) *
+				sizeof(struct ipa_flt_rule_add_v2)),
+				&flt_rule_entry, sizeof(flt_rule_entry));
+			IPACMDBG_H("Added v6 metadata 0xfe rule at index %d for cnt %d\n",
+				index - 1, cnt);
+			index++;
 		}
 	}
 

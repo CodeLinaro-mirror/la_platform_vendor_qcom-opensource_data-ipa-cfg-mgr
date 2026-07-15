@@ -810,6 +810,7 @@ private:
 	uint8_t ext_router_mac_addr[IPA_MAC_ADDR_SIZE];
 	uint8_t netdev_mac[IPA_MAC_ADDR_SIZE];
 
+	/* _a5 = IPA_CLIENT_APPS_WAN_CONS: catch-all /0 IPv6 route rule to the AP (a5) */
 	static uint32_t wan_route_rule_lan_v6_hdl_a5;
 	static uint32_t wan_route_rule_wan_v6_hdl_a5;
 
@@ -997,11 +998,43 @@ private:
 				IPACMDBG_H("Delete client index %d ipv4 Qos rules for tx:%d \n",clt_indx,tx_index);
 				rt_hdl = get_client_memptr(wan_client, clt_indx)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4;
 
-				if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
+				/* MAP-E BR: the per-slot handle mirrors mape_wan_rt_rule_hdl_v4 —
+				 * a single shared IPA rule.  Skip per-slot deletion here; the
+				 * mape_wan_rt_rule_hdl_v4 cleanup block below deletes the live
+				 * handle.  Only applies to is_v6_gateway (BR role) to match that
+				 * cleanup block — a pure is_v4_gateway client must delete normally
+				 * here; without this restriction its per-slot handle would be zeroed
+				 * without the IPA rule ever being deleted, leaking it permanently. */
+				bool is_mape_gw_br =
+					IPACM_Iface::ipacmcfg->mape_enable &&
+					(IPACM_Iface::ipacmcfg->mape_wan_iface_table_index <
+						IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces) &&
+					(strcmp(dev_name, IPACM_Iface::ipacmcfg->iface_table[
+						IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0) &&
+					get_client_memptr(wan_client, clt_indx)->is_v6_gateway;
+				if (is_mape_gw_br)
 				{
-					return IPACM_FAILURE;
+					/* Zero stale/duplicate per-slot handle; live rule cleaned up below */
+					get_client_memptr(wan_client, clt_indx)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4 = 0;
 				}
-				get_client_memptr(wan_client, clt_indx)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4 = 0 ;
+				else
+				{
+					if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
+					{
+						return IPACM_FAILURE;
+					}
+					get_client_memptr(wan_client, clt_indx)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4 = 0;
+					/* rebuild_mape_hdr calls delete_wan_rtrules before setting
+					 * is_v6_gateway, so is_mape_gw_br=false above and the handle
+					 * is deleted here instead of being zeroed.  If it aliases
+					 * mape_wan_rt_rule_hdl_v4, zero the global now so
+					 * handle_wan_client_route_rule does not try to delete a
+					 * stale handle and abort the BR rule reinstall. */
+					if (IPACM_Iface::ipacmcfg->mape_enable &&
+					    rt_hdl != 0 &&
+					    rt_hdl == IPACM_Wan::mape_wan_rt_rule_hdl_v4)
+						IPACM_Wan::mape_wan_rt_rule_hdl_v4 = 0;
+				}
 			}
 		     } /* end of for loop */
 
@@ -1009,15 +1042,35 @@ private:
 		     if(get_client_memptr(wan_client, clt_indx)->route_rule_set_v4==true) /* for ipv4 */
 		     {
 				get_client_memptr(wan_client, clt_indx)->route_rule_set_v4 = false;
-				/* Clear shared MAP-E v4 handle only when the v4 or v6 GW client is deleted */
+				/* Delete and clear the shared MAP-E BR v4 route rule when the GW/BR
+				 * client is torn down.  Previously this only zeroed the handle without
+				 * calling DeleteRoutingHdl, leaking the IPA hardware rule until WAN
+				 * teardown and depleting routing table entries on reconnect. */
 				if (IPACM_Iface::ipacmcfg->mape_enable &&
+				    (IPACM_Iface::ipacmcfg->mape_wan_iface_table_index <
+				            IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces) &&
 				    (strcmp(dev_name, IPACM_Iface::ipacmcfg->iface_table[
 				            IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0) &&
-				    (get_client_memptr(wan_client, clt_indx)->is_v4_gateway ||
-				     get_client_memptr(wan_client, clt_indx)->is_v6_gateway))
+				    get_client_memptr(wan_client, clt_indx)->is_v6_gateway)
 				{
-					IPACMDBG_H("Clearing mape_wan_rt_rule_hdl_v4 on v4 GW client delete\n");
-					IPACM_Wan::mape_wan_rt_rule_hdl_v4 = 0;
+					if (IPACM_Wan::mape_wan_rt_rule_hdl_v4 != 0)
+					{
+						IPACMDBG_H("DEL GW_NEIGH: deleting mape_wan_rt_rule_hdl_v4=0x%x "
+							"before GW client removal\n",
+							IPACM_Wan::mape_wan_rt_rule_hdl_v4);
+						if (m_routing.DeleteRoutingHdl(
+								IPACM_Wan::mape_wan_rt_rule_hdl_v4, IPA_IP_v4) == false)
+							IPACMERR("Failed to delete mape_wan_rt_rule_hdl_v4 "
+								"on GW client DEL\n");
+						IPACM_Wan::mape_wan_rt_rule_hdl_v4 = 0;
+						/* Mark BR route pending so it is reinstalled when
+						 * the GW/BR neighbor is re-resolved. */
+						IPACM_Wan::mape_rules.br_static_route_pending = true;
+					}
+					else
+					{
+						IPACMDBG_H("GW client delete: mape_wan_rt_rule_hdl_v4 already 0\n");
+					}
 				}
 		     }
 		     /* delete IPv4 static route rules */

@@ -6004,6 +6004,20 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 					}
 				}
 			}
+			else
+			{
+				/* default (non-VLAN) catch-all: same dedup as the vlan_id>0 case
+				 * above, otherwise every re-post of IPA_HANDLE_WAN_UP installs a
+				 * duplicate rule that never gets deleted. */
+				for (i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
+				{
+					if (vlan_sta_info[i].v4_flt_hdl && vlan_sta_info[i].vlan_id == 0)
+					{
+						IPACMDBG_H("default flt rule already installed\n");
+						return IPACM_SUCCESS;
+					}
+				}
+			}
 
 			len = sizeof(struct ipa_ioc_add_flt_rule_after) + (1 * sizeof(struct ipa_flt_rule_add));
 			m_pFilteringTable = (struct ipa_ioc_add_flt_rule_after *)calloc(1, len);
@@ -6132,6 +6146,20 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 					if (vlan_sta_info[i].v6_flt_hdl && vlan_sta_info[i].vlan_id == vlan_id)
 					{
 						IPACMDBG_H("flt rule for vlan id : %d already installed\n", vlan_id);
+						return IPACM_SUCCESS;
+					}
+				}
+			}
+			else
+			{
+				/* default (non-VLAN) catch-all: same dedup as the vlan_id>0 case
+				 * above, otherwise every re-post of IPA_HANDLE_WAN_UP_V6 installs a
+				 * duplicate rule that never gets deleted. */
+				for (i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
+				{
+					if (vlan_sta_info[i].v6_flt_hdl && vlan_sta_info[i].vlan_id == 0)
+					{
+						IPACMDBG_H("default flt rule already installed\n");
 						return IPACM_SUCCESS;
 					}
 				}

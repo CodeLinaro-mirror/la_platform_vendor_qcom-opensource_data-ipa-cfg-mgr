@@ -44,6 +44,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/ioctl.h>
 #include <netinet/in.h>
 #include <net/if.h>
@@ -2092,6 +2093,49 @@ static int ipa_nl_decode_nlmsg
 						IPACMDBG_H("Address add on GRE tunnel iface %s (iptype=%d), "
 						           "post IPA_HANDLE_IPOGRE_ADDR_ADD\n",
 						           dev_name, data_addr->iptype);
+
+						/* Update accumulated address info and send to dataipa driver. */
+						GreIfaceIpInfo_t *iface_ip =
+							&IPACM_Iface::ipacmcfg->ipogre_iface_ip_info;
+						if (data_addr->iptype == IPA_IP_v4)
+						{
+							uint32_t nbo = htonl(data_addr->ipv4_addr);
+							memcpy(iface_ip->gre_ipv4_addr, &nbo,
+							       sizeof(iface_ip->gre_ipv4_addr));
+							iface_ip->is_ip_valid.ipv4_addr_valid = 1;
+						}
+						else
+						{
+							for (int wi = 0; wi < 4; wi++)
+							{
+								uint32_t w = htonl(data_addr->ipv6_addr[wi]);
+								memcpy(&iface_ip->gre_ipv6_addr[wi * 4], &w, 4);
+							}
+							iface_ip->is_ip_valid.ipv6_addr_valid = 1;
+						}
+
+						int fd_ipa = open(IPA_DEVICE_NAME, O_RDWR);
+						if (fd_ipa < 0)
+						{
+							IPACMERR("Failed to open %s for SET_IPOGRE_IFACE_ADDR: %d\n",
+							         IPA_DEVICE_NAME, errno);
+						}
+						else
+						{
+							if (ioctl(fd_ipa, IPA_IOC_SET_IPOGRE_IFACE_ADDR, iface_ip) != 0)
+							{
+								IPACMERR("IPA_IOC_SET_IPOGRE_IFACE_ADDR failed: %d\n", errno);
+							}
+							else
+							{
+								IPACMDBG_H("IPA_IOC_SET_IPOGRE_IFACE_ADDR sent "
+								           "(v4_valid=%d v6_valid=%d)\n",
+								           iface_ip->is_ip_valid.ipv4_addr_valid,
+								           iface_ip->is_ip_valid.ipv6_addr_valid);
+                                                        }
+							close(fd_ipa);
+						}
+
 						ipacm_cmd_q_data gre_addr_evt;
 						memset(&gre_addr_evt, 0, sizeof(gre_addr_evt));
 						gre_addr_evt.event = IPA_HANDLE_IPOGRE_ADDR_ADD;

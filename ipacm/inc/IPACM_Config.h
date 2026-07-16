@@ -635,6 +635,9 @@ public:
 	 * pmip_details.tunnel_name which is only populated under FEATURE_EoGRE
 	 * or FEATURE_PMIPV6 due to the broken #ifdef guard at the call-site. */
 	char ipogre_tunnel_name[IPA_IFACE_NAME_LEN];
+	/* Accumulated v4/v6 addresses assigned to the IPoGRE tunnel interface,
+	 * sent to the dataipa driver via IPA_IOC_SET_IPOGRE_IFACE_ADDR. */
+	GreIfaceIpInfo_t ipogre_iface_ip_info;
 #endif
 	int encap_limit;
 	bool encap_enable;

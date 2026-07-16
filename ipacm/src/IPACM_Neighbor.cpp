@@ -276,6 +276,30 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								return;
 							}
 
+							/* Also re-post IPA_LAN_CLIENT_ADD_EVENT so LanToLan (L2L) filter/routing
+							 * rules get reinstalled on reconnect. IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT
+							 * (posted below) only reaches routing/NAT handling in IPACM_Wlan
+							 * (handle_wlan_vlan_neighbor()/handle_wlan_client_ipaddr()), never
+							 * eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, ...) -- so a client
+							 * whose neighbor cache entry survives disconnect (kernel ARP entry stays
+							 * REACHABLE) never gets its L2L rules reinstalled without this. */
+							evt_data.event = IPA_LAN_CLIENT_ADD_EVENT;
+							data_all = (ipacm_event_data_all *)malloc(sizeof(ipacm_event_data_all));
+							if (data_all == NULL)
+							{
+								IPACMERR("Unable to allocate memory\n");
+								return;
+							}
+							memset(data_all,0,sizeof(ipacm_event_data_all));
+							data_all->iptype = IPA_IP_v4;
+							data_all->if_index = neighbor_client[i].iface_index;
+							memcpy(data_all->mac_addr, neighbor_client[i].mac_addr, sizeof(data_all->mac_addr));
+							memcpy(data_all->iface_name, neighbor_client[i].iface_name, sizeof(data_all->iface_name));
+							evt_data.evt_data = (void *)data_all;
+							IPACM_EvtDispatcher::PostEvt(&evt_data);
+							IPACMDBG_H("Posted event %d, with %s for ipv4 client re-connect (L2L rule reinstall)\n",
+								evt_data.event, data_all->iface_name);
+
 							if(strcmp(neighbor_client[i].bridge->bridge_name, BRIDGE_0) != 0)
 							{
 								if(IPACM_Iface::ipacmcfg->is_added_vlan_iface(iface_name))
@@ -316,10 +340,10 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 									if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
 									{
 										/* Get the bridge interface info */
-										bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(neighbor_client[i].iface_name);
+										bridge = IPACM_Iface::ipacmcfg->get_vlan_bridge(neighbor_client[i].bridge->bridge_name);
 										if (!bridge) {
 											/* get_vlan bridge failed */
-											IPACMERR("couldn't get bridge %s, not sending internal event\n", neighbor_client[i].iface_name);
+											IPACMERR("couldn't get bridge %s, not sending internal event\n", neighbor_client[i].bridge->bridge_name);
 											free(data_vlan);
 											return;
 										}

@@ -12593,7 +12593,7 @@ void IPACM_Lan::post_del_self_evt()
 	memset(fid, 0, sizeof(ipacm_event_data_fid));
 	memset(&evt, 0, sizeof(ipacm_cmd_q_data));
 
-	strlcpy(fid->iface_name, dev_name, sizeof(fid->iface_name));
+	strlcpy(fid->iface_name, get_is_mlo_link() ? get_mlo_link_name() : dev_name, sizeof(fid->iface_name));
 	fid->if_index = ipa_if_num;
 
 	evt.evt_data = (void*)fid;

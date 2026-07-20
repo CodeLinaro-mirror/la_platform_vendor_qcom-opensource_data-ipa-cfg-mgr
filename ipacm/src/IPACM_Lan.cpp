@@ -25885,6 +25885,19 @@ int IPACM_Lan::gre_add_catchup_rule(
 		"Attempting to add gre catchup rule for iptype(%d)\n",
 		iptype);
 
+	if (gre_route_data[iptype].flt_gre_1st_pass_hdl)
+	{
+		IPACMDBG_H("Catchup rule already installed for iptype(%d), deleting first\n", iptype);
+		if (m_filtering.DeleteFilteringHdls(
+				&gre_route_data[iptype].flt_gre_1st_pass_hdl, iptype, 1) == false)
+		{
+			IPACMERR("Failed to delete existing catchup rule for iptype(%d)\n", iptype);
+			return IPACM_FAILURE;
+		}
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, iptype, 1);
+		gre_route_data[iptype].flt_gre_1st_pass_hdl = 0;
+	}
+
 	static const int NUM_RULES = 1;
 
 	uint8_t buf[

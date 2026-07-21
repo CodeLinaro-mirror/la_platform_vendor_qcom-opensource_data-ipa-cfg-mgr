@@ -4111,6 +4111,11 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 				 }
 			 }
 
+			 if(orig_dst_ip == rgip_addr)
+			{
+				nat_entry.IsVlanUp = true;
+				i = 0;
+			}
 			 if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry.IsVlanUp))
 			 {
 				 iptodot("vlan client ip", repl_src_ip);
@@ -4123,6 +4128,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			 IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
 		 }
 		 public_ip = orig_dst_ip;
+		if (orig_dst_ip == rgip_addr && rgip_pass_enable)
+			ip_pass_enable = 1;
 #endif
 	 }
 	 else if(IPS_SRC_NAT & status)
@@ -4153,7 +4160,11 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 					}
 				}
 			}
-
+			if(repl_dst_ip == rgip_addr)
+			{
+				nat_entry.IsVlanUp = true;
+				i = 0;
+			}
 			if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry.IsVlanUp))
 			{
 				iptodot("vlan client ip", orig_src_ip);
@@ -4166,6 +4177,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
 		 }
 		 public_ip = repl_dst_ip;
+		if (repl_dst_ip == rgip_addr && rgip_pass_enable)
+			ip_pass_enable = 1;
 		 /* this is rmnet ip. for static policy
 		  * can have another table to check if default PDN or not
 		  * add another table map VLAN ID with the PDN IP.
@@ -4550,6 +4563,12 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 						}
 					}
 				}
+			}
+			if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+			{
+				entry.IsVlanUp = true;
+				i =0;
+				IPACMDBG_H("IPOGRE enabled vlan client\n");
 			}
 			if((i >= IPA_MAX_NUM_HW_PDNS) && (num_v6_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!entry.IsVlanUp))
 			{

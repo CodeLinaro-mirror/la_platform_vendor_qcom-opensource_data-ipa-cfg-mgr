@@ -4097,7 +4097,7 @@ error:
 	return IPACM_FAILURE;
 }
 
-int ipa_nl_query_newneigh(int af_family)
+int ipa_nl_query_newneigh(int af_family, int if_index)
 {
 	IPACMDBG("ipa_nl_send_getneigh\n");
 	int ret_val = IPACM_FAILURE, msglen = 0, nl_sock = 0;
@@ -4125,6 +4125,7 @@ int ipa_nl_query_newneigh(int af_family)
 	nl_request.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
 	nl_request.nd.ndm_state = NUD_REACHABLE;
 	nl_request.nd.ndm_flags = NTF_MASTER|NTF_SELF;
+	nl_request.nd.ndm_ifindex = if_index;
 	nl_request.nlh.nlmsg_len = sizeof(nl_request_t);
 	nl_request.nlh.nlmsg_seq = 1;
 	nl_request.nlh.nlmsg_pid = 0;

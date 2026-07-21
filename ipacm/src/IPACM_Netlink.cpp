@@ -2253,7 +2253,25 @@ static int ipa_nl_decode_nlmsg
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 					data_addr->iptype = IPA_IP_v4;
 					data_addr->ipv4_addr = ntohl(if_ipv4_addr);
-					data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
+					/* Compute mask from prefix length (rtm_dst_len) if mask attr is 0 */
+					if (if_ipipv4_addr_mask != 0)
+					{
+						data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
+					}
+					else if (msg_ptr->nl_route_info.metainfo.rtm_dst_len > 0 &&
+					         msg_ptr->nl_route_info.metainfo.rtm_dst_len <= 32)
+					{
+						uint8_t plen = msg_ptr->nl_route_info.metainfo.rtm_dst_len;
+						data_addr->ipv4_addr_mask = (plen == 32) ? 0xFFFFFFFF :
+							(uint32_t)(~((1u << (32 - plen)) - 1));
+					}
+					else
+					{
+						data_addr->ipv4_addr_mask = 0xFFFFFFFF;
+					}
+					IPACM_EVENT_COPY_ADDR_v4(data_addr->ipv4_addr_gw,
+						msg_ptr->nl_route_info.attr_info.gateway_addr);
+					data_addr->ipv4_addr_gw = ntohl(data_addr->ipv4_addr_gw);
 
 					IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 address 0x%x, mask:0x%x\n",
 									 data_addr->if_index,
@@ -2515,6 +2533,14 @@ process:
 					data_addr->ipv6_addr[1] = ntohl(data_addr->ipv6_addr[1]);
 					data_addr->ipv6_addr[2] = ntohl(data_addr->ipv6_addr[2]);
 					data_addr->ipv6_addr[3] = ntohl(data_addr->ipv6_addr[3]);
+
+					/* Populate gateway address for static route handling */
+					IPACM_EVENT_COPY_ADDR_v6(data_addr->ipv6_addr_gw,
+						msg_ptr->nl_route_info.attr_info.gateway_addr);
+					data_addr->ipv6_addr_gw[0] = ntohl(data_addr->ipv6_addr_gw[0]);
+					data_addr->ipv6_addr_gw[1] = ntohl(data_addr->ipv6_addr_gw[1]);
+					data_addr->ipv6_addr_gw[2] = ntohl(data_addr->ipv6_addr_gw[2]);
+					data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
 
 					mask_value_v6 = msg_ptr->nl_route_info.metainfo.rtm_dst_len;
 					for(mask_index = 0; mask_index < 4; mask_index++)
@@ -2825,14 +2851,26 @@ process_v6:
 						return IPACM_FAILURE;
 					}
 					IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
-					temp = (-1);
-					if_ipipv4_addr_mask = ntohl(temp);
 
 					evt_data.event = IPA_ROUTE_DEL_EVENT;
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 					data_addr->iptype = IPA_IP_v4;
 					data_addr->ipv4_addr = ntohl(if_ipv4_addr);
-					data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
+					/* Compute mask from prefix length (rtm_dst_len) */
+					if (msg_ptr->nl_route_info.metainfo.rtm_dst_len > 0 &&
+					    msg_ptr->nl_route_info.metainfo.rtm_dst_len <= 32)
+					{
+						uint8_t plen = msg_ptr->nl_route_info.metainfo.rtm_dst_len;
+						data_addr->ipv4_addr_mask = (plen == 32) ? 0xFFFFFFFF :
+							(uint32_t)(~((1u << (32 - plen)) - 1));
+					}
+					else
+					{
+						data_addr->ipv4_addr_mask = 0xFFFFFFFF;
+					}
+					IPACM_EVENT_COPY_ADDR_v4(data_addr->ipv4_addr_gw,
+						msg_ptr->nl_route_info.attr_info.gateway_addr);
+					data_addr->ipv4_addr_gw = ntohl(data_addr->ipv4_addr_gw);
 
 					IPACMDBG_H("Posting event IPA_ROUTE_DEL_EVENT with if index:%d, ipv4 address 0x%x, mask:0x%x\n",
 									 data_addr->if_index,
@@ -3000,6 +3038,12 @@ process_v6:
 					evt_data.event = IPA_ROUTE_DEL_EVENT;
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 					data_addr->iptype = IPA_IP_v6;
+					IPACM_EVENT_COPY_ADDR_v6(data_addr->ipv6_addr_gw,
+						msg_ptr->nl_route_info.attr_info.gateway_addr);
+					data_addr->ipv6_addr_gw[0] = ntohl(data_addr->ipv6_addr_gw[0]);
+					data_addr->ipv6_addr_gw[1] = ntohl(data_addr->ipv6_addr_gw[1]);
+					data_addr->ipv6_addr_gw[2] = ntohl(data_addr->ipv6_addr_gw[2]);
+					data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
 
 					IPACMDBG_H("posting event IPA_ROUTE_DEL_EVENT with if index:%d, ipv4 address\n",
 									 data_addr->if_index);

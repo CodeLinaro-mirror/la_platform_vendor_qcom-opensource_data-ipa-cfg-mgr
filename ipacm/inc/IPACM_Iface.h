@@ -143,6 +143,38 @@ struct handleTypeV6 {
 	}
 };
 
+/* Per-tx-index route handle for an IPv4 static route */
+struct wan_v4_rt_hdl {
+	uint32_t rt_rule_hdl_v4;
+};
+
+/* Tracks one IPv4 static route entry per client — keyed by dst_addr */
+struct handleTypeV4 {
+	uint32_t dst_mask;
+	bool route_rule_set_v4{false};
+	std::vector<wan_v4_rt_hdl> hdl_v4;
+	handleTypeV4(size_t n, uint32_t mask) : dst_mask(mask) {
+		hdl_v4.resize(n);
+	}
+};
+
+/* Per-tx-index route handle for an IPv6 dst-prefix static route */
+struct wan_v6_dst_rt_hdl {
+	uint32_t rt_rule_hdl_v6;
+	uint32_t rt_rule_hdl_v6_wan;
+};
+
+/* Tracks one IPv6 dst-prefix static route entry per client — keyed by dst_addr[4] */
+struct handleTypeV6Dst {
+	uint32_t dst_mask[4];
+	bool route_rule_set_v6{false};
+	std::vector<wan_v6_dst_rt_hdl> hdl_v6;
+	handleTypeV6Dst(size_t n, uint32_t *mask) {
+		memcpy(dst_mask, mask, sizeof(dst_mask));
+		hdl_v6.resize(n);
+	}
+};
+
 /* iface */
 class IPACM_Iface :public IPACM_Listener
 {
@@ -197,6 +229,16 @@ public:
 
 	/* save client ipv6 address info and rt handles */
 	std::map<std::array<uint32_t, 4>, handleTypeV6> rt_hdl_v6_list[IPA_MAX_NUM_CLIENTS_IPV6];
+
+	/* save client ipv4 static route info and rt handles (keyed by dst_addr) */
+	std::map<uint32_t, handleTypeV4> rt_hdl_v4_list[IPA_MAX_NUM_WAN_CLIENTS];
+
+	/* save client IPv6 dst-prefix static route handles */
+	std::map<std::array<uint32_t,4>, handleTypeV6Dst> rt_hdl_v6_dst_list[IPA_MAX_NUM_WAN_CLIENTS];
+
+	/* Pending IPv6 static routes waiting for GW neigh resolution */
+	struct v6_pending_route { std::array<uint32_t,4> dst; std::array<uint32_t,4> mask; };
+	std::map<std::array<uint32_t,4>, std::vector<v6_pending_route>> pending_v6_static_routes;
 
 	uint32_t dft_qos_rt_rule_hdl[3];
 

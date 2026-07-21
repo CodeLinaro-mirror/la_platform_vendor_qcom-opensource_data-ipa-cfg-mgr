@@ -144,6 +144,7 @@ const uint8_t IPACM_Wan::v6_gre_header[] = {
 
 bool IPACM_Wan::wan_up = false;
 bool IPACM_Wan::wan_up_v6 = false;
+bool IPACM_Wan::mape_wan_up_pending = false;
 uint8_t IPACM_Wan::xlat_mux_id = 0;
 
 uint32_t IPACM_Wan::curr_wan_ip = 0;
@@ -1662,18 +1663,66 @@ skip_v6_ll_rt:
 			IPACMDBG_H(" mape enabled updating mape_wan_ipv4_addr \n");
 			IPACM_Wan::mape_wan_ipv4_addr = wan_v4_addr;
 			IPACMDBG_H(" mape ipv4 addr 0x%x \n",IPACM_Wan::mape_wan_ipv4_addr);
-			/* If BR neigh is already resolved, the existing v4 route rule was
-			 * installed with src_addr=0. Re-query eth0 neighbors so the neigh
-			 * handler reinstalls the v4 rule with the correct mape_wan_ipv4_addr. */
-			if (memcmp(IPACM_Wan::mape_rules.mac, invalid_mac,
-					sizeof(IPACM_Wan::mape_rules.mac)) != 0)
+			/* If eth0 route was already processed but WAN_UP was deferred waiting
+			 * for mape_wan_ipv4_addr, post IPA_HANDLE_WAN_UP now with correct address. */
+			if (IPACM_Wan::mape_wan_up_pending)
 			{
-				IPACMDBG_H("MAP-E: IPv4 addr set, re-querying neighs to fix v4 route rule src addr\n");
-				int wan_if_index = 0;
-				const char *phy_dev = IPACM_Iface::ipacmcfg->iface_table[
+				IPACM_Wan::mape_wan_up_pending = false;
+				IPACM_Wan::wan_up = true;
+				ipacm_cmd_q_data evt_data;
+				ipacm_event_iface_up *wanup_data =
+					(ipacm_event_iface_up *)malloc(sizeof(ipacm_event_iface_up));
+				if (wanup_data != NULL)
+				{
+					memset(wanup_data, 0, sizeof(ipacm_event_iface_up));
+					const char *eth0_name = IPACM_Iface::ipacmcfg->iface_table[
+						IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name;
+					strlcpy(wanup_data->ifname, eth0_name, sizeof(wanup_data->ifname));
+					wanup_data->ipv4_addr = IPACM_Wan::mape_wan_ipv4_addr;
+					wanup_data->is_sta = true;
+					evt_data.event = IPA_HANDLE_WAN_UP;
+					evt_data.evt_data = (void *)wanup_data;
+					IPACMDBG_H("Posting IPA_HANDLE_WAN_UP with mape_wan_ipv4_addr 0x%x\n",
+						wanup_data->ipv4_addr);
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+				else
+				{
+					IPACMERR("Failed to allocate memory for deferred IPA_HANDLE_WAN_UP\n");
+				}
+			}
+			/* If the GW neigh was received before mape_wan_ipv4_addr was set,
+			 * the MAP-E v4 TX prop route rule was skipped (continue'd) on eth0.
+			 * Re-post the neigh event to eth0 so handle_wan_client_route_rule
+			 * runs on the correct instance with v4_p_ctx_2use and correct addr. */
+			if (IPACM_Iface::ipacmcfg->mape_wan_iface_table_index < IPA_MAX_IFACE_ENTRIES
+					&& IPACM_Wan::mape_rules.mac[0] != 0)
+			{
+				int eth0_if_index = -1;
+				const char *eth0_name = IPACM_Iface::ipacmcfg->iface_table[
 					IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name;
-				IPACM_Iface::ipa_get_if_index((char *)phy_dev, &wan_if_index);
-				ipa_nl_query_newneigh(AF_INET6, wan_if_index);
+				if (IPACM_Iface::ipa_get_if_index((char *)eth0_name, &eth0_if_index) == IPACM_SUCCESS)
+				{
+					ipacm_cmd_q_data evt_data2;
+					ipacm_event_data_all *data_all =
+						(ipacm_event_data_all *)calloc(1, sizeof(ipacm_event_data_all));
+					if (data_all != NULL)
+					{
+						data_all->if_index = eth0_if_index;
+						strlcpy(data_all->iface_name, eth0_name, sizeof(data_all->iface_name));
+						memcpy(data_all->mac_addr, IPACM_Wan::mape_rules.mac,
+							sizeof(data_all->mac_addr));
+						data_all->iptype = IPA_IP_v4;
+						data_all->ipv4_addr = IPACM_Wan::mape_wan_ipv4_addr;
+						evt_data2.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;
+						evt_data2.evt_data = (void *)data_all;
+						IPACMDBG_H("Re-posting neigh to eth0 for deferred MAP-E route rule, mac %02x:%02x:%02x:%02x:%02x:%02x\n",
+							IPACM_Wan::mape_rules.mac[0], IPACM_Wan::mape_rules.mac[1],
+							IPACM_Wan::mape_rules.mac[2], IPACM_Wan::mape_rules.mac[3],
+							IPACM_Wan::mape_rules.mac[4], IPACM_Wan::mape_rules.mac[5]);
+						IPACM_EvtDispatcher::PostEvt(&evt_data2);
+					}
+				}
 			}
 		}
 	}
@@ -2641,6 +2690,17 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACM_EvtDispatcher::PostEvt(&evt_data1);
 					}
 				}
+				/* Non-default IPv4 static route on WAN interface */
+				else if ((data->iptype == IPA_IP_v4) &&
+						data->ipv4_addr != 0)
+				{
+					IPACMDBG_H("IPv4 static route dst=0x%x mask=0x%x gw=0x%x is_br=%d\n",
+						data->ipv4_addr, data->ipv4_addr_mask, data->ipv4_addr_gw,
+						(data->ipv4_addr == IPACM_Wan::mape_wan_ipv4_addr));
+					bool is_br = (data->ipv4_addr == IPACM_Wan::mape_wan_ipv4_addr);
+					handle_wan_static_route(IPA_IP_v4, data->ipv4_addr,
+						data->ipv4_addr_mask, data->ipv4_addr_gw, is_br);
+				}
 				else if ((data->iptype == IPA_IP_v6) &&
 						(!data->ipv6_addr[0]) && (!data->ipv6_addr[1]) && (!data->ipv6_addr[2]) && (!data->ipv6_addr[3]) &&
 						(active_v6 == false) &&	(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX))
@@ -2747,18 +2807,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 									IPACM_Wan::mape_rules.mac[3],
 									IPACM_Wan::mape_rules.mac[4],
 									IPACM_Wan::mape_rules.mac[5]);
-								static_route_flag = true;
-								IPACMDBG_H(" static_route_flag %d \n",static_route_flag);
-								IPACM_Wan::mape_rules.br_static_route_pending = false;
-								/* Reset route_rule_set_v6 so the outer condition in
-								 * handle_wan_client_route_rule allows reinstall of
-								 * both v4 and v6 rules with the BR's proc ctx.
-								 * Without this, if neigh arrived before the static
-								 * route, route_rule_set_v6 == ipv6_set and the
-								 * function returns early skipping the v4 reinstall. */
-								client->route_rule_set_v6 = 0;
-								handle_wan_hdr_init(IPACM_Wan::mape_rules.mac, true);
-								handle_wan_client_route_rule(IPACM_Wan::mape_rules.mac, IPA_IP_v6);
+								handle_wan_static_route(IPA_IP_v6, 0, 0, 0, true);
 							}
 						} else {
 							/* BR static route arrived before neighbor resolved — mark pending */
@@ -2769,7 +2818,35 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						/* Non-BR route: look up FMR rule and update MAC */
 						fmr_rule = IPACM_Wan::get_rule_by_ipv6(data->ipv6_addr);
 						if (!fmr_rule) {
-							IPACMERR("Failed to get FMR rule for IPv6 address\n");
+							/* Not a FMR route — generic IPv6 static route */
+							std::array<uint32_t,4> gw_v6 = {data->ipv6_addr_gw[0],
+								data->ipv6_addr_gw[1], data->ipv6_addr_gw[2], data->ipv6_addr_gw[3]};
+							std::array<uint32_t,4> dst_v6 = {data->ipv6_addr[0],
+								data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]};
+							IPACMDBG_H("IPv6 generic static route dst=%08x:%08x:%08x:%08x gw=%08x:%08x:%08x:%08x\n",
+								dst_v6[0], dst_v6[1], dst_v6[2], dst_v6[3],
+								gw_v6[0], gw_v6[1], gw_v6[2], gw_v6[3]);
+							int gw_clnt = get_wan_client_index_ipv6(gw_v6.data());
+							if (gw_clnt != IPACM_INVALID_INDEX)
+							{
+								if (rt_hdl_v6_dst_list[gw_clnt].count(dst_v6) == 0)
+								{
+									rt_hdl_v6_dst_list[gw_clnt].insert(
+										std::make_pair(dst_v6,
+											handleTypeV6Dst(iface_query->num_tx_props,
+												data->ipv6_addr_mask)));
+								}
+								install_wan_v6_static_route(gw_clnt, dst_v6);
+							}
+							else
+							{
+								/* GW not resolved yet — store route in pending list keyed by GW.
+								 * Will be installed when neigh ADD event fires for this GW. */
+								IPACMDBG_H("IPv6 static route GW not resolved, storing pending\n");
+								pending_v6_static_routes[gw_v6].push_back(
+									{dst_v6, {data->ipv6_addr_mask[0], data->ipv6_addr_mask[1],
+									          data->ipv6_addr_mask[2], data->ipv6_addr_mask[3]}});
+							}
 						} else {
 							int clnt_indx = get_wan_client_index_ipv6(data->ipv6_addr_gw);
 							IPACMDBG_H(" clnt_indx %d \n",clnt_indx);
@@ -3204,6 +3281,127 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					static_route_flag = false;
 					IPACMDBG_H("MAP-E BR static v6 route deleted, reset static_route_flag\n");
 				}
+				/* Non-default IPv4 static route deletion */
+				if ((data->iptype == IPA_IP_v4) && (data->ipv4_addr != 0))
+				{
+					/* Find the GW client by gw IP — check real clients, stubs, and by v4_addr */
+					int gw_clnt = get_wan_client_index_ipv4(data->ipv4_addr_gw);
+					if (gw_clnt == IPACM_INVALID_INDEX)
+						gw_clnt = get_wan_stub_index_ipv4(data->ipv4_addr_gw);
+					if (gw_clnt == IPACM_INVALID_INDEX)
+					{
+						for (int i = 0; i < num_wan_client; i++)
+						{
+							if (get_client_memptr(wan_client, i)->v4_addr == data->ipv4_addr_gw &&
+							    memcmp(get_client_memptr(wan_client, i)->mac, invalid_mac,
+							           sizeof(invalid_mac)) != 0)
+							{
+								gw_clnt = i;
+								break;
+							}
+						}
+					}
+					if (gw_clnt != IPACM_INVALID_INDEX)
+					{
+						auto &map = rt_hdl_v4_list[gw_clnt];
+						auto it = map.find(data->ipv4_addr);
+						if (it != map.end() && it->second.route_rule_set_v4)
+						{
+							for (uint32_t tx = 0; tx < iface_query->num_tx_props; tx++)
+							{
+								uint32_t hdl = it->second.hdl_v4[tx].rt_rule_hdl_v4;
+								if (hdl)
+								{
+									if (m_routing.DeleteRoutingHdl(hdl, IPA_IP_v4) == false)
+										IPACMERR("Failed to delete static route rule hdl=%x\n", hdl);
+								}
+							}
+							map.erase(it);
+							IPACMDBG_H("Deleted static route dst=0x%x/0x%x gw=0x%x from client[%d]\n",
+								data->ipv4_addr, data->ipv4_addr_mask,
+								data->ipv4_addr_gw, gw_clnt);
+						}
+						else if (it != map.end())
+						{
+							/* Route was pending (never installed) — just remove from map */
+							map.erase(it);
+							IPACMDBG_H("Removed pending static route dst=0x%x from client[%d]\n",
+								data->ipv4_addr, gw_clnt);
+							/* If stub is now empty, remove it */
+							if (get_client_memptr(wan_client, gw_clnt)->is_stub && map.empty())
+							{
+								if (gw_clnt != (num_wan_client - 1))
+								{
+									memcpy(get_client_memptr(wan_client, gw_clnt),
+										get_client_memptr(wan_client, num_wan_client - 1),
+										wan_client_len);
+									std::swap(rt_hdl_v4_list[gw_clnt],
+										rt_hdl_v4_list[num_wan_client - 1]);
+									std::swap(rt_hdl_v6_list[gw_clnt],
+										rt_hdl_v6_list[num_wan_client - 1]);
+								}
+								rt_hdl_v4_list[num_wan_client - 1].clear();
+								rt_hdl_v6_list[num_wan_client - 1].clear();
+								num_wan_client--;
+								IPACMDBG_H("Empty stub removed, num_wan_client=%d\n", num_wan_client);
+							}
+						}
+					}
+					else
+					{
+						IPACMDBG_H("GW 0x%x not found for static route del dst=0x%x\n",
+							data->ipv4_addr_gw, data->ipv4_addr);
+					}
+				}
+				/* IPv6 non-default static route deletion */
+				if ((data->iptype == IPA_IP_v6) &&
+					(data->ipv6_addr[0] || data->ipv6_addr[1] ||
+					 data->ipv6_addr[2] || data->ipv6_addr[3]) &&
+					data->ipv6_addr_gw[0] != 0)
+				{
+					uint32_t gw_v6[4];
+					memcpy(gw_v6, data->ipv6_addr_gw, sizeof(gw_v6));
+					int gw_clnt = get_wan_client_index_ipv6(gw_v6);
+					IPACMDBG_H("IPv6 static route del dst=%08x:%08x:%08x:%08x gw clnt=%d\n",
+						data->ipv6_addr[0], data->ipv6_addr[1],
+						data->ipv6_addr[2], data->ipv6_addr[3], gw_clnt);
+					/* For IPv6 static routes delete only the specific dst entry */
+					if (gw_clnt != IPACM_INVALID_INDEX)
+					{
+						std::array<uint32_t,4> dst_v6 = {data->ipv6_addr[0],
+							data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]};
+						auto it = rt_hdl_v6_dst_list[gw_clnt].find(dst_v6);
+						if (it != rt_hdl_v6_dst_list[gw_clnt].end() &&
+						    it->second.route_rule_set_v6)
+						{
+							for (uint32_t tx = 0; tx < iface_query->num_tx_props; tx++)
+							{
+								uint32_t hdl = it->second.hdl_v6[tx].rt_rule_hdl_v6;
+								if (hdl)
+									m_routing.DeleteRoutingHdl(hdl, IPA_IP_v6);
+							}
+							rt_hdl_v6_dst_list[gw_clnt].erase(it);
+							IPACMDBG_H("Deleted IPv6 static route dst=%08x:%08x:%08x:%08x from client[%d]\n",
+								dst_v6[0], dst_v6[1], dst_v6[2], dst_v6[3], gw_clnt);
+						}
+						else
+						{
+							/* Also check pending */
+							std::array<uint32_t,4> gw_v6_key = {data->ipv6_addr_gw[0],
+								data->ipv6_addr_gw[1], data->ipv6_addr_gw[2], data->ipv6_addr_gw[3]};
+							auto pit = pending_v6_static_routes.find(gw_v6_key);
+							if (pit != pending_v6_static_routes.end())
+							{
+								auto &vec = pit->second;
+								vec.erase(std::remove_if(vec.begin(), vec.end(),
+									[&dst_v6](const v6_pending_route &pr){ return pr.dst == dst_v6; }),
+									vec.end());
+								if (vec.empty())
+									pending_v6_static_routes.erase(pit);
+							}
+						}
+					}
+				}
 			}
 		}
 		break;
@@ -3308,6 +3506,48 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					   data->ipv6_addr[2] == wan_v6_addr_gw[2] &&
 					   data->ipv6_addr[3] == wan_v6_addr_gw[3])
 					   	gw_addr = true;
+				}
+
+				/* If a stub slot exists for this neigh's IP, compact it to the
+				 * tail position so handle_wan_hdr_init builds the header there.
+				 * rt_hdl_v4_list entries indexed by stub_idx are moved accordingly. */
+				if (data->iptype == IPA_IP_v4 && data->ipv4_addr != 0)
+				{
+					int stub_idx = get_wan_stub_index_ipv4(data->ipv4_addr);
+					if (stub_idx != IPACM_INVALID_INDEX)
+					{
+						IPACMDBG_H("Promoting stub[%d] gw=0x%x to real client, MAC "
+							"%02x:%02x:%02x:%02x:%02x:%02x\n",
+							stub_idx, data->ipv4_addr,
+							data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+							data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
+						/* Swap stub to last position if not already there */
+						if (stub_idx != num_wan_client - 1)
+						{
+							/* swap client memory */
+							ipa_wan_client *stub_ptr =
+								get_client_memptr(wan_client, stub_idx);
+							ipa_wan_client *last_ptr =
+								get_client_memptr(wan_client, num_wan_client - 1);
+							/* swap using temp buffer on stack via wan_client_len */
+							std::vector<uint8_t> tmp(wan_client_len);
+							memcpy(tmp.data(), stub_ptr, wan_client_len);
+							memcpy(stub_ptr, last_ptr, wan_client_len);
+							memcpy(last_ptr, tmp.data(), wan_client_len);
+							/* swap rt_hdl_v4_list */
+							std::swap(rt_hdl_v4_list[stub_idx],
+							          rt_hdl_v4_list[num_wan_client - 1]);
+							/* swap rt_hdl_v6_list */
+							std::swap(rt_hdl_v6_list[stub_idx],
+							          rt_hdl_v6_list[num_wan_client - 1]);
+						}
+						/* Now stub is at [num_wan_client-1]; zero its MAC and
+						 * decrement so handle_wan_hdr_init allocates there */
+						memset(get_client_memptr(wan_client, num_wan_client - 1)->mac,
+							0, IPA_MAC_ADDR_SIZE);
+						get_client_memptr(wan_client, num_wan_client - 1)->is_stub = false;
+						num_wan_client--;
+					}
 				}
 
 				/* If the same IP (v4 or v6) is already registered to a different MAC
@@ -3440,7 +3680,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						rt_hdl_v6_list[old_clnt_indx] =
 						    std::move(rt_hdl_v6_list[num_wan_client - 1]);
 					}
-					// Always clear the vacated last slot to prevent stale state
 					rt_hdl_v6_list[num_wan_client - 1].clear();
 					num_wan_client--;
 					IPACMDBG_H("Stale WAN client removed; num_wan_client now %d\n",
@@ -3448,6 +3687,19 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				}
 
 				handle_wan_hdr_init(data->mac_addr, gw_addr);
+				/* Set the per-family gateway flag on the client slot.
+				 * A client can be v4 GW, v6 GW, both, or neither independently. */
+				if (gw_addr)
+				{
+					int clnt_indx = get_wan_client_index(data->mac_addr);
+					if (clnt_indx != IPACM_INVALID_INDEX)
+					{
+						if (data->iptype == IPA_IP_v4)
+							get_client_memptr(wan_client, clnt_indx)->is_v4_gateway = true;
+						else if (data->iptype == IPA_IP_v6)
+							get_client_memptr(wan_client, clnt_indx)->is_v6_gateway = true;
+					}
+				}
 				IPACMDBG_H("construct wan-client header and route rules \n");
 				/* Associate with IP and construct RT-rule */
 				if (handle_wan_client_ipaddr(data) == IPACM_FAILURE)
@@ -3459,20 +3711,63 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				if (IPACM_Iface::ipacmcfg->mape_enable &&
 					(IPACM_Iface::ipacmcfg->mape_wan_iface_table_index < IPA_MAX_IFACE_ENTRIES) &&
 					(strcmp(dev_name, IPACM_Iface::ipacmcfg->iface_table[
-						IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0) &&
-					(data->iptype == IPA_IP_v6) &&
-					IPACM_Wan::mape_rules.br_static_route_pending &&
-					(data->ipv6_addr[0] == IPACM_Wan::mape_rules.br_ll_ipaddr[0]) &&
-					(data->ipv6_addr[1] == IPACM_Wan::mape_rules.br_ll_ipaddr[1]) &&
-					(data->ipv6_addr[2] == IPACM_Wan::mape_rules.br_ll_ipaddr[2]) &&
-					(data->ipv6_addr[3] == IPACM_Wan::mape_rules.br_ll_ipaddr[3]))
+						IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0))
 				{
-					IPACMDBG_H("MAP-E BR neighbor resolved after static route, triggering route install\n");
 					memcpy(IPACM_Wan::mape_rules.mac, data->mac_addr, sizeof(IPACM_Wan::mape_rules.mac));
-					static_route_flag = true;
-					IPACM_Wan::mape_rules.br_static_route_pending = false;
+					if (data->iptype == IPA_IP_v6 &&
+						IPACM_Wan::mape_rules.br_static_route_pending &&
+						(data->ipv6_addr[0] == IPACM_Wan::mape_rules.br_ll_ipaddr[0]) &&
+						(data->ipv6_addr[1] == IPACM_Wan::mape_rules.br_ll_ipaddr[1]) &&
+						(data->ipv6_addr[2] == IPACM_Wan::mape_rules.br_ll_ipaddr[2]) &&
+						(data->ipv6_addr[3] == IPACM_Wan::mape_rules.br_ll_ipaddr[3]))
+					{
+						IPACMDBG_H("MAP-E BR v6 neigh resolved after static route, triggering install\n");
+						handle_wan_static_route(IPA_IP_v6, 0, 0, 0, true);
+					}
+					if (data->iptype == IPA_IP_v4 &&
+						IPACM_Wan::mape_rules.br_v4_static_route_pending)
+					{
+						IPACMDBG_H("MAP-E BR v4 neigh resolved after static route, triggering install\n");
+						bool is_br = (data->ipv4_addr == IPACM_Wan::mape_wan_ipv4_addr);
+						handle_wan_static_route(IPA_IP_v4, data->ipv4_addr,
+							0xFFFFFFFF, data->ipv4_addr, is_br);
+					}
 				}
 				handle_wan_client_route_rule(data->mac_addr, data->iptype);
+
+				/* Install any pending IPv6 dst-prefix static routes for this client */
+				if (data->iptype == IPA_IP_v6)
+				{
+					int clnt = get_wan_client_index(data->mac_addr);
+					if (clnt != IPACM_INVALID_INDEX)
+					{
+						/* Replay pending routes for this GW */
+						std::array<uint32_t,4> gw_v6 = {data->ipv6_addr[0],
+							data->ipv6_addr[1], data->ipv6_addr[2], data->ipv6_addr[3]};
+						auto pit = pending_v6_static_routes.find(gw_v6);
+						if (pit != pending_v6_static_routes.end())
+						{
+							for (auto &pr : pit->second)
+							{
+								if (rt_hdl_v6_dst_list[clnt].count(pr.dst) == 0)
+								{
+									rt_hdl_v6_dst_list[clnt].insert(
+										std::make_pair(pr.dst,
+											handleTypeV6Dst(iface_query->num_tx_props,
+												const_cast<uint32_t*>(pr.mask.data()))));
+								}
+								install_wan_v6_static_route(clnt, pr.dst);
+							}
+							pending_v6_static_routes.erase(pit);
+						}
+						/* Install any already-stored entries */
+						for (auto &entry : rt_hdl_v6_dst_list[clnt])
+						{
+							if (!entry.second.route_rule_set_v6)
+								install_wan_v6_static_route(clnt, entry.first);
+						}
+					}
+				}
 				/* Check & construct STA header */
 				handle_sta_header_add_evt();
 				if(IPACM_Iface::ipacmcfg->ipacm_qos_enable)
@@ -3504,8 +3799,131 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 		}
 		break;
 
+	case IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT:
+		{
+			ipacm_event_data_all *data = (ipacm_event_data_all *)param;
+			ipa_interface_index = iface_ipa_index_query(data->if_index);
+
+			IPACMDBG_H("Received IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT dev:%s iptype:%d\n",
+				dev_name, data->iptype);
+
+			if (ipa_interface_index != ipa_if_num)
+				break;
+
+			int clnt_indx = get_wan_client_index(data->mac_addr);
+			if (clnt_indx == IPACM_INVALID_INDEX)
+			{
+				IPACMDBG_H("WAN client not found for MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+					data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+					data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
+				break;
+			}
+
+			IPACMDBG_H("Deleting WAN client index %d iptype %d\n", clnt_indx, data->iptype);
+
+			/* Save GW IP before any compaction for stub cleanup */
+			uint32_t deleted_gw_ip = get_client_memptr(wan_client, clnt_indx)->v4_addr;
+
+			/* Delete only the rules for the family being removed */
+			if (data->iptype == IPA_IP_v4)
+			{
+				delete_wan_rtrules(clnt_indx, IPA_IP_v4);
+				get_client_memptr(wan_client, clnt_indx)->ipv4_set = false;
+				get_client_memptr(wan_client, clnt_indx)->route_rule_set_v4 = false;
+			}
+			else if (data->iptype == IPA_IP_v6)
+			{
+				delete_wan_rtrules(clnt_indx, IPA_IP_v6);
+				/* Release IPv6 address count */
+				IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6 -=
+					get_client_memptr(wan_client, clnt_indx)->ipv6_set;
+				if (IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6 < 0)
+					IPACM_Iface::ipacmcfg->ipa_num_clients_ipv6 = 0;
+				get_client_memptr(wan_client, clnt_indx)->ipv6_set = 0;
+				get_client_memptr(wan_client, clnt_indx)->route_rule_set_v6 = 0;
+				rt_hdl_v6_list[clnt_indx].clear();
+			}
+
+			/* Only tear down headers and compact the slot when both
+			 * families are gone — the other family's rules are still active */
+			bool v4_done = !get_client_memptr(wan_client, clnt_indx)->ipv4_set &&
+			               get_client_memptr(wan_client, clnt_indx)->route_rule_set_v4 == false;
+			bool v6_done = get_client_memptr(wan_client, clnt_indx)->ipv6_set == 0;
+
+			if (v4_done && v6_done)
+			{
+				/* Both families gone — delete headers and proc contexts */
+				if (get_client_memptr(wan_client, clnt_indx)->sta_hdr_proc_ctx_set)
+				{
+					m_header.DeleteHeaderProcCtx(
+						get_client_memptr(wan_client, clnt_indx)->sta_hdr_proc_hdl_v4);
+					m_header.DeleteHeaderProcCtx(
+						get_client_memptr(wan_client, clnt_indx)->sta_hdr_proc_hdl_v6);
+					get_client_memptr(wan_client, clnt_indx)->sta_hdr_proc_ctx_set = false;
+				}
+				if (get_client_memptr(wan_client, clnt_indx)->ipv4_header_set)
+				{
+					m_header.DeleteHeaderHdl(
+						get_client_memptr(wan_client, clnt_indx)->hdr_hdl_v4);
+					get_client_memptr(wan_client, clnt_indx)->ipv4_header_set = false;
+				}
+				if (get_client_memptr(wan_client, clnt_indx)->ipv6_header_set)
+				{
+					m_header.DeleteHeaderHdl(
+						get_client_memptr(wan_client, clnt_indx)->hdr_hdl_v6);
+					get_client_memptr(wan_client, clnt_indx)->ipv6_header_set = false;
+				}
+
+				/* Compact array */
+				if (clnt_indx != (num_wan_client - 1))
+				{
+					memcpy(get_client_memptr(wan_client, clnt_indx),
+						get_client_memptr(wan_client, num_wan_client - 1),
+						wan_client_len);
+					std::swap(rt_hdl_v4_list[clnt_indx], rt_hdl_v4_list[num_wan_client - 1]);
+					std::swap(rt_hdl_v6_list[clnt_indx], rt_hdl_v6_list[num_wan_client - 1]);
+					std::swap(rt_hdl_v6_dst_list[clnt_indx], rt_hdl_v6_dst_list[num_wan_client - 1]);
+				}
+				rt_hdl_v4_list[num_wan_client - 1].clear();
+				rt_hdl_v6_list[num_wan_client - 1].clear();
+				rt_hdl_v6_dst_list[num_wan_client - 1].clear();
+				num_wan_client--;
+				IPACMDBG_H("WAN client fully removed, num_wan_client now %d\n", num_wan_client);
+
+				/* Clean up stub slots for the same GW IP */
+				for (int i = num_wan_client - 1; i >= 0; i--)
+				{
+					if (get_client_memptr(wan_client, i)->is_stub &&
+					    get_client_memptr(wan_client, i)->v4_addr == deleted_gw_ip)
+					{
+						IPACMDBG_H("Removing stub[%d] for deleted GW 0x%x\n",
+							i, deleted_gw_ip);
+						rt_hdl_v4_list[i].clear();
+						if (i != (num_wan_client - 1))
+						{
+							memcpy(get_client_memptr(wan_client, i),
+								get_client_memptr(wan_client, num_wan_client - 1),
+								wan_client_len);
+							std::swap(rt_hdl_v4_list[i], rt_hdl_v4_list[num_wan_client - 1]);
+							std::swap(rt_hdl_v6_list[i], rt_hdl_v6_list[num_wan_client - 1]);
+						}
+						rt_hdl_v4_list[num_wan_client - 1].clear();
+						rt_hdl_v6_list[num_wan_client - 1].clear();
+						num_wan_client--;
+					}
+				}
+			}
+			else
+			{
+					IPACMDBG_H("WAN client[%d] still has %s active, keeping slot\n",
+					clnt_indx,
+					(!v4_done && v6_done) ? "IPv4" :
+					(v4_done && !v6_done) ? "IPv6" : "IPv4+IPv6");
+			}
+		}
+		break;
+
 	case IPA_SW_ROUTING_ENABLE:
-		IPACMDBG_H("Received IPA_SW_ROUTING_ENABLE\n");
 		/* handle software routing enable event */
 		if(m_is_sta_mode == Q6_WAN)
 		{
@@ -6233,6 +6651,17 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 		if (IPACM_Iface::ipacmcfg->mape_enable &&
 			(strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)) {
 			IPACMDBG_H(" mape is enabled updating WANUP with mape ipv4 addr \n");
+			if (IPACM_Wan::mape_wan_ipv4_addr == 0)
+			{
+				/* IPA_ADDR_ADD_EVENT for MAP-E not received yet — install rules now
+				 * but defer posting IPA_HANDLE_WAN_UP until addr is available. */
+				IPACMDBG_H("mape_wan_ipv4_addr not set yet, deferring IPA_HANDLE_WAN_UP\n");
+				IPACM_Wan::mape_wan_up_pending = true;
+				IPACM_Wan::wan_up = false;
+				free(wanup_data_v4);
+				free(rt_rule);
+				return IPACM_SUCCESS;
+			}
 			wanup_data_v4->ipv4_addr = IPACM_Wan::mape_wan_ipv4_addr;
 		} else {
 			wanup_data_v4->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
@@ -10217,7 +10646,20 @@ int IPACM_Wan::handle_down_evt()
 		get_client_memptr(wan_client, i)->ipv6_set = 0;
 		/* clear the map */
 		rt_hdl_v6_list[i].clear();
+		rt_hdl_v4_list[i].clear();
+		rt_hdl_v6_dst_list[i].clear();
 	} /* end of for loop */
+
+	pending_v6_static_routes.clear();
+
+	/* Safety cleanup: delete MAP-E GW v4 rule if still installed
+	 * (e.g. GW neigh was never received so no client has is_v4_gateway set) */
+	if (IPACM_Wan::mape_wan_rt_rule_hdl_v4 != 0)
+	{
+		if (m_routing.DeleteRoutingHdl(IPACM_Wan::mape_wan_rt_rule_hdl_v4, IPA_IP_v4) == false)
+			IPACMERR("Failed to delete residual mape_wan_rt_rule_hdl_v4 on WAN down\n");
+		IPACM_Wan::mape_wan_rt_rule_hdl_v4 = 0;
+	}
 
 	/* Delete MAP-E proc contexts once, outside the per-client loop */
 	if(IPACM_Iface::ipacmcfg->mape_enable && (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)){
@@ -12202,6 +12644,270 @@ int IPACM_Wan::handle_dual_backhaul_disable()
 #endif
 /* handle STA WAN-client */
 /* handle WAN client initial, construct full headers (tx property) */
+/* Generic MAP-E static route handler.
+ * is_br=true : BR/GW route — installs with MAP-E proc ctx and IPA_FLT_SRC_ADDR (mape_wan_ipv4_addr)
+ * is_br=false: non-BR route — installs with per-client hdr_hdl and IPA_FLT_DST_ADDR (dst_v4_addr) */
+void IPACM_Wan::handle_wan_static_route(ipa_ip_type iptype, uint32_t dst_v4_addr,
+                                          uint32_t dst_v4_mask, uint32_t gw_v4_addr,
+                                          bool is_br)
+{
+	if (is_br && !IPACM_Iface::ipacmcfg->mape_enable)
+		return;
+
+	uint8_t *mac = IPACM_Wan::mape_rules.mac;
+	int clnt_indx = IPACM_INVALID_INDEX;
+
+	/* Resolve the gateway neigh to get the MAC */
+	if (iptype == IPA_IP_v4)
+	{
+		clnt_indx = get_wan_client_index_ipv4(gw_v4_addr);
+		if (clnt_indx == IPACM_INVALID_INDEX)
+			clnt_indx = get_wan_stub_index_ipv4(gw_v4_addr);
+		/* Fallback: client exists but ipv4_set not yet true (race with neigh event) */
+		if (clnt_indx == IPACM_INVALID_INDEX)
+		{
+			for (int i = 0; i < num_wan_client; i++)
+			{
+				if (get_client_memptr(wan_client, i)->v4_addr == gw_v4_addr &&
+				    !get_client_memptr(wan_client, i)->is_stub &&
+				    memcmp(get_client_memptr(wan_client, i)->mac, invalid_mac,
+				           sizeof(invalid_mac)) != 0)
+				{
+					IPACMDBG_H("Found GW 0x%x at index %d by v4_addr (ipv4_set may not be true yet)\n",
+						gw_v4_addr, i);
+					clnt_indx = i;
+					break;
+				}
+			}
+		}
+	}
+
+	if (clnt_indx == IPACM_INVALID_INDEX)
+	{
+		IPACMDBG_H("Static route gw=0x%x not yet resolved, creating stub and queueing route\n",
+			gw_v4_addr);
+		if (iptype == IPA_IP_v4 && is_br)
+		{
+			IPACM_Wan::mape_rules.br_v4_static_route_pending = true;
+		}
+		else if (iptype == IPA_IP_v6)
+		{
+			IPACM_Wan::mape_rules.br_static_route_pending = true;
+		}
+		else if (iptype == IPA_IP_v4 && dst_v4_addr != 0)
+		{
+			/* Create stub slot keyed by GW IP, store static route */
+			int stub_idx = create_wan_client_stub(gw_v4_addr);
+			if (stub_idx != IPACM_INVALID_INDEX &&
+			    rt_hdl_v4_list[stub_idx].count(dst_v4_addr) == 0)
+			{
+				rt_hdl_v4_list[stub_idx].insert(
+					std::make_pair(dst_v4_addr,
+						handleTypeV4(iface_query->num_tx_props, dst_v4_mask)));
+				IPACMDBG_H("Stored pending route dst=0x%x/0x%x in stub[%d]\n",
+					dst_v4_addr, dst_v4_mask, stub_idx);
+			}
+		}
+		return;
+	}
+
+	mac = get_client_memptr(wan_client, clnt_indx)->mac;
+
+	/* Insert/reset the static route entry in rt_hdl_v4_list */
+	if (iptype == IPA_IP_v4 && dst_v4_addr != 0 && !is_br)
+	{
+		auto &map = rt_hdl_v4_list[clnt_indx];
+		auto it = map.find(dst_v4_addr);
+		if (it != map.end())
+		{
+			/* Entry exists — reset so it can be reinstalled */
+			it->second.route_rule_set_v4 = false;
+			it->second.dst_mask = dst_v4_mask;
+			for (uint32_t tx = 0; tx < iface_query->num_tx_props; tx++)
+				it->second.hdl_v4[tx].rt_rule_hdl_v4 = 0;
+			IPACMDBG_H("Reset existing rt_hdl_v4_list entry for dst=0x%x\n", dst_v4_addr);
+		}
+		else
+		{
+			map.insert(std::make_pair(dst_v4_addr,
+				handleTypeV4(iface_query->num_tx_props, dst_v4_mask)));
+			IPACMDBG_H("Inserted rt_hdl_v4_list entry for dst=0x%x in client[%d]\n",
+				dst_v4_addr, clnt_indx);
+		}
+	}
+
+	static_route_flag = true;
+	if (is_br)
+	{
+		if (iptype == IPA_IP_v4)
+			IPACM_Wan::mape_rules.br_v4_static_route_pending = false;
+		else
+			IPACM_Wan::mape_rules.br_static_route_pending = false;
+		memcpy(IPACM_Wan::mape_rules.mac, mac, sizeof(IPACM_Wan::mape_rules.mac));
+	}
+	else if (iptype == IPA_IP_v4 && dst_v4_addr != 0)
+	{
+		/* Insert static route into rt_hdl_v4_list if not already present */
+		if (rt_hdl_v4_list[clnt_indx].count(dst_v4_addr) == 0)
+		{
+			rt_hdl_v4_list[clnt_indx].insert(
+				std::make_pair(dst_v4_addr,
+					handleTypeV4(iface_query->num_tx_props, dst_v4_mask)));
+		}
+		/* Only set v4_addr/ipv4_set for real clients, not stubs.
+		 * Stubs keep their GW IP as v4_addr until promoted by neigh. */
+		if (!get_client_memptr(wan_client, clnt_indx)->is_stub)
+		{
+			get_client_memptr(wan_client, clnt_indx)->v4_addr = dst_v4_addr;
+			get_client_memptr(wan_client, clnt_indx)->ipv4_set = true;
+		}
+	}
+
+	IPACMDBG_H("MAP-E static route install: iptype=%d dst=0x%x/0x%x gw=0x%x is_br=%d "
+		"mac=%02x:%02x:%02x:%02x:%02x:%02x\n",
+		iptype, dst_v4_addr, dst_v4_mask, gw_v4_addr, is_br,
+		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+	/* Skip header init and route rule for stub clients — no header yet.
+	 * Route will be installed when neigh promotes the stub. */
+	if (get_client_memptr(wan_client, clnt_indx)->is_stub)
+	{
+		IPACMDBG_H("Client is stub, deferring route rule install until neigh resolves\n");
+		static_route_flag = false;
+		return;
+	}
+
+	handle_wan_hdr_init(mac, is_br);
+	handle_wan_client_route_rule(mac, iptype);
+
+	static_route_flag = false;
+}
+
+/* Create a stub wan_client slot for a GW with known IPv4 address but no
+ * MAC/header yet. Static routes to this GW are stored in rt_hdl_v4_list
+ * and installed when the neigh event fills in the real MAC and header. */
+/* Install a per-destination IPv6 static route rule in the WAN v6 RT table.
+ * Uses IPA_FLT_DST_ADDR matching dst_v6/mask with the client's header. */
+void IPACM_Wan::install_wan_v6_static_route(int wan_index,
+                                              const std::array<uint32_t,4> &dst_v6)
+{
+	if (tx_prop == NULL || wan_index < 0 || wan_index >= num_wan_client)
+		return;
+
+	auto it = rt_hdl_v6_dst_list[wan_index].find(dst_v6);
+	if (it == rt_hdl_v6_dst_list[wan_index].end())
+		return;
+
+	if (it->second.route_rule_set_v6)
+	{
+		IPACMDBG_H("IPv6 static route dst=%08x:%08x:%08x:%08x already installed\n",
+			dst_v6[0], dst_v6[1], dst_v6[2], dst_v6[3]);
+		return;
+	}
+
+	const int NUM = 1;
+	struct ipa_ioc_add_rt_rule *rt_rule = (struct ipa_ioc_add_rt_rule *)
+		calloc(1, sizeof(struct ipa_ioc_add_rt_rule) + NUM * sizeof(struct ipa_rt_rule_add));
+	if (!rt_rule)
+	{
+		IPACMERR("Failed to allocate rt_rule for IPv6 static route\n");
+		return;
+	}
+	rt_rule->commit = 1;
+	rt_rule->num_rules = NUM;
+	rt_rule->ip = IPA_IP_v6;
+	/* Use WANRTBLv6 for WAN-bound IPv6 static route rules */
+	strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name,
+		sizeof(rt_rule->rt_tbl_name));
+	rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+
+	struct ipa_rt_rule_add *rt_rule_entry = &rt_rule->rules[0];
+
+	for (uint32_t tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+	{
+		if (tx_prop->tx[tx_index].ip != IPA_IP_v6)
+			continue;
+		if (tx_prop->tx[tx_index].tc_bmap)
+			continue;
+
+		rt_rule_entry->at_rear = 0;
+		rt_rule_entry->rule.hdr_proc_ctx_hdl = 0;
+		rt_rule_entry->rule.hdr_hdl = 0;
+		if (get_client_memptr(wan_client, wan_index)->sta_hdr_proc_ctx_set)
+			rt_rule_entry->rule.hdr_proc_ctx_hdl =
+				get_client_memptr(wan_client, wan_index)->sta_hdr_proc_hdl_v6;
+		else
+			rt_rule_entry->rule.hdr_hdl =
+				get_client_memptr(wan_client, wan_index)->hdr_hdl_v6;
+		rt_rule_entry->rule.dst = IPACM_Iface::ipacmcfg->isMCC_Mode ?
+			tx_prop->tx[tx_index].alt_dst_pipe : tx_prop->tx[tx_index].dst_pipe;
+
+		memset(&rt_rule_entry->rule.attrib, 0, sizeof(rt_rule_entry->rule.attrib));
+		rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = dst_v6[0];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = dst_v6[1];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = dst_v6[2];
+		rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = dst_v6[3];
+		memcpy(rt_rule_entry->rule.attrib.u.v6.dst_addr_mask,
+			it->second.dst_mask, sizeof(it->second.dst_mask));
+#ifdef FEATURE_IPA_V3
+		rt_rule_entry->rule.hashable = true;
+#endif
+		if (false == m_routing.AddRoutingRule(rt_rule))
+		{
+			IPACMERR("IPv6 static route rule addition failed!\n");
+			free(rt_rule);
+			return;
+		}
+		it->second.hdl_v6[tx_index].rt_rule_hdl_v6 = rt_rule->rules[0].rt_rule_hdl;
+		IPACMDBG_H("IPv6 static route installed: tx:%d dst=%08x:%08x:%08x:%08x hdl=%x\n",
+			tx_index, dst_v6[0], dst_v6[1], dst_v6[2], dst_v6[3],
+			rt_rule->rules[0].rt_rule_hdl);
+		if (tx_index + 1 == iface_query->num_tx_props)
+			it->second.route_rule_set_v6 = true;
+	}
+	free(rt_rule);
+}
+
+int IPACM_Wan::create_wan_client_stub(uint32_t gw_v4_addr)
+{
+	/* Check if stub or real slot already exists for this GW IP */
+	int existing = get_wan_client_index_ipv4(gw_v4_addr);
+	if (existing == IPACM_INVALID_INDEX)
+		existing = get_wan_stub_index_ipv4(gw_v4_addr);
+	if (existing != IPACM_INVALID_INDEX)
+	{
+		IPACMDBG_H("Stub/client already exists at index %d for gw 0x%x\n",
+			existing, gw_v4_addr);
+		return existing;
+	}
+
+	if (num_wan_client >= IPA_MAX_NUM_WAN_CLIENTS)
+	{
+		IPACMERR("Reached max wan clients, cannot create stub for gw 0x%x\n", gw_v4_addr);
+		return IPACM_INVALID_INDEX;
+	}
+
+	int idx = num_wan_client;
+	memset(get_client_memptr(wan_client, idx)->mac, 0,
+		sizeof(get_client_memptr(wan_client, idx)->mac));
+	get_client_memptr(wan_client, idx)->v4_addr          = gw_v4_addr;
+	get_client_memptr(wan_client, idx)->ipv4_set         = false; /* not a real neigh yet */
+	get_client_memptr(wan_client, idx)->ipv6_set         = 0;
+	get_client_memptr(wan_client, idx)->route_rule_set_v4 = false;
+	get_client_memptr(wan_client, idx)->route_rule_set_v6 = 0;
+	get_client_memptr(wan_client, idx)->ipv4_header_set  = false;
+	get_client_memptr(wan_client, idx)->ipv6_header_set  = false;
+	get_client_memptr(wan_client, idx)->sta_hdr_proc_ctx_set = false;
+	get_client_memptr(wan_client, idx)->is_v4_gateway    = false;
+	get_client_memptr(wan_client, idx)->is_v6_gateway    = false;
+	get_client_memptr(wan_client, idx)->is_stub          = true;
+	num_wan_client++;
+	IPACMDBG_H("Created stub wan client at index %d for gw 0x%x, total=%d\n",
+		idx, gw_v4_addr, num_wan_client);
+	return idx;
+}
+
 int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 {
 
@@ -12324,7 +13030,8 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 
 									if (IPACM_Iface::ipacmcfg->mape_enable
 										       && (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)
-										       && is_global_ipv6_addr(IPACM_Wan::mape_wan_ipv6_addr)) {
+										       && tx_prop->tx[cnt].ip == IPA_IP_v4
+										       && gw_addr) {
 										IPACMDBG_H(" Header for Mape \n");
 										sCopyHeader.hdr_len = 54;
 										pHeaderDescriptor->hdr[0].hdr[12] = 0x86;
@@ -12676,7 +13383,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 #endif
 		if (IPACM_Iface::ipacmcfg->mape_enable
 		     && (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)
-		     && is_global_ipv6_addr(IPACM_Wan::mape_wan_ipv6_addr)) {
+		     && gw_addr) {
 				IPACMDBG_H(" calling mape_make_hdr_ctx \n");
 			 	mape_make_hdr_add_ctx(IPA_IP_v4);
 				mape_make_hdr_add_ctx(IPA_IP_v6);
@@ -12708,7 +13415,8 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 			else
 			{
 				if (IPACM_Iface::ipacmcfg->mape_enable
-					&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)) {
+					&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)
+					&& gw_addr) {
 					get_client_memptr(wan_client, num_wan_client)->sta_hdr_proc_hdl_v4 = v4_p_ctx_2use;
 					IPACMDBG_H("Updating hdr_proc_hdl for default route \n");
 				} else {
@@ -12743,6 +13451,9 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 		get_client_memptr(wan_client, num_wan_client)->route_rule_set_v6 = 0;
 		get_client_memptr(wan_client, num_wan_client)->ipv4_set = false;
 		get_client_memptr(wan_client, num_wan_client)->ipv6_set = 0;
+		get_client_memptr(wan_client, num_wan_client)->is_v4_gateway = false;
+		get_client_memptr(wan_client, num_wan_client)->is_v6_gateway = false;
+		get_client_memptr(wan_client, num_wan_client)->is_stub = false;
 		num_wan_client++;
 		header_name_count++; //keep increasing header_name_count
 		res = IPACM_SUCCESS;
@@ -13104,14 +13815,46 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					IPACMDBG_H("Wan Route rule installed already for ipv4 \n");
 					continue;
 				}
-				if (IPACM_Wan::mape_wan_rt_rule_hdl_v4 != 0) {
+				/* MAP-E GW src-addr rule: install at rear so non-GW dst-addr rules
+				 * always sit ahead of it. If the catch-all is already installed,
+				 * delete it first and reinstall after so catch-all stays last:
+				 * [non-GW dst-addr] -> [GW src-addr] -> [catch-all] */
+				if (is_mape_v4_interface && (get_client_memptr(wan_client, wan_index)->is_v4_gateway ||
+						get_client_memptr(wan_client, wan_index)->is_v6_gateway ||
+						memcmp(get_client_memptr(wan_client, wan_index)->mac,
+						       IPACM_Wan::mape_rules.mac,
+						       sizeof(IPACM_Wan::mape_rules.mac)) == 0))
+				{
+					rt_rule_entry->at_rear = 1;
+					if (wan_route_rule_v4_hdl[tx_index] != 0)					{
+						if (m_routing.DeleteRoutingHdl(wan_route_rule_v4_hdl[tx_index], IPA_IP_v4) == false)
+						{
+							IPACMERR("Error deleting catch-all rule before GW reinstall\n");
+							free(rt_rule);
+							return IPACM_FAILURE;
+						}
+						wan_route_rule_v4_hdl[tx_index] = 0;
+					}
+				}
+				/* Static route case: delete and reinstall GW MAP-E rule with updated proc ctx. */
+				if (is_mape_v4_interface && (get_client_memptr(wan_client, wan_index)->is_v4_gateway ||
+						get_client_memptr(wan_client, wan_index)->is_v6_gateway ||
+						memcmp(get_client_memptr(wan_client, wan_index)->mac,
+						       IPACM_Wan::mape_rules.mac,
+						       sizeof(IPACM_Wan::mape_rules.mac)) == 0)
+						&& IPACM_Wan::mape_wan_rt_rule_hdl_v4 != 0) {
 					if (m_routing.DeleteRoutingHdl(IPACM_Wan::mape_wan_rt_rule_hdl_v4, IPA_IP_v4) == false)
 					{
 						IPACMERR("Error Deleting routing rules, aborting...\n");
 						return IPACM_FAILURE;
 					}
 				}
-				IPACM_Wan::mape_wan_rt_rule_hdl_v4 = 0;
+				if (is_mape_v4_interface && (get_client_memptr(wan_client, wan_index)->is_v4_gateway ||
+						get_client_memptr(wan_client, wan_index)->is_v6_gateway ||
+						memcmp(get_client_memptr(wan_client, wan_index)->mac,
+						       IPACM_Wan::mape_rules.mac,
+						       sizeof(IPACM_Wan::mape_rules.mac)) == 0))
+					IPACM_Wan::mape_wan_rt_rule_hdl_v4 = 0;
 				rt_rule->ip = IPA_IP_v4;
 				IPACMDBG_H("client index(%d):ipv4 address: 0x%x\n", wan_index,
 						get_client_memptr(wan_client, wan_index)->v4_addr);
@@ -13149,11 +13892,9 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					rt_rule_entry->rule.hdr_proc_ctx_hdl = 0;
 					rt_rule_entry->rule.hdr_hdl = 0;
 				if (IPACM_Iface::ipacmcfg->mape_enable
-						&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)) {
-					if (!IPACM_Wan::mape_wan_ipv4_addr) {
-						IPACMDBG_H("MAP-E: mape_wan_ipv4_addr not set, skip v4 route rule install\n");
-						continue;
-					}
+						&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)
+						&& (get_client_memptr(wan_client, wan_index)->is_v4_gateway ||
+							get_client_memptr(wan_client, wan_index)->is_v6_gateway)) {
 					rt_rule_entry->rule.hdr_proc_ctx_hdl = v4_p_ctx_2use;
 					IPACMDBG_H("mape v4 rt_rule_entry->rule.hdr_proc_ctx_hdl %x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
 				} else if(get_client_memptr(wan_client, wan_index)->sta_hdr_proc_ctx_set == true)
@@ -13167,8 +13908,20 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				}
 				/*With Wan IP*/
 				if (IPACM_Iface::ipacmcfg->mape_enable
-						&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0))
+						&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)
+						&& (get_client_memptr(wan_client, wan_index)->is_v4_gateway ||
+							get_client_memptr(wan_client, wan_index)->is_v6_gateway ||
+							memcmp(get_client_memptr(wan_client, wan_index)->mac,
+							       IPACM_Wan::mape_rules.mac,
+							       sizeof(IPACM_Wan::mape_rules.mac)) == 0))
 				{
+					if (IPACM_Wan::mape_wan_ipv4_addr == 0)
+					{
+						/* mape_wan_ipv4_addr not yet set — skip to avoid src=0.0.0.0 rule.
+						 * Rule will be installed from handle_addr_evt when addr arrives. */
+						IPACMDBG_H("mape_wan_ipv4_addr not set, skipping MAP-E v4 TX prop\n");
+						continue;
+					}
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 					rt_rule_entry->rule.attrib.u.v4.src_addr = IPACM_Wan::mape_wan_ipv4_addr;
 					rt_rule_entry->rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
@@ -13206,7 +13959,42 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				}
 				IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
 						get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4, iptype);
-			} else {
+
+				/* MAP-E GW rule was installed at rear after deleting the catch-all above.
+				 * Reinstall catch-all at rear so final order is:
+				 * [non-GW dst-addr] -> [GW src-addr] -> [catch-all] */
+				if (is_mape_v4_interface && (get_client_memptr(wan_client, wan_index)->is_v4_gateway ||
+						get_client_memptr(wan_client, wan_index)->is_v6_gateway ||
+						memcmp(get_client_memptr(wan_client, wan_index)->mac,
+						       IPACM_Wan::mape_rules.mac,
+						       sizeof(IPACM_Wan::mape_rules.mac)) == 0)
+						&& wan_route_rule_v4_hdl[tx_index] == 0 && header_set_v4)
+				{
+					rt_rule_entry->at_rear = 1;
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = 0;
+					rt_rule_entry->rule.hdr_hdl = 0;
+					if (hdr_proc_set_v4)
+						rt_rule_entry->rule.hdr_proc_ctx_hdl = proc_hdl_sta_v4;
+					else
+						rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v4;
+					rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
+					memcpy(&rt_rule_entry->rule.attrib,
+							&tx_prop->tx[tx_index].attrib,
+							sizeof(rt_rule_entry->rule.attrib));
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr = 0;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
+					if (false == m_routing.AddRoutingRule(rt_rule))
+					{
+						IPACMERR("Failed to reinstall catch-all routing rule\n");
+						free(rt_rule);
+						return IPACM_FAILURE;
+					}
+					wan_route_rule_v4_hdl[tx_index] = rt_rule->rules[0].rt_rule_hdl;
+					IPACMDBG_H("Reinstalled catch-all rule at rear, hdl=%x\n",
+							wan_route_rule_v4_hdl[tx_index]);
+				}
+				} else {
 				rt_rule->ip = IPA_IP_v6;
 				for (auto it = rt_hdl_v6_list[wan_index].begin(); it != rt_hdl_v6_list[wan_index].end(); ++it)
 				{
@@ -13264,25 +14052,43 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 						}
 					}
 
-					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 					rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
-					if(active_v6 && m_ipv6_addr[0])
+					if (get_client_memptr(wan_client, wan_index)->is_v6_gateway)
 					{
-						rt_rule_entry->rule.attrib.u.v6.src_addr[0] = m_ipv6_addr[0];
-						rt_rule_entry->rule.attrib.u.v6.src_addr[1] = m_ipv6_addr[1];
-						rt_rule_entry->rule.attrib.u.v6.src_addr[2] = 0x00000000;
-						rt_rule_entry->rule.attrib.u.v6.src_addr[3] = 0x00000000;
-						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
-						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
-						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] = 0x00000000;
-						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] = 0x00000000;
+						/* Default GW: match all traffic from the WAN prefix /64 */
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+						if(active_v6 && m_ipv6_addr[0])
+						{
+							rt_rule_entry->rule.attrib.u.v6.src_addr[0] = m_ipv6_addr[0];
+							rt_rule_entry->rule.attrib.u.v6.src_addr[1] = m_ipv6_addr[1];
+							rt_rule_entry->rule.attrib.u.v6.src_addr[2] = 0x00000000;
+							rt_rule_entry->rule.attrib.u.v6.src_addr[3] = 0x00000000;
+							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] = 0x00000000;
+							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] = 0x00000000;
+						}
+						else
+						{
+							IPACMERR("v6 STA WAN s not up yet!!!(%d)\n", active_v6);
+							IPACMERR(" m_ipv6_addr 0x%x 0x%x \n",m_ipv6_addr[0],m_ipv6_addr[1]);
+							free(rt_rule);
+							return IPACM_FAILURE;
+						}
 					}
 					else
 					{
-						IPACMERR("v6 STA WAN s not up yet!!!(%d)\n", active_v6);
-						IPACMERR(" m_ipv6_addr 0x%x 0x%x \n",m_ipv6_addr[0],m_ipv6_addr[1]);
-						free(rt_rule);
-						return IPACM_FAILURE;
+						/* Non-GW peer: match only traffic destined to this specific
+						 * peer's IPv6 address /128 to avoid hijacking GW traffic */
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = it->first[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = it->first[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = it->first[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = it->first[3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
 					}
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
@@ -13348,6 +14154,84 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 		{
 			get_client_memptr(wan_client, wan_index)->route_rule_set_v6 = get_client_memptr(wan_client, wan_index)->ipv6_set;
 		}
+	}
+
+	/* Install IPv4 static routes from rt_hdl_v4_list regardless of route_rule_set_v4.
+	 * These are independent of the per-client default rule and can arrive any time. */
+	if (!rt_hdl_v4_list[wan_index].empty() && tx_prop != NULL)
+	{
+		struct ipa_ioc_add_rt_rule *srt_rule;
+		struct ipa_rt_rule_add *srt_rule_entry;
+		const int NUM = 1;
+
+		srt_rule = (struct ipa_ioc_add_rt_rule *)
+			calloc(1, sizeof(struct ipa_ioc_add_rt_rule) + NUM * sizeof(struct ipa_rt_rule_add));
+		if (srt_rule == NULL)
+		{
+			IPACMERR("Failed to allocate rt_rule for static routes\n");
+			return IPACM_SUCCESS;
+		}
+		srt_rule->commit = 1;
+		srt_rule->num_rules = (uint8_t)NUM;
+		srt_rule->ip = IPA_IP_v4;
+		strlcpy(srt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.name,
+			sizeof(srt_rule->rt_tbl_name));
+		srt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = '\0';
+		srt_rule_entry = &srt_rule->rules[0];
+
+		for (uint32_t tx_idx = 0; tx_idx < iface_query->num_tx_props; tx_idx++)
+		{
+			if (tx_prop->tx[tx_idx].ip != IPA_IP_v4)
+				continue;
+			if (tx_prop->tx[tx_idx].tc_bmap)
+				continue;
+
+			for (auto it = rt_hdl_v4_list[wan_index].begin();
+			     it != rt_hdl_v4_list[wan_index].end(); ++it)
+			{
+				if (it->second.route_rule_set_v4)
+					continue;
+
+				srt_rule_entry->at_rear = 0;
+				srt_rule_entry->rule.hdr_proc_ctx_hdl = 0;
+				srt_rule_entry->rule.hdr_hdl = 0;
+				if (get_client_memptr(wan_client, wan_index)->sta_hdr_proc_ctx_set)
+					srt_rule_entry->rule.hdr_proc_ctx_hdl =
+						get_client_memptr(wan_client, wan_index)->sta_hdr_proc_hdl_v4;
+				else
+					srt_rule_entry->rule.hdr_hdl =
+						get_client_memptr(wan_client, wan_index)->hdr_hdl_v4;
+				if (IPACM_Iface::ipacmcfg->isMCC_Mode)
+					srt_rule_entry->rule.dst = tx_prop->tx[tx_idx].alt_dst_pipe;
+				else
+					srt_rule_entry->rule.dst = tx_prop->tx[tx_idx].dst_pipe;
+				memcpy(&srt_rule_entry->rule.attrib, &tx_prop->tx[tx_idx].attrib,
+					sizeof(srt_rule_entry->rule.attrib));
+				srt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+				srt_rule_entry->rule.attrib.u.v4.dst_addr = it->first;
+				srt_rule_entry->rule.attrib.u.v4.dst_addr_mask = it->second.dst_mask;
+#ifdef FEATURE_IPA_V3
+				srt_rule_entry->rule.hashable = true;
+#endif
+				if (false == m_routing.AddRoutingRule(srt_rule))
+				{
+					IPACMERR("IPv4 static route rule addition failed for dst=0x%x\n", it->first);
+					free(srt_rule);
+					return IPACM_FAILURE;
+				}
+				it->second.hdl_v4[tx_idx].rt_rule_hdl_v4 = srt_rule->rules[0].rt_rule_hdl;
+				IPACMDBG_H("Static route installed: tx:%d dst=0x%x/0x%x hdl=%x\n",
+					tx_idx, it->first, it->second.dst_mask, srt_rule->rules[0].rt_rule_hdl);
+			}
+		}
+		/* Mark all entries as installed after processing all IPv4 TX props */
+		for (auto it = rt_hdl_v4_list[wan_index].begin();
+		     it != rt_hdl_v4_list[wan_index].end(); ++it)
+		{
+			if (it->second.hdl_v4[0].rt_rule_hdl_v4 != 0)
+				it->second.route_rule_set_v4 = true;
+		}
+		free(srt_rule);
 	}
 
 	return IPACM_SUCCESS;
@@ -13468,6 +14352,7 @@ void IPACM_Wan::handle_wan_client_SCC_MCC_switch(bool isSCCMode, ipa_ip_type ipt
 
 	uint32_t tx_index = 0, clnt_index =0;
 	int v6_num = 0;
+	bool is_mape_gw = false;
 	const int NUM_RULES = 1;
 
 	int size = sizeof(struct ipa_ioc_mdfy_rt_rule) +
@@ -13503,6 +14388,12 @@ void IPACM_Wan::handle_wan_client_SCC_MCC_switch(bool isSCCMode, ipa_ip_type ipt
 			{
 				continue;
 			}
+
+			/* MAP-E GW rule uses IPA_FLT_SRC_ADDR — must use correct attrib on modify */
+			is_mape_gw = IPACM_Iface::ipacmcfg->mape_enable &&
+				(strcmp(dev_name, IPACM_Iface::ipacmcfg->iface_table[
+					IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0) &&
+				get_client_memptr(wan_client, clnt_index)->is_v4_gateway;
 
 			for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 			{
@@ -13540,11 +14431,21 @@ void IPACM_Wan::handle_wan_client_SCC_MCC_switch(bool isSCCMode, ipa_ip_type ipt
 				memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 
-				rt_rule_entry->rule.hdr_hdl = get_client_memptr(wan_client, clnt_index)->hdr_hdl_v4;
-				rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(wan_client, clnt_index)->v4_addr;
-				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+				if (is_mape_gw)
+				{
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = v4_p_ctx_2use;
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+					rt_rule_entry->rule.attrib.u.v4.src_addr = IPACM_Wan::mape_wan_ipv4_addr;
+					rt_rule_entry->rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
+				}
+				else
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+					rt_rule_entry->rule.hdr_hdl = get_client_memptr(wan_client, clnt_index)->hdr_hdl_v4;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(wan_client, clnt_index)->v4_addr;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+				}
 
 				/* copy ipv4 RT rule hdl */
 				IPACMDBG_H("rt rule hdl=%x\n",
@@ -16117,6 +17018,7 @@ void IPACM_Wan::read_from_mape_rules_file(void)
     memset(IPACM_Wan::mape_rules.br_ipaddr, 0, sizeof(IPACM_Wan::mape_rules.br_ipaddr));
     memset(IPACM_Wan::mape_rules.br_ll_ipaddr, 0, sizeof(IPACM_Wan::mape_rules.br_ll_ipaddr));
     IPACM_Wan::mape_rules.br_static_route_pending = false;
+    IPACM_Wan::mape_rules.br_v4_static_route_pending = false;
 
     fp = fopen("/tmp/map-mape.rules", "r");
     if (!fp) {

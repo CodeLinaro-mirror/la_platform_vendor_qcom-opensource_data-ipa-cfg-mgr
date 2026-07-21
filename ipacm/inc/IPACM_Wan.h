@@ -93,6 +93,9 @@ typedef struct _ipa_wan_client
 	uint32_t sta_hdr_proc_hdl_v6;
 	bool sta_hdr_proc_ctx_set;
 	bool power_save_set;
+	bool is_v4_gateway;
+	bool is_v6_gateway;
+	bool is_stub; /* slot created for pending static routes, no header/MAC yet */
 	wan_client_rt_hdl wan_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_wan_client;
 
@@ -120,6 +123,7 @@ struct MapRule {
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
 	bool draft03;
 	bool br_static_route_pending;
+	bool br_v4_static_route_pending;
 };
 
 class IPACM_Wan;
@@ -263,6 +267,7 @@ public:
 	static int ipa_pm_q6_check;
 	static bool wan_up;
 	static bool wan_up_v6;
+	static bool mape_wan_up_pending;
 	static uint8_t xlat_mux_id;
 #ifdef FEATURE_VLAN_MPDN
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -923,6 +928,18 @@ private:
 		return IPACM_INVALID_INDEX;
 	}
 
+	/* Find a stub slot (no MAC yet) by GW IPv4 address */
+	inline int get_wan_stub_index_ipv4(uint32_t gw_v4_addr)
+	{
+		for (int cnt = 0; cnt < num_wan_client; cnt++)
+		{
+			if (get_client_memptr(wan_client, cnt)->is_stub &&
+			    get_client_memptr(wan_client, cnt)->v4_addr == gw_v4_addr)
+				return cnt;
+		}
+		return IPACM_INVALID_INDEX;
+	}
+
 	inline int get_wan_client_index_ipv6(uint32_t* ipv6_addr)
 	{
 		int cnt, v6_num;
@@ -992,15 +1009,36 @@ private:
 		     if(get_client_memptr(wan_client, clt_indx)->route_rule_set_v4==true) /* for ipv4 */
 		     {
 				get_client_memptr(wan_client, clt_indx)->route_rule_set_v4 = false;
-				/* Clear shared MAP-E v4 handle so it can be reinstalled on next WAN up */
+				/* Clear shared MAP-E v4 handle only when the v4 or v6 GW client is deleted */
 				if (IPACM_Iface::ipacmcfg->mape_enable &&
 				    (strcmp(dev_name, IPACM_Iface::ipacmcfg->iface_table[
-				            IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0))
+				            IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0) &&
+				    (get_client_memptr(wan_client, clt_indx)->is_v4_gateway ||
+				     get_client_memptr(wan_client, clt_indx)->is_v6_gateway))
 				{
-					IPACMDBG_H("Clearing mape_wan_rt_rule_hdl_v4 on WAN client delete\n");
+					IPACMDBG_H("Clearing mape_wan_rt_rule_hdl_v4 on v4 GW client delete\n");
 					IPACM_Wan::mape_wan_rt_rule_hdl_v4 = 0;
 				}
 		     }
+		     /* delete IPv4 static route rules */
+		     for (auto it = rt_hdl_v4_list[clt_indx].begin();
+		          it != rt_hdl_v4_list[clt_indx].end(); ++it)
+		     {
+		         if (!it->second.route_rule_set_v4)
+		             continue;
+		         for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+		         {
+		             if (tx_prop->tx[tx_index].ip != IPA_IP_v4)
+		                 continue;
+		             uint32_t hdl = it->second.hdl_v4[tx_index].rt_rule_hdl_v4;
+		             if (hdl && m_routing.DeleteRoutingHdl(hdl, IPA_IP_v4) == false)
+		             {
+		                 IPACMERR("Failed to delete IPv4 static route hdl=%x\n", hdl);
+		                 return IPACM_FAILURE;
+		             }
+		         }
+		     }
+		     rt_hdl_v4_list[clt_indx].clear();
 		}
 
 		if(iptype == IPA_IP_v6)
@@ -1042,13 +1080,29 @@ private:
 				} /* end of for loop */
 			}
 
-			if(mape_wan_rt_rule_hdl_v6 ){
+			if(mape_wan_rt_rule_hdl_v6 && get_client_memptr(wan_client, clt_indx)->is_v6_gateway){
 				if(m_routing.DeleteRoutingHdl(mape_wan_rt_rule_hdl_v6, IPA_IP_v6) == false)
 				{
 					return IPACM_FAILURE;
 				}
 				mape_wan_rt_rule_hdl_v6 = 0;
 			}
+			/* Delete IPv6 dst-prefix static route rules */
+			for (auto &entry : rt_hdl_v6_dst_list[clt_indx])
+			{
+				if (!entry.second.route_rule_set_v6) continue;
+				for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+				{
+					if (tx_prop->tx[tx_index].ip != IPA_IP_v6) continue;
+					uint32_t hdl = entry.second.hdl_v6[tx_index].rt_rule_hdl_v6;
+					if (hdl && m_routing.DeleteRoutingHdl(hdl, IPA_IP_v6) == false)
+					{
+						IPACMERR("Failed to delete IPv6 static route rule hdl=%x\n", hdl);
+						return IPACM_FAILURE;
+					}
+				}
+			}
+			rt_hdl_v6_dst_list[clt_indx].clear();
 			IPACMDBG_H("Current clnt-index:%d ipv6_set= %d, route_rule_set_v6= %d, update ipa_num_clients_ipv6:%d\n",
 				clt_indx, get_client_memptr(wan_client, clt_indx)->ipv6_set,
 				get_client_memptr(wan_client, clt_indx)->route_rule_set_v6,
@@ -1059,6 +1113,11 @@ private:
 
 	int handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr);
 	int handle_mape_wan_fmr_hdr_init(uint8_t *mac_addr, MapeFMR* fmr_rule);
+	int create_wan_client_stub(uint32_t gw_v4_addr);
+	void handle_wan_static_route(ipa_ip_type iptype, uint32_t dst_v4_addr,
+	                               uint32_t dst_v4_mask, uint32_t gw_v4_addr,
+	                               bool is_br);
+	void install_wan_v6_static_route(int wan_index, const std::array<uint32_t,4> &dst_v6);
 	int handle_wan_client_ipaddr(ipacm_event_data_all *data);
 	int handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype);
 #ifdef FEATURE_DUAL_BACKHAUL

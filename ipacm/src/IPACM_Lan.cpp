@@ -21209,7 +21209,7 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 	IPACMDBG_H(
 		"There's gre enable work to be done for iptype(%d)\n",
 		iptype);
-
+	bool ast_update = false;
 	// REMINDER: The logic below needs to be tested with more than
 	// one wan instance...
 
@@ -21265,23 +21265,27 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 		{   
 			mux.qmap_id = muxid;
 		}
-		mux.client  = rx_prop->rx[0].src_pipe;
+		for (int i = 0; i < rx_prop->num_rx_props; i += 2)
+		{
+			mux.client = rx_prop->rx[i].src_pipe;
 
-		IPACMDBG_H(
-			"Issuing IPA_IOC_WRITE_QMAPID ioctl -> "
-			"mux.qmap_id(%u) mux.client(%u)\n",
-			mux.qmap_id,
-			mux.client);
+			IPACMDBG_H(
+				"Issuing IPA_IOC_WRITE_QMAPID ioctl -> "
+				"mux.qmap_id(%u) mux.client(%u)\n",
+				mux.qmap_id,
+				mux.client);
 
-		ret = ioctl(fd, IPA_IOC_WRITE_QMAPID, &mux);
+			ret = ioctl(fd, IPA_IOC_WRITE_QMAPID, &mux);
+
+			if ( ret )
+			{
+				IPACMERR("Failed to write mux id %d for pipe index %d\n", mux.qmap_id, i);
+				close(fd);
+				return;
+			}
+		}
 
 		close(fd);
-
-		if ( ret )
-		{
-			IPACMERR("Failed to write mux id %d\n", mux.qmap_id);
-			return;
-		}
 	}
 
 	/*
@@ -21374,19 +21378,22 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 			return;
 		}
 	}
-
+	if ((ipa_if_cate == WLAN_IF))
+	{
+		ast_update = ((IPACM_Wlan *)this)->ast_update_needed();
+	}
 #ifdef FEATURE_VLAN_MPDN
 	handle_uplink_filter_rule(
 		IPACM_Iface::ipacmcfg->GetExtProp(iptype),
 		iptype,
 		IPACM_Iface::ipacmcfg->GetQmapId(),
 		false,
-		false, false,false,isPmipv6,ipogre_enabled);
+		false, ast_update,false,isPmipv6,ipogre_enabled);
 #else
 	handle_uplink_filter_rule(
 		IPACM_Iface::ipacmcfg->GetExtProp(iptype),
 		iptype,
-		IPACM_Iface::ipacmcfg->GetQmapId(), false, isPmipv6);
+		IPACM_Iface::ipacmcfg->GetQmapId(), ast_update, isPmipv6);
 #endif
 
 	/* When IPoGRE is enabled for v6 iptype, the v4 catchall rule is installed via
@@ -21403,12 +21410,12 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 			IPA_IP_v4,
 			IPACM_Iface::ipacmcfg->GetQmapId(),
 			false,
-			false, false, false, isPmipv6, ipogre_enabled);
+			false, ast_update, false, isPmipv6, ipogre_enabled);
 #else
 		handle_uplink_filter_rule(
 			IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
 			IPA_IP_v4,
-			IPACM_Iface::ipacmcfg->GetQmapId(), false, isPmipv6, ipogre_enabled);
+			IPACM_Iface::ipacmcfg->GetQmapId(), ast_update, isPmipv6, ipogre_enabled);
 #endif
 	}
 
@@ -21508,23 +21515,27 @@ void IPACM_Lan::gre_down(bool isPmipv6, bool ipogre_enabled)
 		uint8_t muxid = IPACM_Iface::ipacmcfg->GetQmapId();
 		IPACM_Iface::ipacmcfg->SetQmapId(muxid);
 		mux.qmap_id = muxid;
-		mux.client  = rx_prop->rx[0].src_pipe;
+		for (int i = 0; i < rx_prop->num_rx_props; i += 2)
+		{
+			mux.client = rx_prop->rx[i].src_pipe;
 
-		IPACMDBG_H(
-			"Issuing IPA_IOC_WRITE_QMAPID ioctl -> "
-			"mux.qmap_id(%u) mux.client(%u)\n",
-			mux.qmap_id,
-			mux.client);
+			IPACMDBG_H(
+				"Issuing IPA_IOC_WRITE_QMAPID ioctl -> "
+				"mux.qmap_id(%u) mux.client(%u)\n",
+				mux.qmap_id,
+				mux.client);
 
-		ret = ioctl(fd, IPA_IOC_WRITE_QMAPID, &mux);
+			ret = ioctl(fd, IPA_IOC_WRITE_QMAPID, &mux);
+
+			if ( ret )
+			{
+				IPACMERR("Failed to write mux id %d for pipe index %d\n", mux.qmap_id, i);
+				close(fd);
+				return;
+			}
+		}
 
 		close(fd);
-
-		if ( ret )
-		{
-			IPACMERR("Failed to write mux id %d\n", mux.qmap_id);
-			return;
-		}
 		/*Delete the UL rules updated by GRE, and reinsert them normally*/
 		del_ul_flt_rules(IPA_IP_v4);
 		del_ul_flt_rules(IPA_IP_v6);
@@ -21803,6 +21814,9 @@ int IPACM_Lan::gre_add_catchup_rule(
 		"Attempting to add gre catchup rule for iptype(%d)\n",
 		iptype);
 
+	int idx = ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) &&
+		(rx_prop->num_rx_props > 2)) ? 2 : 0;
+
 	if (gre_route_data[iptype].flt_gre_1st_pass_hdl)
 	{
 		IPACMDBG_H("Catchup rule already installed for iptype(%d), deleting first\n", iptype);
@@ -21812,7 +21826,7 @@ int IPACM_Lan::gre_add_catchup_rule(
 			IPACMERR("Failed to delete existing catchup rule for iptype(%d)\n", iptype);
 			return IPACM_FAILURE;
 		}
-		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, iptype, 1);
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, 1);
 		gre_route_data[iptype].flt_gre_1st_pass_hdl = 0;
 	}
 
@@ -21828,7 +21842,7 @@ int IPACM_Lan::gre_add_catchup_rule(
 		(ipa_ioc_add_flt_rule*) buf;
 
 	pFilteringTable->commit    = 1;
-	pFilteringTable->ep        = rx_prop->rx[0].src_pipe;
+	pFilteringTable->ep        = rx_prop->rx[idx].src_pipe;
 	pFilteringTable->global    = false;
 	pFilteringTable->ip        = iptype;
 	pFilteringTable->num_rules = NUM_RULES;
@@ -22000,7 +22014,7 @@ int IPACM_Lan::gre_add_catchup_rule(
 		pFilteringTable->rules[0].flt_rule_hdl;
 
 	IPACM_Iface::ipacmcfg->increaseFltRuleCount(
-		rx_prop->rx[0].src_pipe, iptype, 1);
+		rx_prop->rx[idx].src_pipe, iptype, 1);
 
 	return IPACM_SUCCESS;
 }
@@ -22027,6 +22041,9 @@ int IPACM_Lan::update_complementary_table(
 
 		const int NUM_RULES = 1;
 
+		int idx = ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) &&
+			(rx_prop->num_rx_props > 2)) ? 2 : 0;
+
 		IPACMDBG_H(
 			"Will add same rule to table of complementary iptype(%d)\n",
 			iptype);
@@ -22041,7 +22058,7 @@ int IPACM_Lan::update_complementary_table(
 			(struct ipa_ioc_add_flt_rule *) buf;
 
 		flt_rule->commit    = 1;
-		flt_rule->ep        = rx_prop->rx[0].src_pipe;
+		flt_rule->ep        = rx_prop->rx[idx].src_pipe;
 		flt_rule->global    = false;
 		flt_rule->ip        = iptype;
 		flt_rule->num_rules = NUM_RULES;
@@ -22115,7 +22132,7 @@ int IPACM_Lan::update_complementary_table(
 				iptype);
 
 			IPACM_Iface::ipacmcfg->increaseFltRuleCount(
-				rx_prop->rx[0].src_pipe, iptype, 1);
+				rx_prop->rx[idx].src_pipe, iptype, 1);
 
 			/*
 			 * Save handle for subsequent cleanup.
@@ -22710,8 +22727,10 @@ void IPACM_Lan::gre_clear_route_data(
 
 			if ( rx_prop )
 			{
+				int idx = ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) &&
+					(rx_prop->num_rx_props > 2)) ? 2 : 0;
 				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-					rx_prop->rx[0].src_pipe, iptype, 1);
+					rx_prop->rx[idx].src_pipe, iptype, 1);
 			}
 		}
 

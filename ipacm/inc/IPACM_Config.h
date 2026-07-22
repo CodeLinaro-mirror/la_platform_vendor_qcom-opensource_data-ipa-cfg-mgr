@@ -442,7 +442,8 @@ public:
 #endif
 	void get_vlan_mode_ifaces();
 #endif
-
+	void get_ifaces_from_vid(uint16_t vlan_id, std::list<std::array<char,
+		IPA_RESOURCE_NAME_MAX>>& iface_list);
 
 #if defined(FEATURE_SOCKSv5) && defined(IPA_SOCKV5_EVENT_MAX)
 	pthread_mutex_t socksv5_lock;

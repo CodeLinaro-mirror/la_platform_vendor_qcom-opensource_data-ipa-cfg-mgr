@@ -2201,16 +2201,6 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 		if(is_any_mux_up(IPA_IP_v4) == true)
 			notif_only = true;
 
-		/* if we still have vlan pdns up notify only */
-		if(set_mux_down(data->mux_id, IPA_IP_v6))
-			return IPACM_FAILURE;
-
-		if(is_any_mux_up(IPA_IP_v6) == true)
-			notif_only_v6 = true;
-
-		/* prefixes list updated, install rules accordingly */
-		modify_ipv6_prefix_flt_rule();
-
 		/* Clean up MTU rule */
 		modify_private_subnet();
 
@@ -2229,10 +2219,19 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 				return IPACM_FAILURE;
 			}
 		}
-
 		/* need to notify once for v4 */
 		if(notify_flt_removed(data->mux_id))
 			return IPACM_FAILURE;
+
+		/* if we still have vlan pdns up notify only */
+		if(set_mux_down(data->mux_id, IPA_IP_v6))
+			return IPACM_FAILURE;
+
+		if(is_any_mux_up(IPA_IP_v6) == true)
+			notif_only_v6 = true;
+
+		/* prefixes list updated, install rules accordingly */
+		modify_ipv6_prefix_flt_rule();
 
 		if(!notif_only_v6)
 		{

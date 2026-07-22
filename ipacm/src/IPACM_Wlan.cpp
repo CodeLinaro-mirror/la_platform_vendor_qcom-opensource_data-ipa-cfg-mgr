@@ -2199,6 +2199,10 @@ int IPACM_Wlan::handle_wlan_mac_flt_event()
 						IPACMERR("unable to add mac flt blacklist v6 UL rule for index: %d\n", wlan_index);
 						return IPACM_FAILURE;
 					}
+					for (auto v6_it = rt_hdl_v6_list[wlan_index].begin(); v6_it != rt_hdl_v6_list[wlan_index].end(); ++v6_it)
+					{
+						CtList->HandleNeighIpAddrDelEvt_v6(Ipv6IpAddress(v6_it->first.data(), false));
+					}
 					if(handle_wlan_client_mac_flt_route_rule(IPA_IP_v6, wlan_index, it->second->is_blacklist))
 					{
 						IPACMERR("unable to del v6 rt rule for index: %d\n", wlan_index);

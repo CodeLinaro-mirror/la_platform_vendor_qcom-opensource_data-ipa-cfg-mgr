@@ -102,9 +102,7 @@ ipa_lan_client_idx IPACM_Wlan::inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLI
 extern char *ipa_l2_hdr_type[];
 ap_dflt_rules IPACM_Wlan::wlan_ap_dflt_rules[MAX_SUPPORTED_WLAN_PIPES];
 
-
-IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index, bool ast_update_needed) :
-		IPACM_Lan(iface_name, iface_index), ipv6ct_inst(Ipv6ct::GetInstance())
+IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index, bool ast_update_needed, bool is_ppp_iface) : IPACM_Lan(iface_name, iface_index, is_ppp_iface), ipv6ct_inst(Ipv6ct::GetInstance())
 {
 	int i = 0;
 #define WLAN_AMPDU_DEFAULT_FILTER_RULES 3
@@ -6727,6 +6725,7 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 	get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4 = false;
 	get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6 = 0;
 	free(get_client_memptr(wlan_client, clt_indx)->p_hdr_info);
+	get_client_memptr(wlan_client, clt_indx)->p_hdr_info = NULL;
 	get_client_memptr(wlan_client, clt_indx)->ta_peer_id = 0;
 	get_client_memptr(wlan_client, clt_indx)->vlan_id = 0;
 	get_client_memptr(wlan_client, clt_indx)->is_vlan = 0;
@@ -6938,6 +6937,7 @@ int IPACM_Wlan::handle_wlan_primary_client_down_evt(uint8_t *mac_addr)
 	}
 
 	free(get_primary_client_memptr(wlan_primary_client, primary_clt_indx)->p_hdr_info);
+	get_primary_client_memptr(wlan_primary_client, primary_clt_indx)->p_hdr_info = NULL;
 
 	while (get_primary_client_memptr(wlan_primary_client, primary_clt_indx)->num_vlan_clients > 0)
 	{
@@ -9792,6 +9792,12 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 		return IPACM_FAILURE;
 	}
 
+	if (data == NULL) {
+		IPACMERR("p_hdr_info is NULL for client_idx %d, cannot init vlan client\n", client_idx);
+		res = IPACM_FAILURE;
+		goto end;
+	}
+
 	if (tx_prop != NULL)
 	{
 		len = sizeof(struct ipa_ioc_add_hdr) + (1 * sizeof(struct ipa_hdr_add));
@@ -10151,6 +10157,40 @@ fail:
 }
 
 void IPACM_Wlan::update_svap_state() {
+#ifdef FEATURE_PRPLWRT
+	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
+	char *char_idx = NULL;
+
+	IPACMDBG_H("dev_name %s\n", dev_name);
+	strlcpy(vlan_iface_name, dev_name, sizeof(vlan_iface_name));
+	if (char_idx = strstr(vlan_iface_name, "_"))
+	{
+		char_idx[0] = '\0';
+		IPACMDBG_H("truncated mlo base iface name %s\n", vlan_iface_name);
+	}
+
+	int ap_vlan_rc = ipa_nl_is_ap_vlan_iftype(vlan_iface_name);
+	if (ap_vlan_rc == -1)
+	{
+		/* Transient netlink error – preserve whatever state was already set
+		 * so a momentary socket/query failure does not silently demote a
+		 * previously-recognised SVAP interface to non-SVAP. */
+		IPACMERR("ipa_nl_is_ap_vlan_iftype failed for %s, preserving prior svap state\n",
+			 vlan_iface_name);
+		return;
+	}
+	else if (ap_vlan_rc == 1)
+	{
+		set_svap_iface_mode(true);
+		is_if_svap = true;
+	}
+	else
+	{
+		/* rc == 0: interface was definitively queried and is not AP_VLAN */
+		set_svap_iface_mode(false);
+		is_if_svap = false;
+	}
+#else
 	FILE *fp = NULL;
 	char MapBSSType_row[10] = { 0 }, cmd[200] = { 0 };
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
@@ -10188,6 +10228,7 @@ void IPACM_Wlan::update_svap_state() {
 
 end:
 	fclose(fp);
+#endif
 }
 
 bool IPACM_Wlan::is_svap_iface(){
@@ -10461,6 +10502,10 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 
 	/* Post the delayed IPA_ETH_BRIDGE_CLIENT_ADD event*/
 	cached_data = get_client_memptr(wlan_client, wlan_index)->p_hdr_info;
+	if (cached_data == NULL) {
+		IPACMDBG_H("p_hdr_info is NULL for wlan_index %d, skip bridge event\n", wlan_index);
+		return 0;
+	}
 	for (int i = 0; i < cached_data->num_of_attribs; i++) {
 		if (!is_svap_iface() && !is_vlan_iface()) {
 			IPACMDBG_H("Wlan iface is NON-SVAP, break\n");

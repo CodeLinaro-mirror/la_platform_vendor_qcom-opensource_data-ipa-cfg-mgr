@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -84,10 +84,18 @@
 
 #define IPACM_CFG_FILE_NAME    "IPACM_cfg.xml"
 #define IPACM_CFG_EXT_FILE_NAME    "IPACM_cfg_ext.xml"
+#ifdef FEATURE_RDKB
+#define IPACM_CFG_EXT_FILE "/systemrw/data/ipa/IPACM_cfg_ext.xml"
+#else
 #define IPACM_CFG_EXT_FILE "/etc/data/ipa/IPACM_cfg_ext.xml"
+#endif
 #ifndef FEATURE_IPA_ANDROID
 #define IPACM_PID_FILE "/var/run/data/ipa/ipacm.pid"
+#ifdef FEATURE_RDKB
+#define IPACM_DIR_NAME     "/systemrw/data/ipa"
+#else
 #define IPACM_DIR_NAME     "/etc/data/ipa"
+#endif
 #else
 #define IPACM_PID_FILE "/data/misc/ipa/ipacm.pid"
 #define IPACM_DIR_NAME     "/data/misc/ipa/"
@@ -283,6 +291,7 @@ void* ipa_driver_msg_notifier(void *param)
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_data_mac *data = NULL;
 	ipacm_event_data_fid *data_fid = NULL;
+	ipacm_event_data_fid *data_fid2 = NULL;
 	ipacm_event_data_iptype *data_iptype = NULL;
 	ipacm_event_data_wlan_ex *data_ex;
 	ipa_get_data_stats_resp_msg_v01 *data_tethering_stats = NULL;
@@ -301,6 +310,9 @@ void* ipa_driver_msg_notifier(void *param)
 	ipa_ioc_pdn_config *pdn_info = NULL;
 #ifdef FEATURE_STATIC_POLICY
 	ipa_ioc_pdn_dscp_map_info *pdn_dscp_info = NULL;
+#endif
+#ifdef FEATURE_PPPOE
+	ipa_ioc_pppoe_info *pppoe_info = NULL;
 #endif
 #ifdef IPA_IOC_SET_MAC_FLT
 	ipa_ioc_mac_client_list_type *event_mac_flt = NULL;
@@ -341,7 +353,7 @@ void* ipa_driver_msg_notifier(void *param)
 
 	while (1)
 	{
-		IPACMDBG_H("Waiting for nofications from IPA driver \n");
+		IPACMDBG_H("Waiting for notifications from IPA driver \n");
 		memset(buffer, 0, sizeof(buffer));
 		memset(&evt_data, 0, sizeof(evt_data));
 		memset(&new_neigh_evt, 0, sizeof(ipacm_cmd_q_data));
@@ -714,11 +726,39 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			evt_data.event = IPA_USB_LINK_UP_EVENT;
 			evt_data.evt_data = data_fid;
+			ipa_nl_send_getroute(IPA_IP_v4);
+			ipa_nl_send_getroute(IPA_IP_v6);
 			break;
 
 		case ECM_DISCONNECT:
 			memcpy(&event_ecm, buffer + sizeof(struct ipa_msg_meta), sizeof(struct ipa_ecm_msg));
 			IPACMDBG_H("Received ECM_DISCONNECT name: %s\n",event_ecm.name);
+
+			for(int i=0; i < MAX_NUM_PPPOE_MPDN; i++)
+			{
+				if(IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i] >= 0 &&
+					strncmp(
+						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].phy_dev_name,
+						event_ecm.name, sizeof(event_ecm.name)) == 0)
+				{
+					data_fid2 = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
+					if(data_fid2 == NULL)
+					{
+						IPACMERR("unable to allocate memory for event_ecm data_fid\n");
+						return NULL;
+					}
+					data_fid2->if_index =
+						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].netlink_interface_index;
+					evt_data.event = IPA_LINK_DOWN_EVENT;
+					evt_data.evt_data = data_fid2;
+					IPACMDBG_H("Posting IPA_LINK_DOWN_EVENT event %d for ETH VLAN iface:%d dev_name:%s\n",
+						evt_data.event, data_fid2->if_index,
+						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->eth_wan_iface_table_idx[i]].iface_name);
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
+			}
+
+			memset(&evt_data, 0, sizeof(evt_data));
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
@@ -1539,6 +1579,29 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			continue;
 
+#ifdef FEATURE_PPPOE
+		case IPA_PPPOE_ADD_MAPPING_EVENT:
+			pppoe_info = (ipa_ioc_pppoe_info *)
+				(buffer + sizeof(struct ipa_msg_meta));
+			IPACMDBG_H("Received IPA_PPPOE_ADD_MAPPING_EVENT dev_name: %s "
+				"vlan_id: %d pppoe_dev_name: %s enable: %d\n",
+				pppoe_info->dev_name, pppoe_info->vlan_id, pppoe_info->pppoe_dev_name,
+				pppoe_info->add);
+			if(pppoe_info->add)
+			{
+				IPACM_Iface::ipacmcfg->pppoe_config_update(pppoe_info, pppoe_info->add, 0, NULL);
+				IPACM_Iface::ipacmcfg->get_pppoe_session_info(pppoe_info->pppoe_dev_name, pppoe_info->dev_name, pppoe_info->vlan_id);
+				IPACMDBG_H("Got ppp pdn config, Get Routes for v4 and v6\n");
+				ipa_nl_send_getroute(IPA_IP_v4);
+				ipa_nl_send_getroute(IPA_IP_v6);
+			}
+			else if(!pppoe_info->add)
+			{
+				IPACM_Iface::ipacmcfg->pppoe_config_update(pppoe_info, pppoe_info->add, 0, NULL);
+			}
+			continue;
+#endif
+
 		default:
 			IPACMDBG_H("Unhandled message type: %d\n", event_hdr.msg_type);
 			continue;
@@ -1815,7 +1878,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (IPACM_SUCCESS == netlinks_query_thread)
+	if ((IPACM_SUCCESS == netlinks_query_thread) && IPACM_Iface::ipacmcfg->is_ipacm_restart)
 	{
 		ret = pthread_create(&netlinks_query_thread, NULL, netlink_events_query, NULL);
 		if (IPACM_SUCCESS != ret)
@@ -1836,7 +1899,8 @@ int main(int argc, char **argv)
 	pthread_join(netlink_thread, NULL);
 	pthread_join(monitor_thread, NULL);
 	pthread_join(ipa_driver_thread, NULL);
-	pthread_join(netlinks_query_thread, NULL);
+	if(IPACM_Iface::ipacmcfg->is_ipacm_restart)
+		pthread_join(netlinks_query_thread, NULL);
 
 	return IPACM_SUCCESS;
 }
@@ -1864,11 +1928,13 @@ int main(int argc, char **argv)
 
 void ipa_is_ipacm_running(void) {
 
-	int fd;
+	int fd, len;
 	struct flock lock;
 	int retval;
+	char buf[32];
+	ssize_t w;
 
-	fd = open(IPACM_PID_FILE, O_RDWR | O_CREAT, 0600);
+	fd = open(IPACM_PID_FILE, O_RDWR | O_CREAT, 0644);
 	if ( fd <= 0 )
 	{
 		IPACMERR("Failed to open %s, error is %d - %s\n",
@@ -1883,6 +1949,10 @@ void ipa_is_ipacm_running(void) {
 	 */
 	memset(&lock, 0, sizeof(lock));
 	lock.l_type = F_WRLCK;
+	lock.l_whence = SEEK_SET;  /* lock the entire file */
+	lock.l_start  = 0;
+	lock.l_len    = 0;
+
 	retval = fcntl(fd, F_SETLK, &lock);
 
 	if (retval != 0)
@@ -1898,7 +1968,68 @@ void ipa_is_ipacm_running(void) {
 	}
 	else
 	{
+		char pid_buf[16];
+		int pid_len;
+		pid_t old_pid = 0;
+
+		pid_len = read(fd, pid_buf, sizeof(pid_buf) - 1);
+		if (pid_len > 0)
+		{
+			pid_buf[pid_len] = '\0';
+			old_pid = atoi(pid_buf);
+			if (old_pid != 0 && old_pid != getpid())
+			{
+				IPACM_Iface::ipacmcfg->is_ipacm_restart = true;
+				IPACMDBG_H("IPACM is restarted. Old PID: %d, New PID: %d\n", old_pid, getpid());
+			}
+		}
+
+		if (lseek(fd, 0, SEEK_SET) < 0)
+		{
+			IPACMERR("lseek failed on pid file");
+		}
+
+		if (ftruncate(fd, 0) < 0)
+		{
+			IPACMERR("ftruncate failed on pid file");
+		}
+
+		pid_len = snprintf(pid_buf, sizeof(pid_buf), "%d\n", getpid());
+		if (pid_len > 0 && write(fd, pid_buf, pid_len) != pid_len)
+		{
+			IPACMERR("write failed on pid file");
+		}
 		IPACMERR("PID %d is IPACM main process\n", getpid());
+		if (ftruncate(fd, 0) == -1) {
+			IPACMERR("ftruncate(%s) failed: %d - %s\n", IPACM_PID_FILE, errno, strerror(errno));
+		}
+		else
+		{
+			if (lseek(fd, 0, SEEK_SET) == (off_t)-1)
+			{
+				IPACMERR("lseek(%s) failed: %d - %s\n", IPACM_PID_FILE, errno, strerror(errno));
+			}
+			else
+			{
+				len = snprintf(buf, sizeof(buf), "%ld\n", (long)getpid());
+				if (len < 0 || len >= (int)sizeof(buf))
+				{
+					IPACMERR("snprintf for PID failed while writing %s\n", IPACM_PID_FILE);
+				}
+				else
+				{
+					w = write(fd, buf, (size_t)len);
+					if (w != len)
+					{
+						IPACMERR("write(%s) failed: %d - %s\n", IPACM_PID_FILE, errno, strerror(errno));
+					}
+					else
+					{
+						(void)fsync(fd);
+					}
+				}
+			}
+		}
 	}
 
 	return;

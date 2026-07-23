@@ -89,6 +89,7 @@ struct client_info
 	l2tp_vlan_mapping_info *mapping_info;
 	l2tp_rt_rule_info l2tp_rt_rule_hdl[IPA_HDR_L2_MAX];
 	uint16_t vlan_id;
+	uint32_t hdr_proc_ctx_intra_interface;
 };
 
 struct lt2p_flt_rule_hdl{

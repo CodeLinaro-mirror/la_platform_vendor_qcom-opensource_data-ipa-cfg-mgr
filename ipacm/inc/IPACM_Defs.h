@@ -70,6 +70,7 @@ extern "C"
 #define STR_RNDIS0_IFACE "rndis0"
 #define STR_ECM_IFACE "ecm"
 #define STR_ECM0_IFACE "ecm0"
+#define ETH_PHY_IFACE_LEN 5
 
 #define IF_NAME_LEN 16
 #define IPA_MAX_FILE_LEN  64
@@ -114,6 +115,10 @@ extern "C"
 #define WWAN_QMI_IOCTL_DEVICE_NAME "/dev/wwan_ioctl"
 #define IPA_DEVICE_NAME "/dev/ipa"
 #define MAX_NUM_PROP 2
+#define ETH_INTF "eth0"
+#define ETH1_INTF "eth1"
+#define RNDIS_INTF "rndis0"
+#define ECM_INTF "ecm0"
 
 #ifdef FEATURE_RDKB
 #define DEFAULT_BRIDGE_IFACE_NAME "brlan0"
@@ -146,6 +151,8 @@ extern "C"
 #define IPACM_FLT_DISABLE 0
 #define IPACM_MAC_FLT 1
 #define IPACM_SW_FLT 2
+
+#define IPA_MAX_VLAN_PER_BRIDGE 3
 
 /*---------------------------------------------------------------------------
 										Return values indicating error status
@@ -201,6 +208,11 @@ extern "C"
 
 #define IPA_DUMMY_PREFIX 0xFFFFFFFF
 #define IPA_MAX_NUM_PROPS 5
+
+#define ETH_INTF "eth0"
+#define ETH1_INTF "eth1"
+#define RNDIS_INTF "rndis0"
+#define ECM_INTF "ecm0"
 
 #ifndef __ss_aligntype
 #define __ss_aligntype unsigned long int
@@ -337,6 +349,7 @@ typedef enum
 #ifdef FEATURE_VLAN_MPDN
 	IPA_PREFIX_CHANGE_EVENT,                  /* ipacm_event_data_fid */
 	IPA_ROUTE_ADD_VLAN_PDN_EVENT,             /* ipacm_event_route_vlan */
+	IPA_ROUTE_DEL_VLAN_PDN_EVENT,             /* ipacm_event_route_vlan */
 	IPA_HANDLE_WAN_VLAN_PDN_UP,               /* ipacm_event_vlan_pdn */
 	IPA_HANDLE_WAN_VLAN_PDN_DOWN,             /* ipacm_event_vlan_pdn */
 	IPA_HANDLE_LAN_VLAN_PDN_DOWN_STATIC,      /* ipacm_event_vlan_pdn */
@@ -388,6 +401,7 @@ typedef enum
 	IPA_QOS_RULE_DEL_EVENT,                   /* ipacm_qos_rule_del_event */
 	IPA_QOS_RULE_FLUSH_EVENT,                 /* ipacm_qos_rule_flush_event */
 	IPA_HANDLE_NEW_NEIGH_EVENT,               /* ipacm_event_data_fid */
+	IPA_WAN_GW_ADDR_ADD_EVENT,                /* ipacm_event_data_addr */
 	IPACM_EVENT_MAX
 } ipa_cm_event_id;
 
@@ -427,7 +441,7 @@ typedef struct
 	uint32_t bridge_netmask;
 	uint32_t bridge_ipv4_addr;
 	uint8_t bridge_mac[IPA_MAC_ADDR_SIZE];
-	uint32_t associate_VID;
+	uint32_t associate_VID[IPA_MAX_VLAN_PER_BRIDGE];
 }ipacm_bridge;
 
 typedef struct
@@ -454,20 +468,21 @@ typedef struct
 {
 	uint32_t subnet_addr;
 	uint32_t subnet_mask;
-	uint8_t if_index;
+	int if_index;
 } ipa_private_subnet;
 
 
 typedef struct _ipacm_event_data_all
 {
 	enum ipa_ip_type iptype;
-	uint8_t if_index;
-	uint8_t master_if_index;
+	int if_index;
+	int master_if_index;
 	uint32_t  ipv4_addr;
 	uint32_t  ipv6_addr[4];
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 	char iface_name[IPA_IFACE_NAME_LEN];
 	bool is_mld_enabled;
+	uint16_t vlanID;
 } ipacm_event_data_all;
 
 typedef struct _ipacm_event_new_neigh_vlan
@@ -511,6 +526,7 @@ typedef struct _ipacm_event_data_fid
 	bool ast_update;
 #endif
 	bool mlo_enabled;
+	bool is_ppp_iface;
 } ipacm_event_data_fid;
 
 typedef struct
@@ -541,6 +557,7 @@ typedef struct _ipacm_event_data_addr
 	uint32_t  ipv6_addr[4];
 	uint32_t  ipv6_addr_mask[4];
 	uint32_t  ipv6_addr_gw[4];
+	uint8_t is_default_backhaul_gw;
 } ipacm_event_data_addr;
 
 typedef struct _ipacm_event_data_mac
@@ -569,11 +586,12 @@ typedef struct _ipacm_event_iface_up
 	bool is_sta;
 	uint8_t xlat_mux_id;
 	uint8_t mux_id;
+	uint16_t vlanID;
 }ipacm_event_iface_up;
 
 typedef struct _ipacm_event_iface_up_tether
 {
-	uint32_t if_index_tether;
+	int if_index_tether;
 	uint32_t ipv6_prefix[2];
 	bool is_sta;
 }ipacm_event_iface_up_tehter;
@@ -647,7 +665,8 @@ typedef enum
 {
 	Q6_WAN = 0,
 	WLAN_WAN,
-	ECM_WAN
+	ECM_WAN,
+	IFACE_MAX
 } ipacm_wan_iface_type;
 
 typedef struct _ipacm_ifacemgr_data
@@ -660,6 +679,7 @@ typedef struct _ipacm_ifacemgr_data
 	bool ast_update;
 #endif
 	char iface_name[IPA_IFACE_NAME_LEN];
+	bool is_ppp_iface;
 }ipacm_ifacemgr_data;
 
 struct ipa_vlan_iface_info
@@ -709,11 +729,21 @@ struct l2tp_vlan_mapping_info
 struct ipa_bridge_vlan_mapping_info {
 	char bridge_name[IPA_RESOURCE_NAME_MAX];
 	uint8_t lan2lan_sw;
-	uint16_t vlan_id;
 	uint32_t bridge_ipv4;
 	uint32_t subnet_mask;
-	uint8_t master_if_index;
+	int master_if_index;
 	uint8_t status;
+	uint16_t vlan_id;
+};
+
+struct ipa_bridge_vlan_mapping_info_new {
+	char bridge_name[IPA_RESOURCE_NAME_MAX];
+	uint8_t lan2lan_sw;
+	uint32_t bridge_ipv4;
+	uint32_t subnet_mask;
+	int master_if_index;
+	uint8_t status;
+	uint16_t vlan_id[IPA_MAX_VLAN_PER_BRIDGE];
 };
 
 struct bridge_vlan_mapping_info
@@ -722,8 +752,9 @@ struct bridge_vlan_mapping_info
 	uint32_t bridge_associated_VID;
 	uint32_t bridge_ipv4;
 	uint32_t subnet_mask;
-	uint8_t bridge_if_index;
+	int bridge_if_index;
 	uint8_t status;
+	uint8_t bridge_mac[IPA_MAC_ADDR_SIZE];
 };
 
 struct l2tp_client_info

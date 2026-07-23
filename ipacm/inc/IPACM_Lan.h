@@ -83,6 +83,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "IPACM_Filtering.h"
 #include "IPACM_Config.h"
 #include "IPACM_Conntrack_NATApp.h"
+#include "IPACM_ConntrackClient.h"
 
 #define IPA_WAN_DEFAULT_FILTER_RULE_HANDLES  1
 #define IPA_NUM_ODU_ROUTE_RULES 2
@@ -185,6 +186,7 @@ typedef struct _ipa_eth_client
 
 #ifdef FEATURE_VLAN_MPDN
 	uint16_t vlan_id;
+	uint32_t client_backhaul_prefix[2];
 #endif
 	bool gre_nat_set;
 #ifdef IPA_IOCTL_SET_EXT_ROUTER_MODE
@@ -243,6 +245,13 @@ typedef struct _xlat_context
 	pdn_context active_pdn_list[IPA_MAX_NUM_HW_PDNS];
 	uint32_t active_pdn_count;
 }xlat_context;
+
+typedef struct _ipacm_vlan_sta_info
+{
+	uint32_t v4_flt_hdl;
+	uint32_t v6_flt_hdl;
+	uint16_t vlan_id;
+}ipacm_vlan_sta_info;
 
 #ifdef FEATURE_EoGRE
 /*
@@ -306,8 +315,11 @@ class IPACM_Lan : public IPACM_Iface
 {
 public:
 
-	IPACM_Lan(char *iface_name, int iface_index);
+	IPACM_Lan(char *iface_name, int iface_index, bool is_ppp_iface = false);
 	~IPACM_Lan();
+
+	/* store lan's wan-up filter rule handlers up to IPA_MAX_NUM_OFFLOAD_VLANS */
+	ipacm_vlan_sta_info vlan_sta_info[IPA_MAX_NUM_OFFLOAD_VLANS];
 
 	/* store lan's wan-up filter rule handlers */
 	uint32_t lan_wan_fl_rule_hdl[IPA_MAX_NUM_PROPS][IPA_WAN_DEFAULT_FILTER_RULE_HANDLES];
@@ -349,7 +361,7 @@ public:
 	/* LAN-iface's callback function */
 	void event_callback(ipa_cm_event_id event, void *data);
 
-	virtual int handle_wan_up(ipa_ip_type ip_type);
+	virtual int handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id = 0);
 
 	/* configure filter rule for wan_up event*/
 	virtual int handle_wan_up_ex(ipacm_ext_prop* ext_prop, ipa_ip_type iptype, uint8_t xlat_mux_id);
@@ -358,10 +370,10 @@ public:
 	virtual int notify_flt_removed(uint8_t mux_id);
 
 	/* delete filter rule for wan_down event*/
-	virtual int handle_wan_down(bool is_sta_mode);
+	virtual int handle_wan_down(bool is_sta_mode, uint8_t mux_id = 0, uint16_t vid = 0);
 
 	/* delete filter rule for wan_down event*/
-	virtual int handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn = true);
+	virtual int handle_wan_down_v6(bool is_sta_mode, bool is_support_mpdn = true, uint16_t vid = 0);
 
 	/* configure private subnet filter rules*/
 	int modify_private_subnet(bool eogre_enabled = false);
@@ -370,6 +382,7 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	int add_vlan_private_subnet(ipacm_bridge *bridge);
 	int modify_ipv6_prefix_flt_rule(bool eogre_enabled = false);
+	int del_vlan_private_subnet(ipacm_bridge *bridge);
 	int handle_backhaul_switch_vlan_mode(bool to_sta);
 #endif
 
@@ -1341,6 +1354,8 @@ private:
 
 	bool is_l2tp_iface;
 
+	uint32_t vlan_hdr_hdl;
+
 #ifdef FEATURE_L2TP
 	uint32_t l2tp_ul_dummy_hdr_hdl; /* 4-byte dummy header */
 
@@ -1348,6 +1363,7 @@ private:
 #endif
 
 #ifdef FEATURE_VLAN_MPDN
+	uint16_t lan_vlan_id[IPA_MAX_NUM_HW_PDNS];
 
 	typedef struct ipacm_mux_struct
 	{
@@ -1396,7 +1412,7 @@ private:
 		return false;
 	}
 
-	inline int set_mux_down(uint8_t mux_id, ipa_ip_type iptype)
+	inline int set_mux_down(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
 	{
 		ipacm_mux_struct *mux = v4_mux_up;
 
@@ -1413,13 +1429,27 @@ private:
 		{
 			if(mux[i].mux_id == mux_id)
 			{
-				memset(&mux[i], 0, sizeof(mux[i]));
-				IPACMDBG_H("successfully removed mux id %d for dev %s, i = %d, iptype %d, VID_cnt = %d\n", mux_id, dev_name, i, iptype, mux[i].VID_cnt);
-				return IPACM_SUCCESS;
+				if(vid > 0)
+				{
+					for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+					{
+						if(mux[i].associated_VIDs[j] == vid)
+						{
+							mux[i].associated_VIDs[j] = 0;
+							mux[i].VID_cnt--;
+						}
+					}
+				}
+				if(mux[i].VID_cnt == 0 || vid == 0)
+				{
+					memset(&mux[i], 0, sizeof(mux[i]));
+					IPACMDBG_H("successfully removed mux id %d for dev %s, i = %d, iptype %d, VID_cnt = %d\n", mux_id, dev_name, i, iptype, mux[i].VID_cnt);
+					return IPACM_SUCCESS;
+				}
 			}
 		}
 
-		IPACMERR("could not find mux %d, iptype %d\n", mux_id, iptype);
+		IPACMERR("could not find mux %d or associated vid %d, iptype %d\n", mux_id, vid, iptype);
 		return IPACM_FAILURE;
 	}
 
@@ -1694,7 +1724,7 @@ private:
 	int handle_down_evt();
 
 	/*handle reset usb-client rt-rules */
-	int handle_lan_client_reset_rt(ipa_ip_type iptype);
+	int handle_lan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id = 0);
 
 #ifdef FEATURE_L2TP
 	/* install l2tp dl rules */

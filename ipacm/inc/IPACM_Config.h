@@ -26,9 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -113,7 +113,17 @@ typedef struct _ipa_rm_client
 
 #define MAX_NUM_EXT_PROPS 25
 #define MAX_NUM_IP_PASS_MPDN 15
+#define MAX_NUM_PPPOE_MPDN 9      /* 8 pppoe pdn over vlan + 1 dhcp pdn over vlan */
 #define EOGRE_PROTOCOL_TYPE 0x6558
+#define IPA_TMP_DIR "/tmp/data_ipa"
+
+#ifdef FEATURE_PPPOE
+#define IPA_PPPOE_TABLE IPA_TMP_DIR"/ipa_pppoe_table.txt"
+#define MAX_PPPOE_ROW_LEN 200
+#define MAX_PPPOE_PARAM_CNT 3
+#define MAX_PPPOE_PARAM_LEN 50
+#define IPA_SYS_CMD_LEN 200
+#endif
 
 #define IPA_QoS_DL_RULE 0
 #define IPA_QoS_UL_RULE 1
@@ -186,6 +196,35 @@ typedef struct
 	/* Store dscp_value */
 	uint8_t dscp_val;
 }ipacm_pdn_dscp_info;
+#endif
+
+#ifdef FEATURE_PPPOE
+/* used to store the PPPoE PDN info */
+typedef struct
+{
+	/* Store the status of the entry
+         * status = 1 when PPPoE pdn name, eth phy name and vlan id are stored.
+         * status = 2 when session id is updated and entry is valid now.*/
+	uint8_t status;
+
+	/* Store PPPoE interface name */
+	char pppoe_dev_name[IPA_RESOURCE_NAME_MAX];
+
+	/* Store eth physical interface name */
+	char phy_dev_name[IPA_RESOURCE_NAME_MAX];
+
+	/* Store vlan ID */
+	uint16_t vlan_id;
+
+	/* Store PPPoE session ID */
+	uint16_t session_id;
+
+	/* Store mac address of the gateway STA WAN client */
+	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
+
+	/* storing iface_index for iface table */
+	uint32_t iface_index;
+} ipacm_pppoe_mpdn_info;
 #endif
 
 #if defined(FEATURE_IPACM_PER_CLIENT_STATS) && defined(IPA_HW_FNR_STATS)
@@ -354,6 +393,7 @@ struct qos_param_info {
 	uint8_t dscp;
 	uint8_t pcp;
 	uint8_t dscp_mark_val;
+	uint8_t pcp_mark_val;
 
 	uint32_t qos_rt_rule_hdl_v4;
 	uint32_t qos_rt_rule_hdl_v6;
@@ -427,6 +467,9 @@ public:
 	/* Store the bridge iface names */
 	char ipa_virtual_iface_name[IPA_IFACE_NAME_LEN];
 
+	/* ETH WAN iface indices */
+	int eth_wan_iface_table_idx[MAX_NUM_PPPOE_MPDN];
+
 	/* Store the number of interface IPACM read from XML file */
 	int ipa_num_ipa_interfaces;
 
@@ -453,10 +496,18 @@ public:
 	pthread_mutex_t pdn_dscp_lock;
 #endif
 
+#ifdef FEATURE_PPPOE
+	ipacm_pppoe_mpdn_info pppoe_mpdn_table[MAX_NUM_PPPOE_MPDN];
+	pthread_mutex_t pppoe_map_lock;
+#endif
+
 	pthread_mutex_t ip_pass_mpdn_lock;
 
 	/* nat_iface_lock */
 	pthread_mutex_t nat_iface_lock;
+
+	/* get_vlan_association_lock */
+	pthread_mutex_t get_vlan_association_lock;
 
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipacm_lan_stats_enable;
@@ -509,6 +560,7 @@ public:
 
 	/* Indicates whether socksv5 is enabled or not. */
 	bool ipacm_socksv5_enable;
+	bool is_ipacm_restart;
 
 	/* Indicates whether l2tp is enabled or not. */
 	int ipacm_flt_enable;
@@ -529,6 +581,16 @@ public:
 	uint32_t ipacm_static_policy_dscp_mark_mode;
 #endif
 
+	/* Indicates whether PPPOE mode is enabled on WAN interface */
+	bool eth_wan_pppoe_enable;
+	/* Indicates whether Eth VLAN mode is enabled on WAN interface */
+	bool eth_vlan_wan_enable;
+	/* Indicates the interface on which Eth VLAN LAN-WAN mode is enabled */
+	const char* eth_lan_wan_iface_name;
+	/* Indicates whether Multi VLAN to Single Bridge mode is enabled */
+	bool multi_vlan_bridge_config_enable;
+	/* br-wan mode flag */
+	bool eth_wan_br_wan_enable;
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info eogre_info;
 	bool           eogre_enabled;
@@ -634,8 +696,9 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	std::list<bridge_vlan_mapping_info> m_bridge_vlan_mapping;
 	void add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data);
+	int get_bridge_vlan_mapping_from_vid(ipacm_bridge *data, uint16_t vlan_id);
 	void del_bridge_vlan_mapping(uint16_t *data);
-	int get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data);
+	int get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info_new *data);
 	uint16_t get_bridge_vlan_mapping_from_subnet(uint32_t ipv4_subnet);
 	void add_vlan_bridge(ipacm_event_data_all * data_all);
 	ipacm_bridge *get_vlan_bridge(char *name);
@@ -647,6 +710,20 @@ public:
 	void get_vlan_mode_ifaces();
 #endif
 
+	int get_eth_vlan_wan_up(int ipa_if_num);
+
+#ifdef FEATURE_PPPOE
+	uint16_t pppoe_get_session_id(const char *pppoe_dev_name);
+	uint16_t pppoe_get_session_id_from_proc(const char *pppoe_dev_name);
+	void get_pppoe_session_info(const char *pppoe_dev_name, const char *phy_dev_name = NULL, uint16_t vlan_id = 0);
+	void update_pppoe_session_info(const char *pppoe_dev_name, char *params[MAX_PPPOE_PARAM_CNT]);
+	int get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id);
+	int get_pppoe_vlan_id_from_proc(const char *p_dev_name, uint16_t *vlan_id);
+	int get_pppoe_indx(char *pppoe_dev_name);
+	int get_phy_name_from_bridge_iface(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN]);
+	int get_phy_name_from_proc(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN]);
+	int get_mac_name_from_proc(const char *p_dev_name, uint8_t *mac_addr);
+#endif
 	bool is_svap_related(const char *phy_inf);
 
 #if defined(FEATURE_SOCKSv5) && defined(IPA_SOCKV5_EVENT_MAX)
@@ -739,6 +816,113 @@ public:
 
 		return indx;
 	}
+
+#ifdef FEATURE_PPPOE
+	inline int get_free_pppoe_pdn_index(char *pppoe_dev_name)
+	{
+		int indx;
+
+		/* Check if the entry already exists for this iface. */
+		for (indx=0; indx < MAX_NUM_PPPOE_MPDN; indx++)
+		{
+			if ((pppoe_mpdn_table[indx].status == 1 ||
+				pppoe_mpdn_table[indx].status == 2) &&
+				strncmp(pppoe_dev_name,
+						pppoe_mpdn_table[indx].pppoe_dev_name,
+						sizeof(pppoe_mpdn_table[indx].pppoe_dev_name)) == 0)
+			{
+				IPACMDBG("Interface (%s) is already present in PPPoE table at index %d\n", pppoe_dev_name, indx);
+				return indx;
+			}
+		}
+		/* Get free index */
+		for (indx=0; indx < MAX_NUM_PPPOE_MPDN; indx++)
+		{
+			if (!pppoe_mpdn_table[indx].status)
+			{
+				IPACMDBG("Got free index %d for %s \n", indx, pppoe_dev_name);
+				return indx;
+			}
+		}
+
+		IPACMDBG("No free index %d. Reached to MAX\n", indx);
+		return MAX_NUM_PPPOE_MPDN;
+	}
+
+	inline int get_pppoe_pdn_index(char *pppoe_dev_name)
+	{
+		int indx;
+
+		for (indx=0; indx < MAX_NUM_PPPOE_MPDN; indx++)
+		{
+			if ((pppoe_mpdn_table[indx].status == 1 ||
+				pppoe_mpdn_table[indx].status == 2))
+				{
+					if(strncmp(pppoe_dev_name,
+						pppoe_mpdn_table[indx].pppoe_dev_name,
+						sizeof(pppoe_mpdn_table[indx].pppoe_dev_name)) == 0)
+						{
+							IPACMDBG("Got pdn %s at index %d \n", pppoe_dev_name, indx);
+							return indx;
+						}
+				}
+		}
+		IPACMDBG("No pdn %s stored.\n", pppoe_dev_name);
+		return MAX_NUM_PPPOE_MPDN;
+	}
+
+	inline uint16_t pppoe_get_session_id(char *pppoe_dev_name)
+	{
+		int indx;
+		if(!pppoe_dev_name)
+			return 0;
+		for(indx=0; indx < MAX_NUM_PPPOE_MPDN; indx++)
+		{
+			if(strcmp(pppoe_mpdn_table[indx].pppoe_dev_name, pppoe_dev_name) == 0)
+			{
+				IPACMDBG("PPPoe dev %s session_id found %d\n",
+						pppoe_dev_name, pppoe_mpdn_table[indx].session_id);
+				return pppoe_mpdn_table[indx].session_id;
+			}
+		}
+		IPACMERR("PPPoe devname %s not found\n", pppoe_dev_name);
+		return 0;
+	}
+
+	inline uint16_t pppoe_get_session_id_from_proc(char *pppoe_dev_name)
+	{
+		FILE *fp = NULL;
+		char line[256], session_id[32], mac[32], device[32], ppp_dev[32];
+		if(!pppoe_dev_name)
+			return 0;
+
+		fp = fopen("/proc/net/pppoe", "r");
+		if (!fp)
+		{
+			IPACMERR("Failed to open %s\n", "/proc/net/pppoe");
+			return 0;
+    }
+		/* Skip header line */
+		fgets(line, sizeof(line), fp);
+		while (fgets(line, sizeof(line), fp))
+		{
+			 /* Fields: Id(hex)  MAC(xx:xx:xx:xx:xx:xx)  Device  PPP-Device */
+			if (sscanf(line, "%15s %17s %15s %15s", session_id, mac, device, ppp_dev) != 4)
+					continue;
+			if (strcmp(ppp_dev, pppoe_dev_name) == 0)
+			{
+				uint16_t id = (uint16_t)strtol(session_id, NULL, 16);
+				IPACMDBG("PPPOE dev %s session_id found %d\n",
+						pppoe_dev_name, id);
+				fclose(fp);
+				return id;
+			}
+		}
+		IPACMERR("PPPoe devname %s not found\n", pppoe_dev_name);
+		fclose(fp);
+		return 0;
+	}
+#endif
 
 #ifdef FEATURE_STATIC_POLICY
 	inline int get_free_pdn_dscp_index(char *pdn_name)
@@ -903,6 +1087,10 @@ public:
 	void ip_pass_config_update(ipa_ioc_pdn_config *pdn_config, int if_index);
 
 	void ip_collision_config_update(ipa_ioc_pdn_config *pdn_config);
+
+#ifdef FEATURE_PPPOE
+	void pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t to_add, uint16_t session_id = 0, uint8_t *mac_addr = NULL);
+#endif
 
 #ifdef FEATURE_STATIC_POLICY
 	void pdn_dscp_config_update(ipa_ioc_pdn_dscp_map_info *pdn_dscp_config);
@@ -1092,6 +1280,7 @@ public:
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_data_fid *data_fid;
 		uint32_t subnet_mask = ~0;
+		ipacm_bridge *bridge = NULL;
 		for(int cnt = 0; cnt < ipa_num_private_subnet; cnt++)
 		{
 			if(private_subnet_table[cnt].subnet_addr == ip_addr)
@@ -1116,6 +1305,24 @@ public:
 				IPACMERR("unable to allocate memory for event data_fid\n");
 				return IPACM_FAILURE;
 			}
+
+			if(multi_vlan_bridge_config_enable)
+			{
+				bridge = get_vlan_bridge(ipa_virtual_iface_name);
+				if(bridge)
+				{
+					IPACMERR("IPACM private subnet_addr entry(%d) name:%s\n", ipa_num_private_subnet,
+						ipa_virtual_iface_name);
+					IPACMDBG("Updated bridge private subnet_addr as: 0x%x \n", ip_addr);
+					bridge->bridge_ipv4_addr = ip_addr;
+					bridge->bridge_netmask = ipv4_addr_mask;
+				}
+				else
+				{
+					IPACMERR("bridge %s not up\n", ipa_virtual_iface_name);
+				}
+			}
+
 			data_fid->if_index = ipa_if_index; // already ipa index, not fid index
 			evt_data.event = IPA_PRIVATE_SUBNET_CHANGE_EVENT;
 			evt_data.evt_data = data_fid;
@@ -1223,15 +1430,34 @@ public:
 	/* do not offload this pdn until we get route add\ new vlan neighbor */
 	inline bool add_no_offload_ipv6_prefix(uint32_t *prefix)
 	{
+
+		if(prefix == NULL)
+		{
+			IPACMERR("Null prefix passed\n");
+			return false;
+		}
+
+		IPACMDBG("prefix 0x[%X][%X] to add in no offload list\n", prefix[0], prefix[1]);
+
 		/* prefix shouldn't be present in offload list - this is a bug */
 		for(int i = 0; i < num_ipv6_prefixes; i++)
 		{
 			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1]))
 			{
-				IPACMERR("prefix 0x[%X][%X] already exists in offload list\n", prefix[0], prefix[1]);
+				IPACMERR("prefix 0x[%X][%X] already exists in offload list at %d\n", prefix[0], prefix[1],i);
 				return false;
 			}
 		}
+		/* Check if no offload prefix already present in no offload list*/
+		for(int i = 0; i < num_no_offload_ipv6_prefix; i++)
+		{
+			if((prefix[0] == ipa_no_offload_ipv6_prefixes[i][0]) && (prefix[1] == ipa_no_offload_ipv6_prefixes[i][1]))
+			{
+				IPACMERR("prefix 0x[%X][%X] already exists in no offload list at %d\n", prefix[0], prefix[1],i);
+				return false;
+			}
+		}
+		/* Add in no offload list */
 		if (num_no_offload_ipv6_prefix < IPA_MAX_IPV6_NO_OFFLOAD_PREFIX_FLT_RULE )
 		{
 			ipa_no_offload_ipv6_prefixes[num_no_offload_ipv6_prefix][0] = prefix[0];
@@ -1245,7 +1471,8 @@ public:
 			return false;
 		}
 
-		IPACMDBG("added no offload v6 prefix 0x[%X][%X]\n", prefix[0], prefix[1]);
+		IPACMDBG("added no offload v6 prefix 0x[%X][%X], now number of no offload pdn %d\n",
+			prefix[0], prefix[1],num_no_offload_ipv6_prefix);
 
 		/* tell all LAN interfaces that we have a change in v6 prefixes */
 		SendPrefixChangeEvent(-1);
@@ -1258,6 +1485,14 @@ public:
 		int i = 0;
 		int no_offload_temp = num_no_offload_ipv6_prefix;
 		bool updated_reserved_slot = false;
+
+		if(prefix == NULL)
+		{
+			IPACMERR("Null prefix passed\n");
+			return false;
+		}
+
+		IPACMDBG("prefix 0x[%X][%X] to add in offload list\n", prefix[0], prefix[1]);
 
 		/* check for duplication */
 		for(i = 0; i < num_ipv6_prefixes; i++)
@@ -1312,9 +1547,10 @@ public:
 				/* Update the vlan id if prefix already saved but vlan id not associated
 				 * e.g Wlan for default pdn reserves a slot with vlan id 0, then eth vlan
 				 * for default pdn associates with vlan id */
-				IPACMDBG_H("Updating vlan id %d for prefix 0x[%X][%X] \n", vlan_id, prefix[0], prefix[1]);
+				IPACMDBG_H("Updating vlan id %d for prefix 0x[%X][%X] \n", ipa_ipv6_prefixes[i].vlan_id, ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
 				ipa_ipv6_prefixes[i].vlan_id = vlan_id;
 				updated_reserved_slot =true;
+				IPACMDBG_H("Updated vlan id %d v6 prefix 0x[%X][%X] for vlan id %d\n",ipa_ipv6_prefixes[i].vlan_id, prefix[0], prefix[1]);
 			}
 		}
 
@@ -1341,6 +1577,15 @@ public:
 	inline int del_vlan_ipv6_prefix(uint32_t* prefix, int ipa_if_num, bool reserve_slot = false, bool is_bridge = false)
 	{
 		int i = 0;
+
+		if(prefix == NULL)
+		{
+			IPACMERR("Null prefix passed\n");
+			return false;
+		}
+
+		IPACMDBG("prefix 0x[%X][%X] to del offload list\n", prefix[0], prefix[1]);
+
 		for(i = 0; i < num_ipv6_prefixes; i++)
 		{
 			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1])
@@ -1585,10 +1830,12 @@ private:
 	string getNameForVlanQuery(const string &interfaceName) {
 		IPACMDBG("interfaceName = %s\n", interfaceName.c_str());
 		for (int i = 0; i < ipa_num_ipa_interfaces; i++) {
-			if (string(interfaceName).rfind(string(iface_table[i].iface_name), 0) == 0 && iface_table[i].virtual_iface) {
+			if (string(iface_table[i].iface_name).length() != 0 && string(interfaceName).rfind(string(iface_table[i].iface_name), 0) == 0 &&
+				iface_table[i].virtual_iface) {
 				return string(iface_table[i].phy_dev_name);
 			}
 		}
+		IPACMDBG_H("passed string %s\n", interfaceName.c_str());
 		return interfaceName;
 	}
 	/**
@@ -1603,6 +1850,19 @@ private:
 	ipa_ifi_dev_name_t* getMacsecInterface(const int interfaceIndex) const {
 		if (!iface_table)
 			return nullptr;
+		/* eth_wan_iface_table_idx reserved for ETH VLAN WAN instances*/
+		for (int i = 0; i < ipa_num_ipa_interfaces; i++)
+		{
+			for (int j = 0; j < MAX_NUM_PPPOE_MPDN; j++)
+			{
+				if(iface_table[i].netlink_interface_index == interfaceIndex &&
+					i == eth_wan_iface_table_idx[j])
+				{
+					return nullptr;
+				}
+			}
+		}
+
 		auto it = std::find_if(iface_table, iface_table + ipa_num_ipa_interfaces,
 			[interfaceIndex](const decltype(iface_table[0])& item) {
 				IPACMDBG("iface_name:%s, phy_dev_name:%s, virtual_iface:%d, netlink_interface_index:%d\n", item.iface_name,

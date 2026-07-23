@@ -28,7 +28,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2022, 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the
@@ -115,6 +115,9 @@ typedef struct _ipa_wan_client
 	int ipv6_set;
 	bool ipv4_header_set;
 	bool ipv6_header_set;
+	uint32_t sta_hdr_proc_hdl_v4;
+	uint32_t sta_hdr_proc_hdl_v6;
+	bool sta_hdr_proc_ctx_set;
 	bool power_save_set;
 	wan_client_rt_hdl wan_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_wan_client;
@@ -140,12 +143,56 @@ typedef struct
 	IPACM_Wan *pIface;
 }ipacm_ipv6_wan_iface;
 
+/*
+ *  * v4_association: The WAN interface V4 VLAN is associated to
+ *  * v6_association: The WAN interface V6 VLAN is associated to
+ *  * v4_idx: Index of the WAN interface in ipv4_to_iface to which VLAN is associated
+ *  * v6_idx: Index of the WAN interface in ipv6_to_iface to which VLAN is associated
+ *  * v4_vlan_idx: Index of vlan_id in the associated_VIDs[] of ipv4_to_iface[v6_idx]
+ *  * v6_vlan_idx: Index of vlan_id in the associated_VIDs[] of ipv6_to_iface[v6_idx]
+ *  * vlan_id : VLAN ID
+ */
+typedef struct
+{
+	ipacm_wan_iface_type v4_association;
+	ipacm_wan_iface_type v6_association;
+	int v4_idx[IFACE_MAX];
+	int v6_idx[IFACE_MAX];
+	int v4_vlan_idx[IFACE_MAX];
+	int v6_vlan_idx[IFACE_MAX];
+	uint16_t vlan_id;
+#ifdef FEATURE_PPPOE
+	uint32_t wan_v4_addr;
+	uint32_t ipv6_prefix[2];
+#endif
+}ipacm_vlan_association_info;
+
 struct ipacm_pdn_flt_rule
 {
 	struct ipa_flt_rule_add flt_rule;
 	uint8_t mux_id;
 };
+#ifdef FEATURE_PPPOE
+/*
+ * PPPoE header..
+ * 1st word: version + type
+ * 2nd word: session id
+ * 3rd word: payload length
+ * 4th word: protocol type
+ */
+typedef struct pppoe_hdr_s
+{
+	uint16_t words[4];
+} pppoe_hdr_t;
 
+/* Where things reside in the struct above... */
+#define PPPOE_SESSION_ID_IDX	1
+#define PPPOE_PAYLOAD_LEN_IDX	2
+#define PPPOE_PROTOCOL_ID_IDX	3
+#define PPPOE_PROTOCOL_V4_TYPE	0x0021
+#define PPPOE_PROTOCOL_V6_TYPE	0x0057
+#define PPPOE_SESSION_ETH_TYPE	0x8864
+#endif
 /* wan iface */
 class IPACM_Wan : public IPACM_Iface
 {
@@ -161,8 +208,9 @@ public:
 	int num_firewall_v6_ul_pdn;
 #endif
 	uint16_t associated_VID;
+	/* once STA up, need associated pending VID to STA-WAN */
+	std::list<uint16_t> pending_VID_STA;
 #endif
-
 	static uint16_t mtu_default_wan_v4;
 	static uint16_t mtu_default_wan_v6;
 
@@ -174,7 +222,9 @@ public:
 	/* IPACM interface name */
 	static char wan_up_dev_name[IF_NAME_LEN];
 	static uint32_t curr_wan_ip;
-	IPACM_Wan(int, ipacm_wan_iface_type, uint8_t *);
+	static int num_ipv4_sta_pdn;
+	static int num_ipv6_sta_pdn;
+	IPACM_Wan(int, ipacm_wan_iface_type, uint8_t *, bool is_ppp_iface = true);
 	virtual ~IPACM_Wan();
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	/* IPACM firewall Configuration file*/
@@ -185,7 +235,12 @@ public:
 	static int read_firewall_filter_rules_ul(void);
 
 	static bool check_dft_firewall_rules_attr_mask_ul(IPACM_firewall_conf_t *firewall_config);
-
+#ifdef FEATURE_PPPOE
+	uint32_t v4_pppoe_ctx_hdl;
+	uint32_t v6_pppoe_ctx_hdl;
+	int pppoe_make_hdr_add_ctx(enum ipa_ip_type iptype, int clnt_idx);
+	int pppoe_del_hdr_proc_ctx(enum ipa_ip_type ip_type);
+#endif
 #ifdef FEATURE_VLAN_MPDN
 	static int get_v6_pdn_firewall_configs(
 		std::pair<IPACM_firewall_conf_t*, ipacm_ipv6_wan_iface*> wan_firewall_pair[],
@@ -203,6 +258,8 @@ public:
 	static int GetV6PrefixByVid(int vid, uint32_t *v6_prefix);
 	static int GetV6MTUByPrefix(uint16_t *mtu, uint32_t *v6_prefix);
 	static IPACM_firewall_conf_t* get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* dev_name);
+	static int get_wan_v4_index(ipacm_wan_iface_type sta_mode);
+	static int get_wan_v6_index(ipacm_wan_iface_type sta_mode);
 #endif
 	static bool isWanUP(int ipa_if_num_tether)
 	{
@@ -262,28 +319,34 @@ public:
 	}
 
 #ifdef FEATURE_VLAN_MPDN
-	static bool isVlanWanUP()
+	static bool isVlanWanUP(bool any_backhaul = false)
 	{
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
-			if(ipv4_to_iface[i].ipv4_addr && ipv4_to_iface[i].wan_up_vlan)
+			if(ipv4_to_iface[i].ipv4_addr && ipv4_to_iface[i].wan_up_vlan && ipv4_to_iface[i].pIface != NULL)
 			{
-				IPACMDBG_H("iface %s is vlan up\n", ipv4_to_iface[i].pIface->dev_name);
-				return true;
+				if(ipv4_to_iface[i].pIface->m_is_sta_mode == Q6_WAN || any_backhaul)
+				{
+					IPACMDBG_H("iface %s is vlan up\n", ipv4_to_iface[i].pIface->dev_name);
+					return true;
+				}
 			}
 		}
 		IPACMDBG_H("No v4 vlan WAN is up\n");
 		return false;
 	}
 
-	static bool isVlanWanUP_V6()
+	static bool isVlanWanUP_V6(bool any_backhaul = false)
 	{
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
-			if(ipv6_to_iface[i].wan_up_vlan_v6)
+			if(ipv6_to_iface[i].wan_up_vlan_v6  && ipv6_to_iface[i].pIface != NULL)
 			{
-				IPACMDBG_H("iface %s is vlan up v6\n", ipv6_to_iface[i].pIface->dev_name);
-				return true;
+				if(ipv6_to_iface[i].pIface->m_is_sta_mode == Q6_WAN || any_backhaul)
+				{
+					IPACMDBG_H("iface %s is vlan up v6\n", ipv6_to_iface[i].pIface->dev_name);
+					return true;
+				}
 			}
 		}
 		IPACMDBG_H("No v6 vlan WAN is up\n");
@@ -401,27 +464,16 @@ public:
 
 	static bool check_client_ipv4_with_pdn_ipv4(uint32_t client_ip, uint16_t vlan_id)
 	{
+		IPACMDBG_H("vlan_id %d \n", vlan_id);
+		IPACMDBG_H("Client IP: 0x%x\n", client_ip);
 		for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
 		{
+			IPACMDBG_H("IPACM_Wan::ipv4_to_iface[%d].ipv4_addr: 0x%x\n", i, IPACM_Wan::ipv4_to_iface[i].ipv4_addr);
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr &&
 					ipv4_to_iface[i].ipv4_addr == client_ip)
 			{
-				if(vlan_id == 0 && ipv4_to_iface[i].pIface->is_default_gateway)
-				{
-					return true;
-				}
-				else
-				{
-					for(int j = 0; j < ipv4_to_iface[i].VID_cnt; j++)
-					{
-						if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
-						{
-							IPACMDBG("vlan %d i %d j %d ip: 0x%x\n",
-										IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j], i,j, client_ip);
-							return true;
-						}
-					}
-				}
+				IPACMDBG_H("Client IP Matched With Wan IP! at index %d \n", i);
+				return true;
 			}
 		}
 		return false;
@@ -432,6 +484,10 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	static struct ipacm_pdn_flt_rule pdn_flt_rule_v4[IPA_MAX_FLT_RULE];
 	static struct ipacm_pdn_flt_rule pdn_flt_rule_v6[IPA_MAX_FLT_RULE];
+	static int wlan_v4_vlan_index;
+	static int wlan_v6_vlan_index;
+	static int eth_sta_v4_vlan_index;
+	static int eth_sta_v6_vlan_index;
 #endif
 	static struct ipa_flt_rule_add flt_rule_v4[IPA_MAX_FLT_RULE];
 	static struct ipa_flt_rule_add flt_rule_v6[IPA_MAX_FLT_RULE];
@@ -541,6 +597,8 @@ private:
 	uint32_t *wan_route_rule_v6_hdl;
 	uint32_t hdr_hdl_sta_v4;
 	uint32_t hdr_hdl_sta_v6;
+	uint32_t proc_hdl_sta_v4;
+	uint32_t proc_hdl_sta_v6;
 	uint32_t firewall_hdl_v4[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t firewall_hdl_v6[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t dft_wan_fl_hdl[IPA_NUM_DEFAULT_WAN_FILTER_RULES];
@@ -559,16 +617,24 @@ private:
 	bool public_wan_v4_addr_set;
 	bool wan_v4_addr_gw_set;
 	bool wan_v6_addr_gw_set;
+	bool wan_v4_is_default_gw;
+	bool wan_v6_is_default_gw;
 	bool active_v4;
 	bool active_v6;
 	bool header_set_v4;
 	bool header_set_v6;
+	bool hdr_proc_set_v4;
+	bool hdr_proc_set_v6;
 	bool header_partial_default_wan_v4;
 	bool header_partial_default_wan_v6;
 	uint8_t ext_router_mac_addr[IPA_MAC_ADDR_SIZE];
 	uint8_t netdev_mac[IPA_MAC_ADDR_SIZE];
 
-	static uint32_t wan_route_rule_v6_hdl_a5;
+	static uint32_t wan_route_rule_lan_v6_hdl_a5;
+	static uint32_t wan_route_rule_wan_v6_hdl_a5;
+
+	static uint32_t pppoe_route_rule_hdl_v4;
+	static uint32_t pppoe_route_rule_hdl_v6;
 
 	static int num_ipv4_modem_pdn;
 
@@ -577,6 +643,12 @@ private:
 	int modem_ipv4_pdn_index;
 
 	int modem_ipv6_pdn_index;
+
+	int sta_ipv4_pdn_index;
+
+	int sta_ipv6_pdn_index;
+
+	uint16_t sta_vlan_id;
 
 	bool is_default_gateway;
 
@@ -815,7 +887,11 @@ private:
 	int handle_route_add_evt(ipa_ip_type iptype);
 
 #ifdef FEATURE_VLAN_MPDN
-	int check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool xlat_cfg = false);
+	void get_vlan_association_info(ipacm_vlan_association_info* vlan_info);
+	void post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vlan_idx, uint16_t vlan_id, bool vlan_up);
+	int handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data);
+	int handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool xlat_cfg = false);
+	int check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool xlat_cfg = false, bool del_vlan_route = false);
 	int handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_id);
 #endif
 
@@ -839,9 +915,9 @@ private:
 	/* configure the socksv5 dl rules */
 	int config_socksv5_rules(ipa_ioc_add_flt_rule *pFilteringTable_v6);
 #endif
-	int handle_route_del_evt(ipa_ip_type iptype);
+	int handle_route_del_evt(ipa_ip_type iptype, bool wan_up_vlan = false);
 
-	int del_dft_firewall_rules(ipa_ip_type iptype);
+	int del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan = false);
 
 	int handle_down_evt();
 

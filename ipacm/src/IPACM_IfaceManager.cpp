@@ -26,9 +26,10 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
+
 */
 /*!
 	@file
@@ -119,7 +120,19 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			{
 				IPACMDBG("WAN-EMBMS (%s) link already up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
 			}
-			else if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF)
+			else if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF &&
+				!IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].virtual_iface &&
+				((strncmp(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, "eth", 3) == 0) ||
+				(strncmp(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, "ppp", 3) == 0) ||
+				(strstr(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, "pppoe") != NULL) ||
+				(strstr(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, "br-ethwan") != NULL) ||
+				(strstr(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, "br-wanpppoe") != NULL)))
+			{
+				IPACMDBG_H("Ignoring IPA_LINK_UP_EVENT for Ethernet/PPPoE WAN interface %s\n", 
+					IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name);
+			}
+			else if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF &&
+				!IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].virtual_iface)
 			{
 				IPACMDBG_H("WAN-LTE (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
 				ifmgr_data.if_index = evt_data->if_index;
@@ -131,6 +144,8 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 		case IPA_USB_LINK_UP_EVENT:
 			IPACMDBG_H("Recieved IPA_USB_LINK_UP_EVENT event: link up %d: \n", evt_data->if_index);
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
+			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(ifmgr_data.iface_name));
+			IPACMDBG_H("Recieved usb link up for: %s \n", ifmgr_data.iface_name);
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
 				IPACMDBG_H("IPA_USB_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
@@ -150,6 +165,9 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("WAN-usb (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, evt_data->if_index);
 				ifmgr_data.if_index = evt_data->if_index;
 				ifmgr_data.if_type = ECM_WAN;
+#ifdef FEATURE_PPPOE
+				ifmgr_data.is_ppp_iface = evt_data->is_ppp_iface;
+#endif
 				create_iface_instance(&ifmgr_data);
 			}
 			else
@@ -268,6 +286,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 {
 	int if_index = param->if_index;
 	ipacm_wan_iface_type is_sta_mode = param->if_type;
+	uint16_t sta_vlan_id = 0;
 
 	int ipa_interface_index;
 	ipa_interface_index = IPACM_Iface::iface_ipa_index_query(if_index);
@@ -302,7 +321,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 		case LAN_IF:
 			{
 				IPACMDBG_H("Creating Lan interface\n");
-				IPACM_Lan *lan = new IPACM_Lan(param->iface_name, ipa_interface_index);
+				IPACM_Lan *lan = new IPACM_Lan(param->iface_name, ipa_interface_index, param->is_ppp_iface);
 				if (lan->rx_prop == NULL && lan->tx_prop == NULL)
 				{
 					/* close the netdev instance if IPA not support*/
@@ -376,7 +395,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 		case ETH_IF:
 			{
 				IPACMDBG_H("Creating ETH interface in router mode\n");
-				IPACM_Lan *ETH = new IPACM_Lan(param->iface_name, ipa_interface_index);
+				IPACM_Lan *ETH = new IPACM_Lan(param->iface_name, ipa_interface_index, param->is_ppp_iface);
 				if (ETH->rx_prop == NULL && ETH->tx_prop == NULL)
 				{
 					/* close the netdev instance if IPA not support*/
@@ -436,7 +455,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				if(IPACM_Iface::ipacmcfg->ipacm_odu_router_mode == true)
 				{
 					IPACMDBG_H("Creating ODU interface in router mode\n");
-					IPACM_Lan *odu = new IPACM_Lan(param->iface_name, ipa_interface_index);
+					IPACM_Lan *odu = new IPACM_Lan(param->iface_name, ipa_interface_index, param->is_ppp_iface);
 					if (odu->rx_prop == NULL && odu->tx_prop == NULL)
 					{
 						/* close the netdev instance if IPA not support*/
@@ -542,7 +561,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 		case WLAN_IF:
 			{
 				IPACMDBG_H("Creating WLan interface\n");
-				IPACM_Wlan *wl = new IPACM_Wlan(param->iface_name, ipa_interface_index, ast_update);
+				IPACM_Wlan *wl = new IPACM_Wlan(param->iface_name, ipa_interface_index, ast_update, param->is_ppp_iface);
 				if (wl->rx_prop == NULL && wl->tx_prop == NULL)
 				{
 					/* reset the AP-iface category to unknown */
@@ -633,7 +652,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_Wan *w;
 					if(is_sta_mode == WLAN_WAN)
 					{
-						w = new IPACM_Wan(ipa_interface_index, is_sta_mode, param->mac_addr);
+						w = new IPACM_Wan(ipa_interface_index, is_sta_mode, param->mac_addr, param->is_ppp_iface);
 						if (w->rx_prop == NULL && w->tx_prop == NULL)
 						{
 							/* reset the AP-iface category to unknown */
@@ -645,13 +664,32 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					}
 					else
 					{
-						w = new IPACM_Wan(ipa_interface_index, is_sta_mode, NULL);
+						w = new IPACM_Wan(ipa_interface_index, is_sta_mode, NULL, param->is_ppp_iface);
 						if (w->rx_prop == NULL && w->tx_prop == NULL)
 						{
 							/* close the netdev instance if IPA not support*/
 							w->delete_iface();
 							return IPACM_FAILURE;
 						}
+#ifdef FEATURE_PPPOE
+						if(param->is_ppp_iface &&
+							IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
+						{
+							if(IPACM_Iface::ipacmcfg->get_pppoe_vlan_id_from_proc(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
+								&sta_vlan_id))
+							{
+								IPACMERR("failed to get iface vlan ID\n");
+							}
+							IPACMDBG_H("Update PPPoE config even if ioctl received or not: pppoe_dev_name: %s phy_dev_name:%s vlan_id: %d \n",
+								IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
+								IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].phy_dev_name, sta_vlan_id);
+
+							IPACM_Iface::ipacmcfg->get_pppoe_session_info
+								(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
+								IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].phy_dev_name,
+								sta_vlan_id);
+						}
+#endif
 					}
 #ifdef FEATURE_EoGRE
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_UP, w);
@@ -673,15 +711,16 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						IPACM_EvtDispatcher::registr(IPA_NETWORK_STATS_UPDATE_EVENT, w);
 					}
 #else/* defined(FEATURE_IPA_ANDROID) */
-					if(is_sta_mode == Q6_WAN)
-					{
-						IPACM_EvtDispatcher::registr(IPA_ADDR_DEL_EVENT, w);
-					}
+
+					IPACM_EvtDispatcher::registr(IPA_ADDR_DEL_EVENT, w);
+
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_EVENT, w);
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_WAN_GW_ADDR_ADD_EVENT, w);
 #endif /* not defined(FEATURE_IPA_ANDROID)*/
 #ifdef FEATURE_VLAN_MPDN
 					IPACM_EvtDispatcher::registr(IPA_ROUTE_ADD_VLAN_PDN_EVENT, w);
+					IPACM_EvtDispatcher::registr(IPA_ROUTE_DEL_VLAN_PDN_EVENT, w);
 #endif
 #ifdef FEATURE_IPv6CT_DISABLED
 					IPACM_EvtDispatcher::registr(IPA_FIREWALL_CHANGE_EVENT, w);
@@ -752,7 +791,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 		case EMBMS_IF:
 			{
 				IPACMDBG("Creating Wan-eMBSM interface\n");
-				IPACM_Wan *embms = new IPACM_Wan(ipa_interface_index, is_sta_mode, NULL);
+				IPACM_Wan *embms = new IPACM_Wan(ipa_interface_index, is_sta_mode, NULL, param->is_ppp_iface);
 				if (embms->rx_prop == NULL && embms->tx_prop == NULL)
 				{
 					/* close the netdev instance if IPA not support*/

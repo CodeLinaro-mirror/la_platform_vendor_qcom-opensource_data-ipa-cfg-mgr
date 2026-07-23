@@ -12960,13 +12960,11 @@ void IPACM_Wan::handle_wan_static_route(ipa_ip_type iptype, uint32_t dst_v4_addr
 				std::make_pair(dst_v4_addr,
 					handleTypeV4(iface_query->num_tx_props, dst_v4_mask)));
 		}
-		/* Only set v4_addr/ipv4_set for real clients, not stubs.
-		 * Stubs keep their GW IP as v4_addr until promoted by neigh. */
-		if (!get_client_memptr(wan_client, clnt_indx)->is_stub)
-		{
-			get_client_memptr(wan_client, clnt_indx)->v4_addr = dst_v4_addr;
-			get_client_memptr(wan_client, clnt_indx)->ipv4_set = true;
-		}
+		/* NOTE: do NOT set v4_addr/ipv4_set here. This client's v4_addr is its
+		 * own GW address (matched by get_wan_client_index_ipv4(gw_v4_addr) above)
+		 * and is set from the neigh's real address in handle_wan_client_ipaddr().
+		 * Overwriting it with the static route destination (dst_v4_addr) breaks
+		 * the GW lookup for every subsequent static route via the same gateway. */
 	}
 
 	IPACMDBG_H("MAP-E static route install: iptype=%d dst=0x%x/0x%x gw=0x%x is_br=%d "
@@ -13038,9 +13036,24 @@ void IPACM_Wan::install_wan_v6_static_route(int wan_index,
 	rt_rule->commit = 1;
 	rt_rule->num_rules = NUM;
 	rt_rule->ip = IPA_IP_v6;
-	/* Use WANRTBLv6 for WAN-bound IPv6 static route rules */
-	strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name,
-		sizeof(rt_rule->rt_tbl_name));
+
+	/* MAP-E BR route matches src=BR_IPv6 — this is a downlink decap rule, so
+	 * it must live in WANRTBLv6 (the table the WAN-ingress filter consults).
+	 * A generic static route matches dst=route_prefix for uplink forwarding,
+	 * so it must live in COMRTBLv6 (rt_tbl_v6), the table the LAN uplink
+	 * filter dispatches WAN-bound v6 traffic to — installing it in WANRTBLv6
+	 * would leave the uplink lookup with no match and traffic to the
+	 * static-route prefix would fall through to the default GW. */
+	bool is_mape_br_dl = IPACM_Iface::ipacmcfg->mape_enable
+		&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)
+		&& get_client_memptr(wan_client, wan_index)->is_v6_gateway
+		&& IPACM_Wan::mape_rules.br_ipaddr[0] != 0;
+	if (is_mape_br_dl)
+		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name,
+			sizeof(rt_rule->rt_tbl_name));
+	else
+		strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name,
+			sizeof(rt_rule->rt_tbl_name));
 	rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX-1] = '\0';
 
 	struct ipa_rt_rule_add *rt_rule_entry = &rt_rule->rules[0];
@@ -13055,9 +13068,7 @@ void IPACM_Wan::install_wan_v6_static_route(int wan_index,
 		rt_rule_entry->at_rear = 0;
 		rt_rule_entry->rule.hdr_proc_ctx_hdl = 0;
 		rt_rule_entry->rule.hdr_hdl = 0;
-		if (IPACM_Iface::ipacmcfg->mape_enable
-			&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)
-			&& get_client_memptr(wan_client, wan_index)->is_v6_gateway)
+		if (is_mape_br_dl)
 			rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
 		else if (get_client_memptr(wan_client, wan_index)->sta_hdr_proc_ctx_set)
 			rt_rule_entry->rule.hdr_proc_ctx_hdl =
@@ -13071,10 +13082,7 @@ void IPACM_Wan::install_wan_v6_static_route(int wan_index,
 		memset(&rt_rule_entry->rule.attrib, 0, sizeof(rt_rule_entry->rule.attrib));
 		/* For MAP-E BR: match src=BR_IPv6/128 (DL decap) instead of dst=route_dst.
 		 * Downlink MAP-E packets have src=BR_IPv6, so this catches them precisely. */
-		if (IPACM_Iface::ipacmcfg->mape_enable
-			&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)
-			&& get_client_memptr(wan_client, wan_index)->is_v6_gateway
-			&& IPACM_Wan::mape_rules.br_ipaddr[0] != 0)
+		if (is_mape_br_dl)
 		{
 			rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 			rt_rule_entry->rule.attrib.u.v6.src_addr[0] = IPACM_Wan::mape_rules.br_ipaddr[0];
@@ -14167,14 +14175,21 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				  tx_prop->tx[tx_index].ip == IPA_IP_v4))
 			{
 				/* Skip reinstall if the v4 rule is already up, UNLESS this is the MAP-E
-				 * BR client (identified by MAC match against mape_rules.mac).  The BR
-				 * check must be IP-family-agnostic: in GW≠BR topology the BR neighbor
-				 * is always an IPv6 link-local address, so gating the exception on
-				 * "iptype == IPA_IP_v4" prevented the reinstall from ever firing and
-				 * left mape_wan_rt_rule_hdl_v4 permanently wired to the GW proc_ctx
-				 * (GW MAC) instead of the correct BR proc_ctx (BR MAC). */
-				if((get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4 != 0 || IPACM_Wan::mape_wan_rt_rule_hdl_v4 != 0) &&
-						!(is_mape_v4_interface && memcmp(mac_addr, IPACM_Wan::mape_rules.mac, sizeof(IPACM_Wan::mape_rules.mac)) == 0)) {
+				 * BR client (identified by MAC match against mape_rules.mac) — the BR
+				 * client is always allowed to (re)install so a re-identified BR gets
+				 * its rule rebuilt with the correct proc ctx.
+				 *
+				 * "already up" must be judged from THIS client's own per-client
+				 * wan_rt_hdl_v4, not from mape_wan_rt_rule_hdl_v4: that handle is a
+				 * single, interface-wide MAP-E catch-all/GW value, not a per-client
+				 * one. ORing it in here meant that once ANY client on the interface
+				 * set it, every OTHER (non-GW, non-BR) client's own wan_rt_hdl_v4 —
+				 * still legitimately 0 — was masked, and that client's dst-addr rule
+				 * never installed. */
+				bool is_mape_gw_or_br_client = is_mape_v4_interface &&
+					memcmp(mac_addr, IPACM_Wan::mape_rules.mac, sizeof(IPACM_Wan::mape_rules.mac)) == 0;
+				if (get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4 != 0 &&
+						!is_mape_gw_or_br_client) {
 					IPACMDBG_H("Wan Route rule installed already for ipv4 \n");
 					continue;
 				}

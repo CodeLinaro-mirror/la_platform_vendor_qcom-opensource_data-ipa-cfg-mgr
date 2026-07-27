@@ -444,10 +444,23 @@ int IPACM_Iface::iface_ipa_index_query
 
 	for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; i++)
 	{
-		if (strncmp(ifr.ifr_name,
+		bool name_match = (strncmp(ifr.ifr_name,
 								IPACM_Iface::ipacmcfg->iface_table[i].iface_name,
-								sizeof(IPACM_Iface::ipacmcfg->iface_table[i].iface_name)) == 0)
+								sizeof(IPACM_Iface::ipacmcfg->iface_table[i].iface_name)) == 0);
+		bool mape_match = (i == IPACM_Iface::ipacmcfg->mape_wan_iface_table_index &&
+							IS_MAPE_IFACE(ifr.ifr_name));
+		if (name_match || mape_match)
 		{
+			if (mape_match)
+			{
+				strlcpy(IPACM_Iface::ipacmcfg->iface_table[i].iface_name,
+						ifr.ifr_name,
+						sizeof(IPACM_Iface::ipacmcfg->iface_table[i].iface_name));
+				IPACMDBG_H("Updated MAP-E iface_name to %s\n", ifr.ifr_name);
+				IPACMDBG_H(" iface_name %s mape_wan_iface_table_index %d \n",
+						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].iface_name,
+						IPACM_Iface::ipacmcfg->mape_wan_iface_table_index);
+			}
 			IPACMDBG_H("Interface (%s) linux(%d) mapped to ipa(%d) \n", ifr.ifr_name,
 							 IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index, i);
 

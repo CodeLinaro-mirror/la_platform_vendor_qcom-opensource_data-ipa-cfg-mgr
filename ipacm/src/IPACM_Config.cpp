@@ -816,11 +816,11 @@ reread:
 		}
 	}
 
-	strlcpy(iface_table[mape_wan_iface_table_index].iface_name,MAPE_IFACE_NAME,strlen(MAPE_IFACE_NAME)+1);
-	IPACMDBG_H(" iface_name %s \n",iface_table[mape_wan_iface_table_index].iface_name);
 	iface_table[mape_wan_iface_table_index].if_cat = WAN_IF;
 	iface_table[mape_wan_iface_table_index].if_mode = ROUTER;
 	iface_table[mape_wan_iface_table_index].virtual_iface = true;
+	/* iface_name is stamped later by iface_ipa_index_query(); empty until then */
+	IPACMDBG_H("MAPE slot iface_name pending kernel discovery\n");
 	memcpy(iface_table[mape_wan_iface_table_index].phy_dev_name, cfg->mape_wan_iface_name, sizeof(iface_table[mape_wan_iface_table_index].phy_dev_name));
 	IPACMDBG_H(" phy_dev_name %s \n",iface_table[mape_wan_iface_table_index].phy_dev_name);
 

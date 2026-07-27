@@ -4173,7 +4173,7 @@ int ipa_nl_query_newneigh(int af_family)
 			break;
 		}
 
-		if (ipa_nl_decode_nlmsg((const char*)h, msglen, msg_ptr)) {
+		if (ipa_nl_decode_nlmsg((const char*)h, h->nlmsg_len, msg_ptr)) {
 			IPACMERR("Failed to decode rtm link message\n");
 			h = NLMSG_NEXT(h, msglen);
 			continue;
@@ -4460,7 +4460,7 @@ int  ipa_nl_query_getlink(int af_family)
 			{
 				if(iface_info->ifi_flags & IFF_UP)
 				{
-					if (ipa_nl_decode_nlmsg((const char*)nl_hdr, ret_val, msg_ptr)) {
+					if (ipa_nl_decode_nlmsg((const char*)nl_hdr, nl_hdr->nlmsg_len, msg_ptr)) {
 						IPACMERR("Failed to decode rtm link message\n");
 						nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
 						continue;

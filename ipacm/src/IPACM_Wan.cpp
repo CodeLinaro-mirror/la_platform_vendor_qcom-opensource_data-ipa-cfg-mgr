@@ -17521,6 +17521,22 @@ int IPACM_Wan::ipgre_add_rgip_rt_rule(
 		IPACMDBG_H("RGIP not assigned yet, not installing route rule\n");
 		return IPACM_SUCCESS;
 	}
+
+	/* If rgip_ip is a dummy/link-local address (169.x.x.x), use the persistent
+	 * IPPT address instead so the route rule matches the real source IP. */
+	uint32_t rgip_addr_2use = IPACM_Iface::ipacmcfg->rgip_ip;
+	if ( (rgip_addr_2use & 0xFF000000) == 0xA9000000 )
+	{
+		IPACMDBG_H("rgip_ip 0x%x is a dummy IP (169.x.x.x), using rgip_ip_ippt 0x%x instead\n",
+			rgip_addr_2use, IPACM_Iface::ipacmcfg->rgip_ip_ippt);
+		if ( IPACM_Iface::ipacmcfg->rgip_ip_ippt == 0 )
+		{
+			IPACMDBG_H("rgip_ip_ippt not assigned yet, not installing route rule\n");
+			return IPACM_SUCCESS;
+		}
+		rgip_addr_2use = IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+	}
+
 	uint32_t hdr_2use = IPACM_Wan::ipgre_route_data[IPA_IP_v6].ul_header_hdl_c;
 
 
@@ -17598,7 +17614,7 @@ int IPACM_Wan::ipgre_add_rgip_rt_rule(
 	rt_rule_entry->at_rear                          = true;
 	rt_rule_entry->rule.dst                         = IPA_CLIENT_DUMMY_CONS;
 	rt_rule_entry->rule.attrib.attrib_mask          = IPA_FLT_SRC_ADDR;
-	rt_rule_entry->rule.attrib.u.v4.src_addr        = IPACM_Iface::ipacmcfg->rgip_ip;
+	rt_rule_entry->rule.attrib.u.v4.src_addr        = rgip_addr_2use;
 	rt_rule_entry->rule.attrib.u.v4.src_addr_mask   = 0xFFFFFFFF;
 	rt_rule_entry->rule.hdr_proc_ctx_hdl            =
 		IPACM_Wan::ipgre_route_data[IPACM_Iface::ipacmcfg->ipgre_info.iptype].proc_ctx_gre_add_hdl_rgip;
@@ -17608,7 +17624,7 @@ int IPACM_Wan::ipgre_add_rgip_rt_rule(
 	rt_rule_entry->rule.retain_hdr                  = 0;
 
 	IPACMDBG_H("Adding rgip route rule with src_addr 0x%x\n",
-		IPACM_Iface::ipacmcfg->rgip_ip);
+		rgip_addr_2use);
 
 	if ( m_routing.AddRoutingRule(rt_table) == false )
 	{

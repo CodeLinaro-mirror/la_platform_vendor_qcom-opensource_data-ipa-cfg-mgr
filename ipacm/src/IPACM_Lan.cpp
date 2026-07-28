@@ -2824,6 +2824,11 @@ int IPACM_Lan::handle_eth_mac_flt_event()
 						IPACMERR("unbale to add mac flt blacklist v6 UL rule for index: %d\n", eth_index);
 						return IPACM_FAILURE;
 					}
+					/* ongoing/new allowing connections will have NAT-miss issue, will optimize future */
+					for (auto v6_it = rt_hdl_v6_list[eth_index].begin(); v6_it != rt_hdl_v6_list[eth_index].end(); ++v6_it)
+					{
+						CtList->HandleNeighIpAddrDelEvt_v6(Ipv6IpAddress(v6_it->first.data(), false));
+					}
 					if(handle_eth_client_mac_flt_route_rule(IPA_IP_v6, eth_index, it->second->is_blacklist))
 					{
 						IPACMERR("unbale to del v6 rt rule for index: %d\n", eth_index);

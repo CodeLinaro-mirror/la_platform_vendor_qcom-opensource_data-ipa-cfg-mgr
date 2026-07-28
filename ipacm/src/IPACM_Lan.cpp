@@ -13916,13 +13916,12 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 					{
 						pthread_mutex_lock(&IPACM_Iface::ipacmcfg->cnt_idx_lock);
 						if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1) {
-							uint16_t disc_vlan = get_client_memptr(eth_client, clt_indx)->vlan_id;
-							auto it = IPACM_Iface::ipacmcfg->vlan_counter_map.find(disc_vlan);
+							auto it = IPACM_Iface::ipacmcfg->vlan_counter_map.find(vlan_id);
 							if (it != IPACM_Iface::ipacmcfg->vlan_counter_map.end() &&
 								it->second.ref_count > 1) {
 								is_last_on_vlan = false;
 							}
-							IPACM_Iface::ipacmcfg->release_vlan_counter(disc_vlan);
+							IPACM_Iface::ipacmcfg->release_vlan_counter(vlan_id);
 						} else {
 							/* Mode 0: always free */
 							if (IPACM_Iface::ipacmcfg->reset_cnt_idx(client_info->wan_cnt_idx, false))
@@ -13949,7 +13948,7 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 			memset(&ci_v3, 0, sizeof(ci_v3));
 			ci_v3.device_type = client_info->device_type;
 			memcpy(ci_v3.mac, client_info->mac, IPA_MAC_ADDR_SIZE);
-			ci_v3.vlan_id = get_client_memptr(eth_client, clt_indx)->vlan_id;
+			ci_v3.vlan_id = vlan_id;
 			ci_v3.client_init = client_info->client_init;
 			ci_v3.client_idx = client_info->client_idx;
 			ci_v3.ul_src_pipe = client_info->ul_src_pipe;
@@ -13963,6 +13962,95 @@ int IPACM_Lan::handle_eth_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id, i
 			clear_lan_client_info(client_info);  /* Mode 0 only */
 		free(client_info);
 	}
+
+	/* Also clean up active/inactive lan_stats slot here (del_neigh path).
+	 * Kept in handle_lan_client_disconnect as well — guard in
+	 * reset_active_lan_stats_index prevents double-decrement if both fire. */
+	{
+		int active_stats_idx;
+#ifdef IPA_HW_FNR_STATS
+		if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1 ||
+				IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_2)
+			active_stats_idx = get_lan_stats_index(mac_addr, IPACM_Iface::ipacmcfg->lan_stats_mode, vlan_id);
+		else
+#endif
+			active_stats_idx = get_lan_stats_index(mac_addr);
+
+		int reset_active_result;
+#ifdef IPA_HW_FNR_STATS
+		if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1 ||
+				IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_2)
+			reset_active_result = reset_active_lan_stats_index(active_stats_idx, mac_addr,
+				IPACM_Iface::ipacmcfg->lan_stats_mode, vlan_id);
+		else
+#endif
+			reset_active_result = reset_active_lan_stats_index(active_stats_idx, mac_addr);
+
+		if (reset_active_result == -1)
+		{
+			IPACMDBG_H("del_neigh: failed to reset active lan_stats index, try inactive list.\n");
+			int reset_inactive_result;
+#ifdef IPA_HW_FNR_STATS
+			if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1 ||
+					IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_2)
+				reset_inactive_result = reset_inactive_lan_stats_index(mac_addr,
+					IPACM_Iface::ipacmcfg->lan_stats_mode, vlan_id);
+			else
+#endif
+				reset_inactive_result = reset_inactive_lan_stats_index(mac_addr);
+			if (reset_inactive_result == -1)
+				IPACMDBG_H("del_neigh: failed to reset inactive lan_stats index.\n");
+		}
+		else
+		{
+			/* Slot freed — promote first inactive client to active if any. */
+			uint8_t mac[IPA_MAC_ADDR_SIZE];
+			uint16_t inactive_vlan_id = 0;
+			int get_avail_result;
+#ifdef IPA_HW_FNR_STATS
+			if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1 ||
+					IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_2)
+				get_avail_result = get_available_inactive_lan_client(mac,
+					IPACM_Iface::ipacmcfg->lan_stats_mode, &inactive_vlan_id);
+			else
+#endif
+				get_avail_result = get_available_inactive_lan_client(mac);
+
+			if (get_avail_result == IPACM_SUCCESS)
+			{
+				int add_active_result;
+#ifdef IPA_HW_FNR_STATS
+				if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1 ||
+						IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_2)
+					add_active_result = get_free_active_lan_stats_index(mac,
+						IPACM_Iface::ipacmcfg->lan_stats_mode, inactive_vlan_id);
+				else
+#endif
+					add_active_result = get_free_active_lan_stats_index(mac);
+
+				if (add_active_result != -1)
+				{
+					int remove_inactive_result;
+#ifdef IPA_HW_FNR_STATS
+					if (IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_1 ||
+							IPACM_Iface::ipacmcfg->lan_stats_mode == IPA_LAN_STATS_MODE_2)
+						remove_inactive_result = reset_inactive_lan_stats_index(mac,
+							IPACM_Iface::ipacmcfg->lan_stats_mode, inactive_vlan_id);
+					else
+#endif
+						remove_inactive_result = reset_inactive_lan_stats_index(mac);
+					if (remove_inactive_result == IPACM_FAILURE)
+						IPACMDBG_H("del_neigh: unable to remove client from inactive list.\n");
+					handle_lan_client_connect(mac, inactive_vlan_id);
+				}
+				else
+					IPACMDBG_H("del_neigh: no free active slot for inactive client.\n");
+			}
+			else
+				IPACMDBG_H("del_neigh: no inactive client to promote.\n");
+		}
+	}
+
 	get_client_memptr(eth_client, clt_indx)->lan_stats_idx = -1;
 	memset(get_client_memptr(eth_client, clt_indx)->wan_ul_fl_rule_hdl_v4, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));
 	memset(get_client_memptr(eth_client, clt_indx)->wan_ul_fl_rule_hdl_v6, 0, MAX_WAN_UL_FILTER_RULES * sizeof(uint32_t));

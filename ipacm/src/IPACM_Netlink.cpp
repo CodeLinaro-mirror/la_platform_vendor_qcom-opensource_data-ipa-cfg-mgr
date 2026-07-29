@@ -2467,7 +2467,8 @@ process:
 			/* Check for delegate_prefix route for Prefix Delegation */
 			if((msg_ptr->nl_route_info.metainfo.rtm_family == AF_INET6) &&
 			   (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_BLACKHOLE || msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNREACHABLE) &&
-			   (msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST))
+			   (msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST) &&
+			   (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
 				IPACMDBG_H("Got RTM_NEWROUTE for delegate_prefix route with dst_len %d\n", msg_ptr->nl_route_info.metainfo.rtm_dst_len);
 
@@ -2792,7 +2793,8 @@ process_v6:
 			/* Check for delegate_prefix route delete for Prefix Delegation */
 			if((msg_ptr->nl_route_info.metainfo.rtm_family == AF_INET6) &&
 			   (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_BLACKHOLE || msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNREACHABLE) &&
-			   (msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST))
+			   (msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST) &&
+			   (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
 				uint32_t ipv6_addr[4];
 				IPACMDBG_H("Got RTM_DELROUTE for delegate_prefix route with dst_len %d\n", msg_ptr->nl_route_info.metainfo.rtm_dst_len);

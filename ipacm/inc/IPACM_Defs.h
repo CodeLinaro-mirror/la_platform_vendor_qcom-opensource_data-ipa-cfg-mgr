@@ -232,6 +232,7 @@ extern "C"
 
 #define IPV6_SIZE 16
 
+#define INVALID_PCP_MARK 8
 /*
  * The following macros allow callers to print the raw bytes making up
  * an address.  No assumptions are made about endianess.

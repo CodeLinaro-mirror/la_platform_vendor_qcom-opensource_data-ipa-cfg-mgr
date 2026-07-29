@@ -393,7 +393,7 @@ struct qos_param_info {
 	uint8_t dscp;
 	uint8_t pcp;
 	uint8_t dscp_mark_val;
-	uint8_t pcp_mark_val;
+	uint8_t pcp_mark_val = INVALID_PCP_MARK;
 
 	uint32_t qos_rt_rule_hdl_v4;
 	uint32_t qos_rt_rule_hdl_v6;

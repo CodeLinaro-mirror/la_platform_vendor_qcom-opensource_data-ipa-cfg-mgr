@@ -26,42 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
  /*!
@@ -97,6 +63,7 @@
 #include <stdlib.h>
 #include <execinfo.h>
 #include "linux/ipa_qmi_service_v01.h"
+#include <sched.h>
 
 #include <string.h>
 #include <netlink/object.h>
@@ -155,6 +122,7 @@
 #ifdef FEATURE_IPACM_RESTART
 #define IPA_READY_QCMAP_NOTIFIER_FILE "/var/run/data/monitor/ipacmd.pid"
 #endif
+#define IPACM_SCHED_FIFO_PRIORITY  65
 
 void* netlink_start(void *param);
 #ifndef FEATURE_IPA_ANDROID
@@ -1225,6 +1193,34 @@ void *l2tp_process(void *param)
 int main(int argc, char **argv)
 {
 	int ret;
+	struct sched_param param = {0};
+	int max_priority = sched_get_priority_max(SCHED_FIFO);
+	if (max_priority == -1) {
+		IPACMERR("Failed to get max priority for SCHED_FIFO: %s\n", strerror(errno));
+		IPACMERR("Continuing with default scheduling policy\n");
+	}
+	else
+	{
+		// Use a high but not maximum priority to avoid starving critical system processes
+		param.sched_priority = (max_priority > 1) ?
+			(IPACM_SCHED_FIFO_PRIORITY < max_priority ? IPACM_SCHED_FIFO_PRIORITY : max_priority) : 1;
+		if(sched_setscheduler(getpid(), SCHED_FIFO, &param) == -1)
+		{
+			if(errno == EPERM)
+			{
+				IPACMERR("Insufficient privileges to set SCHED_FIFO (requires CAP_SYS_NICE or root)\n");
+			}
+			else
+			{
+				IPACMERR("Failed to set SCHED_FIFO scheduler: %s\n", strerror(errno));
+			}
+			IPACMERR("Continuing with default scheduling policy\n");
+		}
+		else
+		{
+			IPACMDBG_H("Set SCHED_FIFO with priority %d\n", param.sched_priority);
+		}
+	}
 
 #ifdef FEATURE_IPACM_RESTART
 	FILE *fp = NULL;

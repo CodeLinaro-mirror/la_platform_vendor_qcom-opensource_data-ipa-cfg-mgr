@@ -6312,6 +6312,39 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	bool notif_only = false;
 	bool ast_update = false;
 
+#ifdef FEATURE_IPoGRE
+	/* If IPoGRE is already up when a late WAN-up arrives, don't install the
+	 * plain modem uplink rules here - that would overwrite the GRE rules and
+	 * send LAN traffic to the modem instead of the tunnel.
+	 *
+	 * Instead, re-post the IPoGRE down+up events. These run in order: the down
+	 * event clears the old GRE state, and the up event re-installs it on a clean
+	 * base, steering the uplink back into the GRE tunnel. (Calling gre_down()/
+	 * gre_up() directly here won't work - they only do the LAN-side part and
+	 * rely on the WAN side having already done its route/header setup.)
+	 *
+	 * The WAN-up flag is checked per iptype (v4/v6) since this runs for both. */
+	if(IPACM_Iface::ipacmcfg->ipogre_enabled == true &&
+		((iptype == IPA_IP_v4 && IPACM_Wan::isWanUP(ipa_if_num)) ||
+		 (iptype == IPA_IP_v6 && IPACM_Wan::isWanUP_V6(ipa_if_num))))
+	{
+		ipacm_cmd_q_data ipogre_evt;
+		IPACMDBG_H("WAN up after IPoGRE enable (iptype %d): re-steering uplink "
+			"into GRE tunnel\n", iptype);
+
+		memset(&ipogre_evt, 0, sizeof(ipogre_evt));
+		ipogre_evt.event    = IPA_HANDLE_IPOGRE_DOWN;
+		ipogre_evt.evt_data = 0;
+		IPACM_EvtDispatcher::PostEvt(&ipogre_evt);
+
+		memset(&ipogre_evt, 0, sizeof(ipogre_evt));
+		ipogre_evt.event    = IPA_HANDLE_IPOGRE_UP;
+		ipogre_evt.evt_data = 0;
+		IPACM_EvtDispatcher::PostEvt(&ipogre_evt);
+		return IPACM_SUCCESS;
+	}
+#endif
+
 	if(rx_prop != NULL)
 	{
 		/* give mux ID of the default PDN to IPA-driver for WLAN/LAN pkts */

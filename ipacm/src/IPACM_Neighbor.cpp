@@ -1870,7 +1870,6 @@ void IPACM_Neighbor::update_neigh_cache(const char *iface_name, uint8_t *mac_add
 							}
 							neighbor_client[i].iface_index = query_ifindex;
 							is_client_cached = true;
-							break;
 						}
 						bridge = NULL;
 					}
@@ -1897,6 +1896,10 @@ void IPACM_Neighbor::update_neigh_cache(const char *iface_name, uint8_t *mac_add
 								evt_data.event, data_all->iface_name);
 						}
 					}
+				}
+				if(is_client_cached)
+				{
+					break;
 				}
 			}
 		}

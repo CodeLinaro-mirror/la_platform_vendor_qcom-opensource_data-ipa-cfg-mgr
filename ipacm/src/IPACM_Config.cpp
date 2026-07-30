@@ -1475,7 +1475,10 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 	list<bridge_vlan_mapping_info>::iterator it_mapping;
 	bridge_vlan_mapping_info new_mapping;
 	ipacm_bridge *bridge = NULL;
-
+	ipacm_event_eth_bridge *evt_data_eth_bridge = NULL;
+	ipacm_cmd_q_data eth_bridge_evt = {};
+	bool bridge_dummy_vid_mapping = false, is_found = false;
+	std::list<std::array<char, IPA_RESOURCE_NAME_MAX>> iface_list;
 	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
 		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
@@ -1501,14 +1504,22 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 			}
 			else if(is_dummy_VID(it_mapping->bridge_associated_VID))
 			{
+				bridge_dummy_vid_mapping = true;
 				continue;
 			}
-			IPACM_LOG(IPACM_LOG_WARN, "The bridge %s was added before with vlan id %d\n", data->bridge_name,
-				it_mapping->bridge_associated_VID);
-			goto fail;
+			if(it_mapping->bridge_associated_VID == data->vlan_id)
+			{
+				is_found = true;
+				continue;
+			}
 		}
 	}
-
+	if(is_found)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "The bridge %s was added before with vlan id %d\n", data->bridge_name,
+				data->vlan_id);
+		goto fail;
+	}
 	memset(&new_mapping, 0, sizeof(new_mapping));
 	strlcpy(new_mapping.bridge_iface_name, data->bridge_name,
 		sizeof(new_mapping.bridge_iface_name));
@@ -1530,10 +1541,48 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_ioc_bridge_vlan_mapping_info *dat
 		bridge->associate_VID = data->vlan_id;
 		bridge->bridge_ipv4_addr = data->bridge_ipv4;
 		bridge->bridge_netmask = data->subnet_mask;
+		goto post_add_vlan_evt;
 	}
 	return;
 fail:
 	pthread_mutex_unlock(&vlan_l2tp_lock);
+post_add_vlan_evt:
+	/* dummy mapping is already presents, so wlan AP on demand bridge mapping recieved
+	before actual iface vlan bridge mapping, so we need to post the  IPA_ETH_BRIDGE_ADD_VLAN_ID
+	event to install the lantolan rules between wlan AP to assosiate bridge vlan interface*/
+	if(bridge_dummy_vid_mapping)
+	{
+#ifdef FEATURE_VLAN_MPDN
+		get_ifaces_from_vid(data->vlan_id, iface_list);
+
+		for (const auto& iface : iface_list)
+		{
+			evt_data_eth_bridge =
+				(ipacm_event_eth_bridge *)calloc(1, sizeof(ipacm_event_eth_bridge));
+
+			if (evt_data_eth_bridge == NULL)
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "Failed to allocate memory.\n");
+				continue;
+			}
+
+			strlcpy(evt_data_eth_bridge->iface_name,
+					iface.data(),
+					sizeof(evt_data_eth_bridge->iface_name));
+
+			evt_data_eth_bridge->VlanID = data->vlan_id;
+
+			eth_bridge_evt.evt_data = (void *)evt_data_eth_bridge;
+			eth_bridge_evt.event = IPA_ETH_BRIDGE_ADD_VLAN_ID;
+
+			IPACM_LOG(IPACM_LOG_DEBUG, "Posting event %s %s\n",
+					IPACM_Iface::ipacmcfg->getEventName(eth_bridge_evt.event),
+					iface.data());
+			IPACM_EvtDispatcher::PostEvt(&eth_bridge_evt);
+		}
+
+#endif
+	}
 	return;
 }
 
@@ -2381,6 +2430,31 @@ int IPACM_Config::get_iface_vlan_ids(char *phys_iface_name, uint16_t *Ids)
 
 	return IPACM_SUCCESS;
 }
+
+void IPACM_Config::get_ifaces_from_vid(
+    uint16_t vlan_id,
+    std::list<std::array<char, IPA_RESOURCE_NAME_MAX>>& iface_list)
+{
+	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
+		return;
+	}
+	for (auto it_vlan = m_vlan_iface.begin();
+			it_vlan != m_vlan_iface.end();
+			++it_vlan)
+	{
+		if (it_vlan->vlan_id == vlan_id)
+		{
+			std::array<char, IPA_RESOURCE_NAME_MAX> iface = {};
+			memcpy(iface.data(), it_vlan->vlan_iface_name, sizeof(it_vlan->vlan_iface_name));
+			IPACM_LOG(IPACM_LOG_DEBUG, "copied  %s iface to the list\n", it_vlan->vlan_iface_name);
+			iface_list.push_back(iface);
+		}
+	}
+	pthread_mutex_unlock(&vlan_l2tp_lock);
+}
+
 #ifdef IPA_VLAN_PRIORITY
 	int IPACM_Config::get_vlan_id(char *iface_name, uint16_t *vlan_id, uint8_t *priority)
 #else

@@ -7759,6 +7759,32 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				flt_rule_entry.status = -1;
 				flt_rule_entry.rule.rt_tbl_hdl = IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.hdl;
 				flt_rule_entry.at_rear = true;
+				if (IPACM_Iface::ipacmcfg->mape_enable  && m_is_sta_mode == ECM_WAN
+						&& mape_wan_fl_hdl == 0 ) {
+					IPACMDBG_H(" Installing next hdr based filter rule \n");
+					memcpy(&flt_rule_entry.rule.attrib,
+							&rx_prop->rx[idx].attrib,
+							sizeof(struct ipa_rule_attrib));
+					flt_rule_entry.rule.hashable = true;
+					flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+					flt_rule_entry.rule.attrib.u.v6.next_hdr = 4;
+					flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+					memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+					if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+					{
+						IPACMERR("Error Adding Filtering rules, aborting...\n");
+						free(m_pFilteringTable);
+						m_pFilteringTable = NULL;
+						res = IPACM_FAILURE;
+						goto fail;
+					}
+					else
+					{
+						IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
+						IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
+					}
+					mape_wan_fl_hdl = m_pFilteringTable->rules[0].flt_rule_hdl;
+				}
 #ifdef FEATURE_IPV6_NAT
 				if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
 				{
@@ -7774,30 +7800,6 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 #endif
 				{
 					flt_rule_entry.at_rear = true;
-					if (IPACM_Iface::ipacmcfg->mape_enable  && m_is_sta_mode == ECM_WAN
-							&& mape_wan_fl_hdl == 0 ) {
-						IPACMDBG_H(" Installing next hdr based filter rule \n");
-						memcpy(&flt_rule_entry.rule.attrib,
-								&rx_prop->rx[0].attrib,
-								sizeof(struct ipa_rule_attrib));
-						flt_rule_entry.rule.hashable = true;
-						flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
-						flt_rule_entry.rule.attrib.u.v6.next_hdr = 4;
-						flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-						memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-						if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
-						{
-							IPACMERR("Error Adding Filtering rules, aborting...\n");
-							res = IPACM_FAILURE;
-							goto fail;
-						}
-						else
-						{
-							IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
-							IPACMDBG_H("flt rule hdl0=0x%x, status=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl, m_pFilteringTable->rules[0].status);
-						}
-						mape_wan_fl_hdl = m_pFilteringTable->rules[0].flt_rule_hdl;
-					}
 					if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
 						IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].if_mode == ROUTER )
 					{
@@ -9626,6 +9628,7 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 					return IPACM_FAILURE;
 				}
 				mape_wan_fl_hdl = 0;
+				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
 			}
 			if(is_ppp_iface)
 			{

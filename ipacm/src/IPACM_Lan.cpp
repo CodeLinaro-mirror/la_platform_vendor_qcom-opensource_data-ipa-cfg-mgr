@@ -5810,8 +5810,10 @@ int IPACM_Lan::handle_wan_up_v2(ipa_ip_type ip_type, uint16_t vlan_id, uint8_t *
 				/* construct 1st pass v6NAT flt-rule */
 				add_ipv6_nat_ula_prefix_flt_rule();
 
-				/* 2nd pass rule - go to RT block */
-				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				/* 2nd pass rule - send to IPv6 NAT (SRC_NAT) so that the NAT
+				 * engine processes the reply traffic; using IPA_PASS_TO_ROUTING
+				 * here bypasses NAT and breaks IPv6 NAT connectivity. */
+				flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
 			}
 			else
 #endif
@@ -6215,8 +6217,10 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 				/* construct 1st pass v6NAT flt-rule */
 				add_ipv6_nat_ula_prefix_flt_rule();
 
-				/* 2nd pass rule - go to RT block */
-				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				/* 2nd pass rule - send to IPv6 NAT (SRC_NAT) so that the NAT
+				 * engine processes the reply traffic; using IPA_PASS_TO_ROUTING
+				 * here bypasses NAT and breaks IPv6 NAT connectivity. */
+				flt_rule_entry.rule.action = IPA_PASS_TO_SRC_NAT;
 			} else
 #endif
 			if (IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() && !IPACM_Wan::isWan_Bridge_Mode())

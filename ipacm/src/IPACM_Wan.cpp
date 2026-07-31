@@ -6388,7 +6388,6 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 
 	if (m_is_sta_mode != Q6_WAN)
 	{
-		IPACM_Wan::backhaul_is_sta_mode	= true;
 		if((iptype==IPA_IP_v4) && (header_set_v4 != true))
 		{
 			IPACMDBG_H("STA ipv4-header haven't constructed \n");
@@ -6413,6 +6412,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			}
 			return IPACM_SUCCESS;
 		}
+		IPACM_Wan::backhaul_is_sta_mode = true;
 	}
 	else
 	{

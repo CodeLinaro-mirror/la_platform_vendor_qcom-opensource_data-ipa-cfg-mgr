@@ -168,6 +168,13 @@ int IPACM_Iface::handle_software_routing_enable(void)
 		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
 	}
 
+	if (ipa_if_cate == WAN_IF && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && strstr(dev_name, "pppoe") != NULL
+			&& rx_prop->num_rx_props > 2)
+	{
+		idx = 2;
+		IPACMDBG_H("PPPoE is enabled, install rules on extra Rx pipe at idx %d \n", idx);
+	}
+
 	m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
 		 calloc(1,
 						sizeof(struct ipa_ioc_add_flt_rule) +
@@ -308,6 +315,13 @@ int IPACM_Iface::handle_software_routing_disable(void)
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 		idx = 2;
 		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx1 pipe at idx %d \n", idx);
+	}
+
+	if (ipa_if_cate == WAN_IF && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && strstr(dev_name, "pppoe") != NULL
+			&& rx_prop->num_rx_props > 2)
+	{
+		idx = 2;
+		IPACMDBG_H("PPPoE is enabled, delete rules on extra Rx pipe at idx %d \n", idx);
 	}
 
 	if (softwarerouting_act == false)

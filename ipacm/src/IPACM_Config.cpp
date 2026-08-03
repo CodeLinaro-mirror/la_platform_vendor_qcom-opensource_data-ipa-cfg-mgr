@@ -26,39 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 		@file
@@ -440,6 +410,11 @@ int IPACM_Config::Init(void)
 	char	IPACM_config_file[IPA_MAX_FILE_LEN];
 	IPACM_conf_t	*cfg;
 
+	struct statvfs stat;
+	ulong available_partition_size_bytes = 0;
+	char ipacm_log_file[] = IPACM_LOG_COLLECTION_FILE;
+	char *ipacm_log_dir = NULL;
+
 	cfg = (IPACM_conf_t *)malloc(sizeof(IPACM_conf_t));
 	if(cfg == NULL)
 	{
@@ -484,6 +459,41 @@ int IPACM_Config::Init(void)
 		ret = IPACM_FAILURE;
 		goto fail;
 	}
+
+	if(cfg->max_file_size_quota > 100)
+	{
+		IPACMDBG_H("Invalid Quota Set[%d], changing to default[%d]\n",
+				cfg->max_file_size_quota, IPACM_DEF_LOG_FILE_SIZE_QUOTA);
+		cfg->max_file_size_quota = IPACM_DEF_LOG_FILE_SIZE_QUOTA;
+	}
+	ipacm_log_dir = dirname(ipacm_log_file);
+
+	/* Read the available partition size */
+	if (statvfs(ipacm_log_dir, &stat) != 0) {
+		IPACMDBG_H("Failed to get available partition size\n");
+		max_file_size = 0;
+	}
+	else
+	{
+		available_partition_size_bytes = stat.f_bavail * stat.f_frsize;
+
+		IPACMDBG_H("Setting file size to min of APS[%lu], max_filesz[%lu], \
+				Based on Quota[%lu] \n", available_partition_size_bytes,
+				cfg->max_file_size, (ulong)((available_partition_size_bytes *
+						cfg->max_file_size_quota) /100));
+
+		/* Conerting from ulong to unit32_t, since uint32_t can hold a
+		 * file size value upto 4GB. So, shouldn't affect here as the file
+		 * size configured will usually be less than that.
+		 */
+		max_file_size = (uint32_t)std::min({(ulong)(cfg->max_file_size),
+				(ulong)(available_partition_size_bytes),
+				(ulong)((available_partition_size_bytes *
+						cfg->max_file_size_quota) / 100)});
+	}
+	IPACMDBG_H("max_file_size %d \n", max_file_size);
+
+	log_init();
 
 	/* Construct IPACM Iface table */
 	ipa_num_ipa_interfaces = cfg->iface_config.num_iface_entries;

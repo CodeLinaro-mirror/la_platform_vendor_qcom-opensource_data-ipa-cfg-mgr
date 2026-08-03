@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * 
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
 	@file
@@ -73,14 +77,17 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index), ipv6ct_inst(Ip
 		if (tx_prop != NULL)
 		{
 			free(tx_prop);
+			tx_prop = NULL;
 		}
 		if (rx_prop != NULL)
 		{
 			free(rx_prop);
+			rx_prop = NULL;
 		}
 		if (iface_query != NULL)
 		{
 			free(iface_query);
+			iface_query = NULL;
 		}
 		delete this;
 		return;
@@ -148,6 +155,10 @@ IPACM_Wlan::IPACM_Wlan(int iface_index) : IPACM_Lan(iface_index), ipv6ct_inst(Ip
 
 IPACM_Wlan::~IPACM_Wlan()
 {
+	if(wlan_client != NULL)
+	{
+		free(wlan_client);
+	}
 	IPACM_EvtDispatcher::deregistr(this);
 	IPACM_IfaceManager::deregistr(this);
 	IPACM_Wlan::num_wlan_ap_iface--;
@@ -226,14 +237,17 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			if(rx_prop != NULL)
 			{
 				free(rx_prop);
+				rx_prop = NULL;
 			}
 			if(tx_prop != NULL)
 			{
 				free(tx_prop);
+				tx_prop = NULL;
 			}
 			if(iface_query != NULL)
 			{
 				free(iface_query);
+				iface_query = NULL;
 			}
 #endif
 			delete this;
@@ -1007,7 +1021,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data)
 	}
 
 	IPACMDBG_H("Wifi client number: %d\n", num_wifi_client);
-
+	memset(get_client_memptr(wlan_client, num_wifi_client), 0, sizeof(ipa_wlan_client));
 	/* add header to IPA */
 	if(tx_prop != NULL)
 	{
@@ -3055,20 +3069,6 @@ fail:
 	}
 	IPACMDBG_H("finished delete software-routing filtering rules\n ");
 
-	if (rx_prop != NULL)
-	{
-		if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
-		{
-			/* Delete corresponding ipa_rm_resource_name of RX-endpoint after delete all IPV4V6 FT-rule */
-			IPACMDBG_H("dev %s add producer dependency\n", dev_name);
-			IPACMDBG_H("depend Got pipe %d rm index : %d \n", rx_prop->rx[0].src_pipe, IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
-			IPACM_Iface::ipacmcfg->DelRmDepend(IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[rx_prop->rx[0].src_pipe]);
-		}
-#ifndef FEATURE_ETH_BRIDGE_LE
-		free(rx_prop);
-#endif
-	}
-
 	for (i = 0; i < num_wifi_client; i++)
 	{
 		if(get_client_memptr(wlan_client, i)->p_hdr_info != NULL)
@@ -3079,18 +3079,8 @@ fail:
 	if(wlan_client != NULL)
 	{
 		free(wlan_client);
+		wlan_client = NULL;
 	}
-#ifndef FEATURE_ETH_BRIDGE_LE
-	if (tx_prop != NULL)
-	{
-		free(tx_prop);
-	}
-
-	if (iface_query != NULL)
-	{
-		free(iface_query);
-	}
-#endif
 
 	is_active = false;
 	post_del_self_evt();

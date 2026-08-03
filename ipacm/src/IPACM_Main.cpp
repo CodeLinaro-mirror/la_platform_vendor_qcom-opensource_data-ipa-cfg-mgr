@@ -30,7 +30,7 @@
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
-/*!
+ /*!
 	@file
 	IPACM_Main.cpp
 
@@ -113,7 +113,6 @@
 IPACM_Neighbor *neigh = NULL;
 
 uint32_t ipacm_event_stats[IPACM_EVENT_MAX];
-bool ipacm_logging = true;
 
 void ipa_is_ipacm_running(void);
 int ipa_get_if_index(char *if_name, int *if_index);
@@ -443,11 +442,12 @@ void* ipa_driver_msg_notifier(void *param)
 			}
 			memcpy(event_ex, buffer + sizeof(struct ipa_msg_meta), length);
 			data_ex = (ipacm_event_data_wlan_ex *)malloc(sizeof(ipacm_event_data_wlan_ex) + event_ex_o.num_of_attribs * sizeof(ipa_wlan_hdr_attrib_val));
-		    if (data_ex == NULL)
-		    {
+		    	if (data_ex == NULL)
+		    	{
 				IPACMERR("unable to allocate memory for event data\n");
-		    	return NULL;
-		    }
+				free(event_ex);
+				return NULL;
+			}
 			data_ex->num_of_attribs = event_ex->num_of_attribs;
 
 			memcpy(data_ex->attribs,
@@ -1000,6 +1000,7 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	case SIGBUS:
 	case SIGABRT:
 	case SIGTERM:
+		log_ipacm_crash_info("IPACM EXIT ABNORMALLY !!!!!");
 		p = (ucontext_t *)extra;
 		IPACMERR("siginfo address=%x\n", info->si_addr);
 		IPACMERR("arm_pc address = 0x%X\n", p->uc_mcontext.arm_pc);
@@ -1101,7 +1102,6 @@ int main(int argc, char **argv)
 
 	/* check if ipacm is already running or not */
 	ipa_is_ipacm_running();
-
 	IPACMDBG_H("In main()\n");
 
 #ifdef FEATURE_IPACM_RESTART

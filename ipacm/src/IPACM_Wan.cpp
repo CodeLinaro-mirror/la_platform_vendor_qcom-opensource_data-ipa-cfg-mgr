@@ -26,39 +26,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- *
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *
- *   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear.
  */
 /*!
 		@file
@@ -285,6 +255,31 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 
 IPACM_Wan::~IPACM_Wan()
 {
+	/* EventDispatcher/IfaceManager deregistration is performed
+	* before object destruction in the WAN event handling path.
+	* Destructor only releases locally owned resources.
+	*/
+	if (wan_route_rule_v4_hdl != NULL)
+	{
+		free(wan_route_rule_v4_hdl);
+		wan_route_rule_v4_hdl = NULL;
+	}
+	if (wan_route_rule_v6_hdl != NULL)
+	{
+		free(wan_route_rule_v6_hdl);
+		wan_route_rule_v6_hdl = NULL;
+	}
+	if (wan_client != NULL)
+	{
+		free(wan_client);
+		wan_client = NULL;
+	}
+	if (ext_prop != NULL)
+	{
+		free(ext_prop);
+		ext_prop = NULL;
+	}
+
 	IPACM_EvtDispatcher::deregistr(this);
 	IPACM_IfaceManager::deregistr(this);
 	return;
@@ -298,11 +293,17 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 	{
 		if(iptype == IPA_IP_v4)
 		{
+			if (!(IPACM_Wan::ipv4_to_iface[i].pIface))
+			{
+				IPACMERR("couldn't find MUX for VID %d\n", vlan_id);
+				continue;
+			}
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 			{
 				for(int j = 0; j <  ipv4_to_iface[i].VID_cnt; j++)
 				{
-					if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
+					if((IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop) &&
+						(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id))
 					{
 						*mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
 						return IPACM_SUCCESS;
@@ -312,11 +313,17 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 		}
 		else
 		{
+			if(!(IPACM_Wan::ipv6_to_iface[i].pIface))
+			{
+				IPACMERR("couldn't find MUX for VID %d\n", vlan_id);
+				continue;
+			}
 			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
 			{
 				for(int j = 0; j < ipv6_to_iface[i].VID_cnt; j++)
 				{
-					if(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id)
+					if((IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop) &&
+							(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id))
 					{
 						*mux_id = IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
 						return IPACM_SUCCESS;
@@ -471,6 +478,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			if(m_header.GetHeaderHandle(&hdr) == false)
 			{
 				IPACMERR("Failed to get QMAP header.\n");
+				free(rt_rule);
+				rt_rule = NULL;
 				return IPACM_FAILURE;
 			}
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
@@ -721,6 +730,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			if(m_header.GetHeaderHandle(&hdr) == false)
 			{
 				IPACMERR("Failed to get QMAP header.\n");
+				free(rt_rule);
+				rt_rule = NULL;
 				return IPACM_FAILURE;
 			}
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
@@ -812,6 +823,7 @@ fail:
 	if(rt_rule != NULL)
 	{
 		free(rt_rule);
+		rt_rule = NULL;
 	}
 
 	return res;
@@ -1891,6 +1903,8 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			if(m_header.GetHeaderHandle(&hdr) == false)
 			{
 				IPACMERR("Failed to get QMAP header.\n");
+				free(rt_rule);
+				rt_rule = NULL;
 				return IPACM_FAILURE;
 			}
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
@@ -1912,6 +1926,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			{
 				IPACMERR("Routing rule addition failed!\n");
 				free(rt_rule);
+				rt_rule = NULL;
 				return IPACM_FAILURE;
 			}
 			wan_route_rule_v6_hdl_a5 = rt_rule_entry->rt_rule_hdl;
@@ -1919,6 +1934,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				wan_route_rule_v6_hdl_a5, 0, iptype);
 
 			free(rt_rule);
+			rt_rule = NULL;
 		}
 			/* Xlat case pdn_index might not be populated*/
 			if (modem_ipv6_pdn_index == -1) {
@@ -2311,6 +2327,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 				{
 		    		IPACMERR("Routing rule addition failed!\n");
 		    		free(rt_rule);
+					rt_rule = NULL;
 		    		return IPACM_FAILURE;
 				}
 				wan_route_rule_v4_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
@@ -2336,6 +2353,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 				{
 		    		IPACMERR("Routing rule addition failed!\n");
 		    		free(rt_rule);
+					rt_rule = NULL;
 		    		return IPACM_FAILURE;
 				}
 				wan_route_rule_v6_hdl[tx_index] = rt_rule_entry->rt_rule_hdl;
@@ -2362,6 +2380,8 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			if(m_header.GetHeaderHandle(&hdr) == false)
 			{
 				IPACMERR("Failed to get QMAP header.\n");
+				free(rt_rule);
+				rt_rule = NULL;
 				return IPACM_FAILURE;
 			}
 			rt_rule_entry->rule.hdr_hdl = hdr.hdl;
@@ -2375,6 +2395,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			{
 				IPACMERR("Construct dummy ethernet_header failed!\n");
 				free(rt_rule);
+				rt_rule = NULL;
 				return IPACM_FAILURE;
 			}
 			rt_rule_entry->rule.hdr_proc_ctx_hdl = hdr_proc_hdl_dummy_v6;
@@ -2400,6 +2421,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			{
 				IPACMERR("Routing rule addition failed!\n");
 				free(rt_rule);
+				rt_rule = NULL;
 				return IPACM_FAILURE;
 			}
 			wan_route_rule_v6_hdl_a5 = rt_rule_entry->rt_rule_hdl;
@@ -2426,6 +2448,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	{
 		IPACMERR("Unable to allocate memory\n");
 		free(rt_rule);
+		rt_rule = NULL;
 		return IPACM_FAILURE;
 	}
 	memset(wanup_data, 0, sizeof(ipacm_event_iface_up));
@@ -2583,6 +2606,7 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 	if(rt_rule != NULL)
 	{
 		free(rt_rule);
+		rt_rule = NULL;
 	}
 	return IPACM_SUCCESS;
 }
@@ -4620,8 +4644,8 @@ int IPACM_Wan::query_ext_prop()
 		if (ret < 0)
 		{
 			IPACMERR("ioctl IPA_IOC_QUERY_INTF_EXT_PROPS failed\n");
-			/* ext_prop memory will free when iface-down*/
 			free(ext_prop);
+			ext_prop = NULL;
 			close(fd);
 			return ret;
 		}
@@ -5915,26 +5939,32 @@ fail:
 	if (tx_prop != NULL)
 	{
 		free(tx_prop);
+		tx_prop = NULL;
 	}
 	if (rx_prop != NULL)
 	{
 		free(rx_prop);
+		rx_prop = NULL;
 	}
 	if (iface_query != NULL)
 	{
 		free(iface_query);
+		iface_query = NULL;
 	}
 	if (wan_route_rule_v4_hdl != NULL)
 	{
 		free(wan_route_rule_v4_hdl);
+		wan_route_rule_v4_hdl = NULL;
 	}
 	if (wan_route_rule_v6_hdl != NULL)
 	{
 		free(wan_route_rule_v6_hdl);
+		wan_route_rule_v6_hdl = NULL;
 	}
 	if (wan_client != NULL)
 	{
 		free(wan_client);
+		wan_client = NULL;
 	}
 	close(m_fd_ipa);
 	return res;
@@ -5983,13 +6013,12 @@ int IPACM_Wan::handle_down_evt_ex()
 		num_ipv4_modem_pdn--;
 		IPACMDBG_H("Now the number of modem ipv4 pdn is %d.\n", num_ipv4_modem_pdn);
 #ifdef FEATURE_VLAN_MPDN
-		if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
+		if((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
 		{
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_vlan_pdn *vlandown_data;
 
 			ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
-			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
 			memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
 			ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
 			num_offloaded_pdns--;
@@ -6037,10 +6066,12 @@ int IPACM_Wan::handle_down_evt_ex()
 				install_wan_filtering_rule(false);
 			}
 		}
-
-		ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
-		ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
-
+		if(modem_ipv4_pdn_index >= 0)
+		{
+			ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
+			ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
+			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
+		}
 		/* if no PDN is up, remove rm dependencies */
 		if(!isVlanWanUP() && !isVlanWanUP_V6() && !wan_up && !wan_up_v6)
 		{
@@ -6214,8 +6245,11 @@ int IPACM_Wan::handle_down_evt_ex()
 				install_wan_filtering_rule(false);
 			}
 		}
-		memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
-		ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
+		if(modem_ipv6_pdn_index >= 0)
+		{
+			memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
+			ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
+		}
 
 		/* if no PDN is up, remove rm dependencies */
 		if(!isVlanWanUP() && !isVlanWanUP_V6() && !wan_up && !wan_up_v6)
@@ -6331,8 +6365,8 @@ int IPACM_Wan::handle_down_evt_ex()
 #ifdef FEATURE_VLAN_MPDN
 		IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
 
-		if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan ||
-			ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
+		if((modem_ipv4_pdn_index >= 0 && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan) ||
+			(modem_ipv6_pdn_index >= 0 && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6))
 		{
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_vlan_pdn *vlandown_data;
@@ -6391,12 +6425,18 @@ int IPACM_Wan::handle_down_evt_ex()
 
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 		}
+		if(modem_ipv4_pdn_index >= 0)
+		{
+			ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
+			ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
+			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
 
-		ipv4_to_iface[modem_ipv4_pdn_index].ipv4_addr = 0;
-		ipv4_to_iface[modem_ipv4_pdn_index].pIface = NULL;
-		memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
-		ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
-
+		}
+		if(modem_ipv6_pdn_index >= 0)
+		{
+			memset(&ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
+			ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
+		}
 		if(!isVlanWanUP())
 		{
 			if(IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
@@ -6588,30 +6628,37 @@ fail:
 	if (tx_prop != NULL)
 	{
 		free(tx_prop);
+		tx_prop = NULL;
 	}
 	if (rx_prop != NULL)
 	{
 		free(rx_prop);
+		rx_prop = NULL;
 	}
 	if (ext_prop != NULL)
 	{
 		free(ext_prop);
+		ext_prop = NULL;
 	}
 	if (iface_query != NULL)
 	{
 		free(iface_query);
+		iface_query = NULL;
 	}
 	if (wan_route_rule_v4_hdl != NULL)
 	{
 		free(wan_route_rule_v4_hdl);
+		wan_route_rule_v4_hdl = NULL;
 	}
 	if (wan_route_rule_v6_hdl != NULL)
 	{
 		free(wan_route_rule_v6_hdl);
+		wan_route_rule_v6_hdl = NULL;
 	}
 	if (wan_client != NULL)
 	{
 		free(wan_client);
+		wan_client = NULL;
 	}
 	close(m_fd_ipa);
 	return res;
@@ -7564,6 +7611,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				{
 					IPACMERR("Routing rule addition failed!\n");
 					free(rt_rule);
+					rt_rule = NULL;
 					return IPACM_FAILURE;
 				}
 
@@ -7614,6 +7662,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					{
 						IPACMERR("Routing rule addition failed!\n");
 						free(rt_rule);
+						rt_rule = NULL;
 						return IPACM_FAILURE;
 					}
 
@@ -7645,6 +7694,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					{
 						IPACMERR("Routing rule addition failed!\n");
 						free(rt_rule);
+						rt_rule = NULL;
 						return IPACM_FAILURE;
 					}
 
@@ -7657,6 +7707,7 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 		} /* end of for loop */
 
 		free(rt_rule);
+		rt_rule = NULL;
 
 		if (iptype == IPA_IP_v4)
 		{
@@ -7767,6 +7818,7 @@ void IPACM_Wan::handle_wlan_SCC_MCC_switch(bool isSCCMode, ipa_ip_type iptype)
 			{
 				IPACMERR("Routing rule modify failed!\n");
 				free(rt_rule);
+				rt_rule = NULL;
 				return;
 			}
 
@@ -7774,6 +7826,7 @@ void IPACM_Wan::handle_wlan_SCC_MCC_switch(bool isSCCMode, ipa_ip_type iptype)
 		}
 
 		free(rt_rule);
+		rt_rule = NULL;
 	}
 
 	return;
@@ -7875,6 +7928,7 @@ void IPACM_Wan::handle_wan_client_SCC_MCC_switch(bool isSCCMode, ipa_ip_type ipt
 				{
 					IPACMERR("Routing rule modify failed!\n");
 					free(rt_rule);
+					rt_rule = NULL;
 					return;
 				}
 			}
@@ -7951,6 +8005,7 @@ void IPACM_Wan::handle_wan_client_SCC_MCC_switch(bool isSCCMode, ipa_ip_type ipt
 					{
 						IPACMERR("Routing rule Modify failed!\n");
 						free(rt_rule);
+						rt_rule = NULL;
 						return;
 					}
 				}
@@ -7960,6 +8015,7 @@ void IPACM_Wan::handle_wan_client_SCC_MCC_switch(bool isSCCMode, ipa_ip_type ipt
 	}
 
 	free(rt_rule);
+	rt_rule = NULL;
 	return;
 }
 

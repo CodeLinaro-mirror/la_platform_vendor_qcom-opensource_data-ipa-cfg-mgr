@@ -4616,7 +4616,7 @@ int IPACM_Config::SetSpclIface(char *event_iface_name) {
 void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 {
 	list<qos_param_info>::iterator it_qos_params;
-	qos_param_info new_qos_info = { 0 };
+	qos_param_info new_qos_info = {};
 	ipacm_cmd_q_data evt_data;
 
 	if(pthread_mutex_lock(&qos_param_list_lock) != 0)

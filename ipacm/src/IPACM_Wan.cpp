@@ -13872,7 +13872,7 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 					IPACMERR("QOS param PCP no action from IPA in UL \n");
 				}
 
-				if (qos_param->dscp_mark_val || qos_param->pcp_mark_val)
+				if (qos_param->dscp_mark_val || qos_param->pcp_mark_val != INVALID_PCP_MARK)
 				{
 					IPACMDBG_H("qos ul dscp_mark_val is %d pcp_mark_val is %d\n",
 						qos_param->dscp_mark_val, qos_param->pcp_mark_val);
@@ -13895,7 +13895,7 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 						hdr_proc_ctx->pdn_dscp_params.valid = 1;
 						hdr_proc_ctx->pdn_dscp_params.dscp_val = qos_param->dscp_mark_val;
 					}
-					if (qos_param->pcp_mark_val)
+					if (qos_param->pcp_mark_val != INVALID_PCP_MARK)
 					{
 						hdr_proc_ctx->pdn_dscp_params.pcp_valid = 1;
 						hdr_proc_ctx->pdn_dscp_params.pcp_val = qos_param->pcp_mark_val;
@@ -14035,7 +14035,7 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 					IPACMERR("QOS param PCP no v6 route rule action from IPA in UL\n");
 				}
 
-				if (qos_param->dscp_mark_val || qos_param->pcp_mark_val)
+				if (qos_param->dscp_mark_val || qos_param->pcp_mark_val != INVALID_PCP_MARK)
 				{
 					int size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
 					hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
@@ -14056,7 +14056,7 @@ int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 						hdr_proc_ctx->pdn_dscp_params.valid = 1;
 						hdr_proc_ctx->pdn_dscp_params.dscp_val = qos_param->dscp_mark_val;
 					}
-					if (qos_param->pcp_mark_val)
+					if (qos_param->pcp_mark_val != INVALID_PCP_MARK)
 					{
 						hdr_proc_ctx->pdn_dscp_params.pcp_valid = 1;
 						hdr_proc_ctx->pdn_dscp_params.pcp_val = qos_param->pcp_mark_val;

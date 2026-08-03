@@ -1872,10 +1872,12 @@ int IPACM_Wan::handle_addr_del_evt(ipacm_event_data_addr *data)
 					IPACMDBG_H("Not Any vlan is Up..:\n");
 				}
 				num_ipv4_sta_pdn--;
-				public_wan_v4_addr = 0;
-				public_wan_v4_addr_set = false;
-				wan_v4_addr = 0;
-				wan_v4_addr_set = false;
+				/* Don't clear wan_v4_addr/public_wan_v4_addr here: the route-delete
+				 * event for this PDN (handle_route_del_evt) hasn't run yet and still
+				 * needs the real address to post IPA_HANDLE_WAN_DOWN/RemovePdn with.
+				 * Clearing it here would make that later lookup use 0.0.0.0 and
+				 * remove the wrong (or no) PDN. handle_route_del_evt() clears these
+				 * once it has consumed them. */
 
 				if (rx_prop != NULL && num_ipv4_sta_pdn == 0)
 				{
@@ -9823,6 +9825,17 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype, bool wan_up_vlan)
 			else
 			{
 				memset(IPACM_Wan::wan_up_dev_name, 0, sizeof(IPACM_Wan::wan_up_dev_name));
+			}
+			/* Now that IPA_HANDLE_WAN_DOWN has been posted with the real address
+			 * (moved here from handle_addr_del_evt, which used to clear these
+			 * before this event ever consumed them, causing RemovePdn(0) and a
+			 * leaked PDN), it is safe to clear the cached STA address. */
+			if (m_is_sta_mode != Q6_WAN)
+			{
+				public_wan_v4_addr = 0;
+				public_wan_v4_addr_set = false;
+				wan_v4_addr = 0;
+				wan_v4_addr_set = false;
 			}
 		}
 		else

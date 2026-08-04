@@ -1345,13 +1345,6 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 					}
 #endif
 					IPACMDBG_H("LAN iface delete client \n");
-					/* Delete QOS rules. */
-					if (IPACM_Iface::ipacmcfg->ipacm_qos_enable) {
-						delete_client_qos_rule(data->mac_addr, vlan_id, IPA_IP_v4, NULL);
-						delete_client_qos_rule(data->mac_addr, vlan_id, IPA_IP_v6, NULL);
-					}
-					handle_eth_client_down_evt(data->mac_addr, vlan_id, data);
-					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, data->iface_name, vlan_id);
 				}
 #ifdef FEATURE_L2TP
 				else

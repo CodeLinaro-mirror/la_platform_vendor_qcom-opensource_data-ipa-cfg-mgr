@@ -3965,7 +3965,15 @@ bool IPACM_Config::detect_and_handle_collision(const char* dev_name, uint32_t wa
 		private_subnet_table[i].isCollisionSubnet = true;
 
 		vid = get_bridge_vlan_mapping_from_subnet(entry.subnet_addr);
-		if_index = ipa_get_if_idx_by_vid(vid);
+		if (vid != 0) {
+			/* VLAN-associated subnet (e.g. VLAN MPDN bridge): resolve if_index via the VLAN sub-interface */
+			if_index = ipa_get_if_idx_by_vid(vid);
+		}
+		else {
+			/* Non-VLAN subnet: if_index is already tracked on the private subnet entry itself */
+			if_index = entry.if_index;
+			IPACMDBG_H("Non-VLAN subnet (0x%x): using stored if_index: %d\n", entry.subnet_addr, if_index);
+		}
 
 		ipacm_cmd_q_data evt_data{};
 		data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));

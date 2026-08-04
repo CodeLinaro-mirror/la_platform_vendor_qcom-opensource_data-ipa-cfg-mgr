@@ -29,7 +29,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 Changes from Qualcomm Innovation Center are provided under the following license:
 Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
-
 */
 /*!
 	@file
@@ -49,38 +48,47 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 
 pthread_mutex_t mutex    = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  cond_var = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 MessageQueue* MessageQueue::inst_internal = NULL;
 MessageQueue* MessageQueue::inst_external = NULL;
 
 MessageQueue* MessageQueue::getInstanceInternal()
 {
+	pthread_mutex_lock(&queue_mutex);
 	if(inst_internal == NULL)
 	{
-		inst_internal = new MessageQueue();
-		if(inst_internal == NULL)
-		{
-			IPACM_LOG(IPACM_LOG_ERR, "unable to create internal Message Queue instance\n");
-			return NULL;
-		}
+		inst_internal = new(std::nothrow) MessageQueue();
+	}
+	MessageQueue* result = inst_internal;
+	pthread_mutex_unlock(&queue_mutex);
+
+	if(result == NULL)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "unable to create internal Message Queue instance\n");
+		return NULL;
 	}
 
-	return inst_internal;
+	return result;
 }
 
 MessageQueue* MessageQueue::getInstanceExternal()
 {
+	pthread_mutex_lock(&queue_mutex);
 	if(inst_external == NULL)
 	{
-		inst_external = new MessageQueue();
-		if(inst_external == NULL)
-		{
-			IPACM_LOG(IPACM_LOG_ERR, "unable to create external Message Queue instance\n");
-			return NULL;
-		}
+		inst_external = new(std::nothrow) MessageQueue();
+	}
+	MessageQueue* result = inst_external;
+	pthread_mutex_unlock(&queue_mutex);
+
+	if(result == NULL)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "unable to create external Message Queue instance\n");
+		return NULL;
 	}
 
-	return inst_external;
+	return result;
 }
 
 void MessageQueue::enqueue(Message *item)

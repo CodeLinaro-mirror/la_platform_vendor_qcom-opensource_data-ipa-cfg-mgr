@@ -25,6 +25,10 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 /*!
 	@file
@@ -50,32 +54,40 @@ MessageQueue* MessageQueue::inst_external = NULL;
 
 MessageQueue* MessageQueue::getInstanceInternal()
 {
+	pthread_mutex_lock(&mutex);
 	if(inst_internal == NULL)
 	{
-		inst_internal = new MessageQueue();
-		if(inst_internal == NULL)
-		{
-			IPACMERR("unable to create internal Message Queue instance\n");
-			return NULL;
-		}
+		inst_internal = new(std::nothrow) MessageQueue();
+	}
+	MessageQueue* result = inst_internal;
+	pthread_mutex_unlock(&mutex);
+
+	if(result == NULL)
+	{
+		IPACMERR("unable to create internal Message Queue instance\n");
+		return NULL;
 	}
 
-	return inst_internal;
+	return result;
 }
 
 MessageQueue* MessageQueue::getInstanceExternal()
 {
+	pthread_mutex_lock(&mutex);
 	if(inst_external == NULL)
 	{
-		inst_external = new MessageQueue();
-		if(inst_external == NULL)
-		{
-			IPACMERR("unable to create external Message Queue instance\n");
-			return NULL;
-		}
+		inst_external = new(std::nothrow) MessageQueue();
+	}
+	MessageQueue* result = inst_external;
+	pthread_mutex_unlock(&mutex);
+
+	if(result == NULL)
+	{
+		IPACMERR("unable to create external Message Queue instance\n");
+		return NULL;
 	}
 
-	return inst_external;
+	return result;
 }
 
 void MessageQueue::enqueue(Message *item)

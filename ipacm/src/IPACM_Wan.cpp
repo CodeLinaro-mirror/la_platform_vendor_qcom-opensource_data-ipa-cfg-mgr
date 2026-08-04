@@ -7246,6 +7246,11 @@ int IPACM_Wan::handle_sta_header_add_evt()
 			if(wan_v6_addr_gw_set)
 			{
 				gw_index = get_wan_client_index_ipv6(wan_v6_addr_gw);
+				if (gw_index == IPACM_INVALID_INDEX)
+				{
+					IPACMDBG_H("v6 gw client not registered yet, waiting\n");
+					return IPACM_FAILURE;
+				}
 				if (gw_index != index)
 				{
 					IPACMDBG_H(" v6 gw index:%d not matching with v4 index:%d\n",
@@ -7311,13 +7316,27 @@ int IPACM_Wan::handle_sta_header_add_evt()
 				IPACMDBG_H("currently can't find matched wan-client's MAC-addr, waiting for header construction\n");
 				if(m_is_sta_mode != Q6_WAN)
 					return IPACM_FAILURE;
+				/* Q6_WAN has no MAC-based neighbor; fall through and use
+				 * v4 GW address to identify the client instead. */
 			}
 
-			/* Make sure the GW MAC is same for both v4 and v6. */
+			/* For normal modes: cross-validate that the v4 and v6 GW resolve to
+			 * the same client entry.  For Q6_WAN fall-through (no MAC-based v6
+			 * neighbor): use the v4 GW lookup as the sole client identifier. */
 			if(wan_v4_addr_gw_set)
 			{
 				gw_index = get_wan_client_index_ipv4(wan_v4_addr_gw);
-				if (gw_index != index)
+				if (gw_index == IPACM_INVALID_INDEX)
+				{
+					IPACMDBG_H("Q6_WAN: v4 gw client not registered yet, waiting\n");
+					return IPACM_FAILURE;
+				}
+				/* Q6_WAN fall-through: adopt v4 GW index; otherwise cross-validate v4/v6 match */
+				if (index == IPACM_INVALID_INDEX)
+				{
+					index = gw_index;
+				}
+				else if (gw_index != index)
 				{
 					IPACMDBG_H(" v4 gw index:%d not matching with v6 index:%d\n",
 						gw_index, index);
@@ -7335,11 +7354,23 @@ int IPACM_Wan::handle_sta_header_add_evt()
 					return IPACM_FAILURE;
 				}
 			}
-			else if(!header_set_v4 && get_client_memptr(wan_client, index)->ipv4_header_set)
+			else if(!header_set_v4 && index != IPACM_INVALID_INDEX &&
+					get_client_memptr(wan_client, index)->ipv4_header_set)
 			{
 				hdr_hdl_sta_v4 = get_client_memptr(wan_client, index)->hdr_hdl_v4;
 				header_set_v4 = true;
 				IPACMDBG_H("add full ipv4 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v4);
+			}
+			else if (!header_set_v4 && index == IPACM_INVALID_INDEX)
+			{
+				IPACMDBG_H("Q6_WAN: no valid client index and no v4 gw set, cannot set v4 header\n");
+				return IPACM_FAILURE;
+			}
+			else if (!header_set_v4 && index != IPACM_INVALID_INDEX &&
+					!get_client_memptr(wan_client, index)->ipv4_header_set)
+			{
+				IPACMERR("wan-client found but ipv4 header not yet constructed\n");
+				return IPACM_FAILURE;
 			}
 		}
 	}

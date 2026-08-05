@@ -547,30 +547,28 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			memcpy(ipv6_prefix, data->ipv6_addr, sizeof(ipv6_prefix));
 			memcpy(m_ipv6_addr, data->ipv6_addr, sizeof(m_ipv6_addr));
 #ifdef FEATURE_VLAN_MPDN
+			if (modem_ipv6_pdn_index == -1) {
+				modem_ipv6_pdn_index = getFreePDNIndex_V6();
+				if (modem_ipv6_pdn_index == -1)
+				{
+					/* add this prefix to no_offload_ipv6_prefix */
+					IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_prefix);
+					IPACMERR("No Free index available.!\n");
+					res = IPACM_FAILURE;
+					goto fail;
+				}
+			}
+
+			memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
+			ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
+			IPACMDBG_H("index %d prefix: 0x%08x%08x\n", modem_ipv6_pdn_index,
+			ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
+			ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
 			if(m_is_sta_mode == Q6_WAN)
 			{
-				if (modem_ipv6_pdn_index == -1) {
-					modem_ipv6_pdn_index = getFreePDNIndex_V6();
-					if (modem_ipv6_pdn_index == -1)
-					{
-						/* add this prefix to no_offload_ipv6_prefix */
-						IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_prefix);
-						IPACMERR("No Free index available.!\n");
-						res = IPACM_FAILURE;
-						goto fail;
-					}
-				}
-
-				memcpy(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, data->ipv6_addr, sizeof(uint32_t) * 2);
-				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
 				IPACM_Iface::ipacmcfg->add_no_offload_ipv6_prefix(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix);
-				IPACMDBG_H("index %d prefix: 0x%08x%08x\n", modem_ipv6_pdn_index,
-				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
-				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
-
 				num_ipv6_modem_pdn++;
 				IPACMDBG_H("Now the number of modem ipv6 pdn is %d.\n", num_ipv6_modem_pdn);
-
 			}
 #endif
 		}
@@ -4059,7 +4057,14 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				{
 					return res;
 				}
-				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
+				if(m_is_sta_mode == WLAN_WAN || (curr_interface->m_is_sta_mode == WLAN_WAN))
+				{
+					rules[pos].mux_id = 0;
+				}
+				else
+				{
+					rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
+				}
 				++pos;
 			}
 		}
@@ -4090,11 +4095,14 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			{
 				IPACM_Wan* curr_interface = offloaded_pdns_v4[i].second->pIface;
 				IPACMDBG_H("adding firewall rules for iface %s\n", curr_interface->dev_name);
-				res = add_firewall_rules_ex(*offloaded_pdns_v4[i].first, iptype, curr_interface->ext_prop->ext[0].mux_id,
-					curr_interface->rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - offloaded_pdns_count_v4, pos);
-				if (res != IPACM_SUCCESS)
+				if(m_is_sta_mode == Q6_WAN && curr_interface->ext_prop != NULL)
 				{
-					return res;
+					res = add_firewall_rules_ex(*offloaded_pdns_v4[i].first, iptype, curr_interface->ext_prop->ext[0].mux_id,
+						curr_interface->rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - offloaded_pdns_count_v4, pos);
+					if (res != IPACM_SUCCESS)
+					{
+						return res;
+					}
 				}
 			}
 #else
@@ -4119,10 +4127,14 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 				return res;
 			}
 			IPACMDBG_H("m_is_sta_mode %d\n", m_is_sta_mode);
-			if(m_is_sta_mode == WLAN_WAN)
+			if(m_is_sta_mode == WLAN_WAN || (curr_interface->m_is_sta_mode == WLAN_WAN))
+			{
 				rules[pos].mux_id = 0;
+			}
 			else
+			{
 				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
+			}
 			++pos;
 		}
 		if(offloaded_pdns_count_v4)
@@ -4153,11 +4165,14 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 		{
 			IPACM_Wan* curr_interface = offloaded_pdns_v6[i].second->pIface;
 			IPACMDBG_H("adding firewall rules for iface %s ip-type %d\n", curr_interface->dev_name, iptype);
-			res = add_firewall_rules_ex(*offloaded_pdns_v6[i].first, iptype, curr_interface->ext_prop->ext[0].mux_id,
-				curr_interface->rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - offloaded_pdns_count_v6, pos);
-			if(res != IPACM_SUCCESS)
+			if(m_is_sta_mode == Q6_WAN && curr_interface->ext_prop != NULL)
 			{
-				return res;
+				res = add_firewall_rules_ex(*offloaded_pdns_v6[i].first, iptype, curr_interface->ext_prop->ext[0].mux_id,
+					curr_interface->rx_prop->rx[0].attrib, rules, IPA_MAX_FLT_RULE - offloaded_pdns_count_v6, pos);
+				if(res != IPACM_SUCCESS)
+				{
+					return res;
+				}
 			}
 		}
 #else
@@ -4182,7 +4197,13 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 
 #ifdef FEATURE_VLAN_MPDN
 			/* this rule shall apply to all PDNs, but we must send some MUX ID in the QMI */
-			rules[pos].mux_id = ext_prop->ext[0].mux_id;
+			if((m_is_sta_mode == WLAN_WAN) ||
+			(curr_interface->m_is_sta_mode == WLAN_WAN))
+				rules[pos].mux_id = 0;
+			else
+			{
+				rules[pos].mux_id = ext_prop->ext[0].mux_id;
+			}
 #endif
 			++pos;
 		}
@@ -4200,7 +4221,17 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			{
 				return res;
 			}
-			rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
+			if((m_is_sta_mode == WLAN_WAN) ||
+			(curr_interface->m_is_sta_mode == WLAN_WAN))
+			{
+				rules[pos].mux_id = 0;
+				IPACMDBG_H("Added mux id 0\n");
+			}
+			else
+			{
+				IPACMDBG_H("Adding mux id %d \n", curr_interface->ext_prop->ext[0].mux_id);
+				rules[pos].mux_id = curr_interface->ext_prop->ext[0].mux_id;
+			}
 			++pos;
 		}
 
@@ -4640,6 +4671,7 @@ int IPACM_Wan::add_icmp_alg_rules(struct ipa_flt_rule_add *rules, int rule_offse
 #ifdef FEATURE_VLAN_MPDN
 	int num_icmp_rules = 0;
 #endif
+	bool is_rule_added = false;
 	struct ipa_flt_rule_add flt_rule_entry;
 	IPACM_Config* ipacm_config = IPACM_Iface::ipacmcfg;
 	ipa_ioc_generate_flt_eq flt_eq;
@@ -4711,11 +4743,25 @@ int IPACM_Wan::add_icmp_alg_rules(struct ipa_flt_rule_add *rules, int rule_offse
 			if(ipv4_to_iface[i].pIface &&
 				(ipv4_to_iface[i].wan_up_vlan || isDefaultGatewayIfaceUp(ipv4_to_iface[i].pIface)))
 			{
-				IPACMDBG_H("adding ICMP rule for IF %s ipv4\n", ipv4_to_iface[i].pIface->dev_name);
-				rules[rule_offset + i].mux_id = ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
-				memcpy(&(rules[rule_offset + i].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-				IPACM_Wan::num_v4_flt_rule++;
-				num_icmp_rules++;
+				is_rule_added = false;
+				IPACMDBG_H("adding ICMPv4 rule for IF %s \n", ipv4_to_iface[i].pIface->dev_name);
+				if (m_is_sta_mode == Q6_WAN && ipv4_to_iface[i].pIface->ext_prop != NULL)
+				{
+					rules[rule_offset + i].mux_id = ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+					is_rule_added = true;
+				}
+				else if(ipv4_to_iface[i].pIface->m_is_sta_mode == WLAN_WAN)
+				{
+					rules[rule_offset + i].mux_id = 0;
+					is_rule_added = true;
+				}
+
+				if(is_rule_added == true)
+				{
+					memcpy(&(rules[rule_offset + i].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+					IPACM_Wan::num_v4_flt_rule++;
+					num_icmp_rules++;
+				}
 			}
 		}
 #else
@@ -4791,11 +4837,25 @@ int IPACM_Wan::add_icmp_alg_rules(struct ipa_flt_rule_add *rules, int rule_offse
 		{
 			if(ipv6_to_iface[i].pIface && (ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
 			{
-				IPACMDBG_H("adding ICMPv6 rule for IF %s \n", ipv6_to_iface[i].pIface->dev_name);
-				rules[rule_offset + i].mux_id = ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
-				memcpy(&(rules[rule_offset + i].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
-				IPACM_Wan::num_v6_flt_rule++;
-				num_icmp_rules++;
+				is_rule_added = false;
+				IPACMDBG_H("adding ICMP rule for IF %s ipv6\n", ipv6_to_iface[i].pIface->dev_name);
+				if(m_is_sta_mode == Q6_WAN && ipv6_to_iface[i].pIface->ext_prop != NULL)
+				{
+					rules[rule_offset + i].mux_id = ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+					is_rule_added = true;
+				}
+				else if(ipv6_to_iface[i].pIface->m_is_sta_mode == WLAN_WAN)
+				{
+					rules[rule_offset + i].mux_id = 0;
+					is_rule_added = true;
+				}
+
+				if(is_rule_added == true)
+				{
+					memcpy(&(rules[rule_offset + i].flt_rule), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+					IPACM_Wan::num_v6_flt_rule++;
+					num_icmp_rules++;
+				}
 			}
 		}
 #else
@@ -6297,7 +6357,17 @@ int IPACM_Wan::handle_down_evt()
 			goto fail;
 		}
 	}
+
 fail:
+#ifdef FEATURE_VLAN_MPDN
+	if(modem_ipv6_pdn_index >= 0)
+	{
+		IPACM_Iface::ipacmcfg->del_vlan_ipv6_prefix(ipv6_prefix, -1);
+		ipv6_to_iface[modem_ipv6_pdn_index].pIface = NULL;
+		memset(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix,
+			0, sizeof(uint32_t) * 2);
+	}
+#endif
 	if (tx_prop != NULL)
 	{
 		free(tx_prop);

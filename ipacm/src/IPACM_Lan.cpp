@@ -3359,6 +3359,7 @@ int IPACM_Lan::handle_wan_up(ipa_ip_type ip_type, uint16_t vlan_id)
 
 		/* copy filter hdls */
 		dft_v6fl_rule_hdl[m_ipv6_default_filterting_rules_count] = m_pFilteringTable->rules[0].flt_rule_hdl;
+		m_ipv6_default_filterting_rules_count++;
 		free(m_pFilteringTable);
 	}
 
@@ -5913,7 +5914,17 @@ int IPACM_Lan::handle_vlan_phys_if_down()
 			memset(v6_mux_up[i].associated_VIDs, 0, sizeof(v6_mux_up[i].associated_VIDs[0]) * IPA_MAX_NUM_SW_PDNS);
 		}
 	}
-
+	if(lan_wan_fl_rule_hdl[0] != 0)
+	{
+		IPACMDBG_H("Deleting wlan ipv4 sta rule\n");
+		if (m_filtering.DeleteFilteringHdls(&lan_wan_fl_rule_hdl[0], IPA_IP_v4, 1) == false)
+		{
+			IPACMERR("Error deleting to Filter rule, aborting...\n");
+			return IPACM_FAILURE;
+		}
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v4, 1);
+		lan_wan_fl_rule_hdl[0] = 0;
+	}
 	return IPACM_SUCCESS;
 }
 #endif
@@ -6133,6 +6144,8 @@ int IPACM_Lan::handle_down_evt()
 			}
 			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
 				rx_prop->rx[0].src_pipe, IPA_IP_v6, m_ipv6_default_filterting_rules_count);
+			memset(dft_v6fl_rule_hdl, 0, sizeof(uint32_t) * m_ipv6_default_filterting_rules_count);
+			m_ipv6_default_filterting_rules_count = 0;
 		}
 
 		if(m_filtering.DeleteFilteringHdls(&tcp_syn_flt_rule_hdl[IPA_IP_v6], IPA_IP_v6, 1) == false)

@@ -630,6 +630,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, wl);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_DOWN, wl);
 #endif
+#ifdef FEATURE_IPoGRE
+				IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_UP, wl);
+				IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_DOWN, wl);
+#endif
 				if (IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled == true) {
 					IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_VLAN_MODE, wl);
 				}

@@ -18678,24 +18678,9 @@ int IPACM_Lan::eth_bridge_del_hdr_proc_ctx(uint32_t hdr_proc_ctx_hdl)
 bool IPACM_Lan::is_vlan_event(char *event_iface_name)
 {
 #ifdef FEATURE_PRPLWRT
-	/* Skip wlan-typed event interfaces for non-WLAN self-interfaces. Guard on
-	 * ipa_if_cate so WLAN instances (e.g. wlan0) still reach the substring
-	 * check below for their own vlan sub-ifaces (e.g. wlan0.100).
-	 * Use iface_table[].if_cat rather than a name-prefix check so that any
-	 * future wlan-named non-wireless interface (e.g. wlanbr0) is not excluded. */
-	if (event_iface_name != NULL && ipa_if_cate != WLAN_IF) {
-		char base_name[IPA_IFACE_NAME_LEN];
-		strlcpy(base_name, event_iface_name, sizeof(base_name));
-		char *dot = strchr(base_name, '.');
-		if (dot) *dot = '\0';
-		for (int i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; i++) {
-			if (strncmp(IPACM_Iface::ipacmcfg->iface_table[i].iface_name,
-					base_name, IPA_IFACE_NAME_LEN) == 0) {
-				if (IPACM_Iface::ipacmcfg->iface_table[i].if_cat == WLAN_IF)
-					return false;
-				break;
-			}
-		}
+	// Check if interface name contains "wlan"
+	if (event_iface_name != NULL && strncmp(event_iface_name, "wlan", 4) == 0) {
+		return false;
 	}
 #endif
 	string selfDevName(dev_name), eventInterfaceName(event_iface_name);

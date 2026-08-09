@@ -6,7 +6,6 @@
 	</ODUCFG>
 	<LANStats>
 		<EnableLANStats>0</EnableLANStats>
-		<LANStatsMode>0</LANStatsMode>
 	</LANStats>
 	<PublicIpSupport>
 		<EnablePublicIpSupport>0</EnablePublicIpSupport>

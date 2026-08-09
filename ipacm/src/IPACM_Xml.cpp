@@ -796,20 +796,6 @@ static int ipacm_cfg_xml_parse_tree
 						}
 					}
 				}
-				else if (IPACM_util_icmp_string((char*)xml_node->name, LAN_Stats_Mode_TAG) == 0)
-				{
-					IPACMDBG_H("inside lan statistics mode\n");
-					content = IPACM_read_content_element(xml_node);
-					if (content)
-					{
-						str_size = strlen(content);
-						memset(content_buf, 0, sizeof(content_buf));
-						memcpy(content_buf, (void *)content, str_size);
-						content_buf[MAX_XML_STR_LEN-1] = '\0';
-						config->lan_stats_mode = atoi(content_buf);
-						IPACMDBG_H("LAN Stats mode %d buf(%d)\n", config->lan_stats_mode, atoi(content_buf));
-					}
-				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, LAN2LAN_Stats_Enable_TAG) == 0)
 				{
 					IPACMDBG_H("inside enable lan2lan statistics\n");

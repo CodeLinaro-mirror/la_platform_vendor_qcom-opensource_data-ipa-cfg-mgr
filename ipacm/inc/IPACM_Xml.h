@@ -232,7 +232,6 @@ if (!(a)) {                                                 \
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 #define LAN_Stats_TAG                        "LANStats"
 #define LAN_Stats_Enable_TAG                 "EnableLANStats"
-#define LAN_Stats_Mode_TAG                   "LANStatsMode"
 #define LAN2LAN_Stats_TAG                    "LAN2LANStats"
 #define LAN2LAN_Stats_Enable_TAG             "EnableLAN2LANStats"
 #endif
@@ -479,7 +478,6 @@ typedef struct  _IPACM_conf_t
 	bool qos_mode;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool lan_stats_enable;
-	uint8_t lan_stats_mode;
 	bool lan2lan_stats_enable;
 #endif
 	int max_file_size;

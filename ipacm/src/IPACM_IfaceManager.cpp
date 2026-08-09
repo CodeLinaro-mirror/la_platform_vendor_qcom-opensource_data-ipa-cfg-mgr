@@ -630,6 +630,10 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_UP, wl);
 				IPACM_EvtDispatcher::registr(IPA_HANDLE_GRE_DOWN, wl);
 #endif
+#ifdef FEATURE_IPoGRE
+				IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_UP, wl);
+				IPACM_EvtDispatcher::registr(IPA_WAN_HANDLE_IPOGRE_DOWN, wl);
+#endif
 				if (IPACM_Iface::ipacmcfg->wlan_vlan_mpdn_enabled == true) {
 					IPACM_EvtDispatcher::registr(IPA_WLAN_SWITCH_VLAN_MODE, wl);
 				}
@@ -682,7 +686,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						if (w->rx_prop == NULL && w->tx_prop == NULL)
 						{
 							/* close the netdev instance if IPA not support*/
-							if (strcmp(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,MAPE_IFACE_NAME) == 0){
+							if (IS_MAPE_IFACE(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name)){
 								IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].ifi_flags = 0;
 							}
 							w->delete_iface();
@@ -692,10 +696,16 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						if(param->is_ppp_iface &&
 							IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
 						{
-							if(IPACM_Iface::ipacmcfg->get_pppoe_vlan_id(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
-								&sta_vlan_id))
+							if (IPACM_Iface::ipacmcfg->check_eth_wan_br_wan_enable() == false)
 							{
-								IPACMERR("failed to get iface vlan ID\n");
+								if(IPACM_Iface::ipacmcfg->get_pppoe_vlan_id(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, &sta_vlan_id))
+								{
+									IPACMERR("failed to get iface vlan ID\n");
+								}
+							}
+							else
+							{
+								IPACM_Iface::ipacmcfg->get_pppoe_vlan_id_proc(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, &sta_vlan_id);
 							}
 							IPACMDBG_H("Update PPPoE config even if ioctl received or not: pppoe_dev_name: %s phy_dev_name:%s vlan_id: %d \n",
 								IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,
@@ -728,6 +738,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_IPOGRE_UP,w);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_IPOGRE_DOWN,w);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_RGIP_UP, w);
+					IPACM_EvtDispatcher::registr(IPA_HANDLE_IPOGRE_ADDR_ADD, w);
 #endif
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, w);
 #ifdef FEATURE_IPA_ANDROID

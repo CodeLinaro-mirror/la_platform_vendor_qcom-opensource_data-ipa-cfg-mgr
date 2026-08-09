@@ -72,8 +72,34 @@ extern "C"
 #define STR_RNDIS0_IFACE "rndis0"
 #define STR_ECM_IFACE "ecm"
 #define STR_ECM0_IFACE "ecm0"
+
+/* IPv6 multicast MAC prefix: 33:33:xx:xx:xx:xx */
+#define IPV6_MCAST_MAC_BYTE0  0x33
+#define IPV6_MCAST_MAC_BYTE1  0x33
+/* IPv4 multicast MAC prefix: 01:00:5e:xx:xx:xx */
+#define IPV4_MCAST_MAC_BYTE0  0x01
+#define IPV4_MCAST_MAC_BYTE1  0x00
+#define IPV4_MCAST_MAC_BYTE2  0x5e
+
+#define IS_IPV6_MCAST_MAC(mac) \
+	((mac)[0] == IPV6_MCAST_MAC_BYTE0 && (mac)[1] == IPV6_MCAST_MAC_BYTE1)
+#define IS_IPV4_MCAST_MAC(mac) \
+	((mac)[0] == IPV4_MCAST_MAC_BYTE0 && (mac)[1] == IPV4_MCAST_MAC_BYTE1 && \
+	 (mac)[2] == IPV4_MCAST_MAC_BYTE2)
 #define ETH_PHY_IFACE_LEN 5
-#define MAPE_IFACE_NAME "map-mape"
+#define MAPE_IFACE_PREFIX  "map-"
+#define MAPE_IFACE_PREFIX2 "mape"
+/* Check if an interface name matches a MAP-E prefix ("map-" or "mape").
+ * strlen() is used instead of sizeof()-1 to derive the prefix length from
+ * the string content with proper null termination, not the compile-time
+ * buffer size. Implemented as an inline function so 'name' is evaluated
+ * only once, avoiding the double-evaluation pitfall of a macro. */
+static inline bool is_mape_iface(const char *name)
+{
+    return strncmp(name, MAPE_IFACE_PREFIX,  strlen(MAPE_IFACE_PREFIX))  == 0 ||
+           strncmp(name, MAPE_IFACE_PREFIX2, strlen(MAPE_IFACE_PREFIX2)) == 0;
+}
+#define IS_MAPE_IFACE(name) is_mape_iface(name)
 
 #define IF_NAME_LEN 16
 #define IPA_MAX_FILE_LEN  64
@@ -246,6 +272,11 @@ extern "C"
 #define MUX_ID_DL_METADATA_MASK 0x7f
 #define MUX_ID_DL_METADATA_SHIFT 24
 #endif
+#define IPv6NAT_UL_METADATA_VALUE 0xfe
+#define IPv6NAT_UL_METADATA_MASK  0xff
+#define IPv6NAT_UL_METADATA_SHIFT 16
+#define IPv6NAT_DL_METADATA_VALUE 0x01
+#define IPv6NAT_DL_METADATA_SHIFT 7
 
 #define IPV6_NUM_ADDR 3
 
@@ -336,6 +367,8 @@ typedef enum
 	IPA_LAN_CLIENT_DISCONNECT_EVENT,          /* ipacm_event_data_mac */
 	IPA_LAN_CLIENT_UPDATE_EVENT,              /* ipacm_event_data_mac */
 #endif
+	IPA_IP_PASS_UPDATE_EVENT,                 /* ipacm_ip_pass_pdn_info */
+	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, /* Handle ip pass pdn info update.*/
 	IPA_EXTERNAL_EVENT_MAX,
 
 	IPA_HANDLE_WAN_UP,                        /* ipacm_event_iface_up  */
@@ -386,8 +419,6 @@ typedef enum
 #endif
 	IPA_MAC_ADD_DEL_FLT_EVENT,                /* NULL */
 	IPA_IP_COLLISION_UPDATE_EVENT,            /* ipacm_ip_collision_pdn_info */
-	IPA_IP_PASS_UPDATE_EVENT,                 /* ipacm_ip_pass_pdn_info */
-	IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT, /* Handle ip pass pdn info update.*/
 	IPA_RGIP_PASS_UPDATE_EVENT,               /* ipacm_event_rgip_pass_info */
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	IPA_PKT_THRESHOLD_UPDATE_EVENT,           /* ipa_set_pkt_threshold */
@@ -414,6 +445,7 @@ typedef enum
 	IPA_WAN_HANDLE_IPOGRE_DOWN,
 	IPA_HANDLE_RGIP_UP,
 	IPA_HANDLE_RGIP_DEL,
+	IPA_HANDLE_IPOGRE_ADDR_ADD,                /* address added to GRE tunnel iface */
 #endif
 	IPA_HANDLE_MACSEC_ADD,                    /* ipa_macsec_map */
 	IPA_HANDLE_MACSEC_DEL,                    /* ipa_macsec_map */
@@ -604,6 +636,7 @@ typedef struct _ipacm_event_data_mac
 	int ipa_if_cate;
 	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
 	char iface_name[IPA_IFACE_NAME_LEN];
+	uint16_t vlan_id;
 } ipacm_event_data_mac;
 
 typedef struct

@@ -59,6 +59,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #ifdef FEATURE_EoGRE
 #include <linux/ip.h>
 #include <linux/if_tunnel.h>
+#include <linux/ip6_tunnel.h>
 #endif
 
 #define DUMMY_RGIP_ADDRESS 169
@@ -670,6 +671,16 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
     if (attrib[IFLA_IFNAME]) {  // validation
         IPACMDBG("ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
 		strlcpy(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), IPA_IFACE_NAME_LEN);
+#ifdef FEATURE_IPoGRE
+		/* Separately store the GRE interface name for IPoGRE so that
+		 * ipgre_install_dl_exception_flt_rule() can look up the interface
+		 * IP via getifaddrs().  pmip_details.tunnel_name is only written
+		 * when the call-site guard fires, which previously required
+		 * FEATURE_EoGRE due to the broken "#ifdef FEATURE_EoGRE || ..."
+		 * directive. */
+		strlcpy(pConfig->ipogre_tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), IPA_IFACE_NAME_LEN);
+		IPACMDBG_H("IPoGRE tunnel iface name: %s\n", pConfig->ipogre_tunnel_name);
+#endif
     }
 	if (!attrib[IFLA_LINKINFO]){
 		IPACMDBG("No Link info\n");
@@ -716,6 +727,43 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 
 				IPACMDBG_H("GRE info v6: src addr:0x%x:%x:%x:%x, dst addr:0x%x:%x:%x:%x \n",
 							saddr6.s6_addr32[0],saddr6.s6_addr32[1],saddr6.s6_addr32[2],saddr6.s6_addr32[3],daddr6.s6_addr32[0],daddr6.s6_addr32[1],daddr6.s6_addr32[2],daddr6.s6_addr32[3]);
+			}
+
+			/* Learn encap_limit so IPACM can choose the correct IPoGRE
+			 * outer header template: non-zero encap_limit means the kernel
+			 * adds an 8-byte Destination Options extension header (RFC 2473)
+			 * making the outer IPv6+GRE header 52 bytes; zero means no
+			 * extension header, 44 bytes. Kernel default when the attribute
+			 * is absent is 4 (extension header present). */
+			if (greinfo[IFLA_GRE_ENCAP_LIMIT])
+			{
+				pConfig->encap_limit =
+					*(__u8 *)RTA_DATA(greinfo[IFLA_GRE_ENCAP_LIMIT]);
+				IPACMDBG_H("GRE encap_limit: %d\n", pConfig->encap_limit);
+			}
+			else
+			{
+				pConfig->encap_limit = 4; /* kernel default */
+				IPACMDBG_H("IFLA_GRE_ENCAP_LIMIT absent, using default encap_limit=4\n");
+
+			}
+
+			if (greinfo[IFLA_GRE_FLAGS])
+			{
+				__u16 gre_flags = *(__u16 *)RTA_DATA(greinfo[IFLA_GRE_FLAGS]);
+				IPACMDBG_H("IFLA_GRE_FLAGS: 0x%04x (CSUM=%d KEY=%d SEQ=%d IGN_ENCAP_LIMIT=%d)\n",
+					gre_flags,
+					(gre_flags & GRE_CSUM),
+					(gre_flags & GRE_KEY),
+					(gre_flags & GRE_SEQ),
+					(gre_flags & IP6_TNL_F_IGN_ENCAP_LIMIT));
+				pConfig->encap_enable = !(gre_flags & IP6_TNL_F_IGN_ENCAP_LIMIT);
+				IPACMDBG_H("encap_enable: %d\n", pConfig->encap_enable);
+			}
+			else
+			{
+				IPACMDBG_H("IFLA_GRE_FLAGS absent, no GRE flags set\n");
+				pConfig->encap_enable = true;
 			}
 
 			memcpy(&(pConfig->ipgre_info),&ipgre_info,sizeof(ipa_ipgre_info));
@@ -781,12 +829,16 @@ static int tunnel_delete(struct ifinfomsg* ifi, int len, int type)
 		{
 			IPACMDBG("Tunnel Delete: ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
 #if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
-			if(strncmp(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), strlen(pConfig->pmip_details.tunnel_name)) == 0)
+			if(pConfig->pmip_details.tunnel_name[0] != '\0' &&
+				strncmp(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), strlen(pConfig->pmip_details.tunnel_name)) == 0)
 			{
 				IPACMDBG("Tunnel name matched, Cleaning up\n");
 				pConfig->pmip_details.tunnel_name[0]='\0';
 				pConfig->pmip_details.pmipv6_tunnel_setup=false;
 				pConfig->pmip_details.pmipv6_gre_event_posted=false;
+#ifdef FEATURE_IPoGRE
+				pConfig->ipogre_tunnel_name[0] = '\0';
+#endif
 				if(pConfig->pmip_details.pmipv6_enabled)
 				{
 					/* Send GRE DOWN event */
@@ -1249,7 +1301,7 @@ static int ipa_nl_decode_nlmsg
 				 * Android but this should be processed in case of MDM for
 				 * Ehernet interface.
 				 */
-#ifdef FEATURE_EoGRE || FEATURE_PMIPV6
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 				// struct nlmsghdr *h;
 				struct ifinfomsg *ifi2;
 				//ifi_type is 1 for gretap2
@@ -1419,6 +1471,7 @@ static int ipa_nl_decode_nlmsg
 										}
 									else
 									{
+										IPACM_Iface::ipacmcfg->rgip_ip = queried_ip;
 										*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip;
 										memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
 										rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
@@ -1455,6 +1508,29 @@ static int ipa_nl_decode_nlmsg
 					if (strncmp(dev_name, IPACM_Iface::ipacmcfg->rgip_iface_name,
 						sizeof(IPACM_Iface::ipacmcfg->rgip_iface_name)) == 0)
 					{
+						/* Query the IP currently assigned to the interface. If it is a dummy
+						 * 169.x.x.x address, update rgip_ip with the stored rgip_ip_ippt so
+						 * that IPA_HANDLE_RGIP_DEL is processed with the correct IP. */
+						uint32_t queried_ip = 0;
+						int query_fd = socket(AF_INET, SOCK_DGRAM, 0);
+						if (query_fd >= 0)
+						{
+							struct ifreq ifr_query;
+							memset(&ifr_query, 0, sizeof(ifr_query));
+							strlcpy(ifr_query.ifr_name, dev_name, IFNAMSIZ);
+							if (ioctl(query_fd, SIOCGIFADDR, &ifr_query) == 0)
+							{
+								queried_ip = ntohl(((struct sockaddr_in *)&ifr_query.ifr_addr)->sin_addr.s_addr);
+							}
+							close(query_fd);
+						}
+						if ((queried_ip >> 24) == DUMMY_RGIP_ADDRESS)
+						{
+							IPACMDBG_H("RGIP iface %s link down but current ip 0x%x is dummy "
+									"(169.x.x.x), use stored ip 0x%x for IPA_HANDLE_RGIP_DEL\n",
+									dev_name, queried_ip, IPACM_Iface::ipacmcfg->rgip_ip_ippt);
+							IPACM_Iface::ipacmcfg->rgip_ip = IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+						}
 						IPACMDBG_H("RGIP iface %s link down, post IPA_HANDLE_RGIP_DEL\n", dev_name);
 						ipacm_cmd_q_data rgip_evt_data;
 						uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
@@ -1466,10 +1542,25 @@ static int ipa_nl_decode_nlmsg
 						{
 							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
 							rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
-							*rgip_v4 = 0;
+							*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip != 0 ?
+								IPACM_Iface::ipacmcfg->rgip_ip :
+								IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+							IPACMDBG_H("IPA_HANDLE_RGIP_DEL (link down) with ip 0x%x\n", *rgip_v4);
 							rgip_evt_data.evt_data = rgip_v4;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
 						}
+					}
+					if (IPACM_Iface::ipacmcfg->ipogre_enabled &&
+						strncmp(dev_name, IPACM_Iface::ipacmcfg->pmip_details.tunnel_name,
+							sizeof(IPACM_Iface::ipacmcfg->pmip_details.tunnel_name)) == 0)
+					{
+						IPACMDBG_H("IPoGRE iface %s link down, post IPA_HANDLE_IPOGRE_DOWN\n", dev_name);
+						IPACM_Iface::ipacmcfg->ipogre_enabled = false;
+						ipacm_cmd_q_data ipogre_evt_data;
+						memset(&ipogre_evt_data, 0, sizeof(ipogre_evt_data));
+						ipogre_evt_data.event = IPA_HANDLE_IPOGRE_DOWN;
+						ipogre_evt_data.evt_data = 0;
+						IPACM_EvtDispatcher::PostEvt(&ipogre_evt_data);
 					}
 #endif
 					IPACMDBG_H("Interface %s bring down with IP-family: %d \n", dev_name,
@@ -1619,7 +1710,10 @@ static int ipa_nl_decode_nlmsg
 						{
 							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
 							rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
-							*rgip_v4 = 0;
+							*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip != 0 ?
+								IPACM_Iface::ipacmcfg->rgip_ip :
+								IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+							IPACMDBG_H("IPA_HANDLE_RGIP_DEL (link down lower) with ip 0x%x\n", *rgip_v4);
 							rgip_evt_data.evt_data = rgip_v4;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
 						}
@@ -1690,7 +1784,10 @@ static int ipa_nl_decode_nlmsg
 						{
 							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
 							rgip_evt_data.event = IPA_HANDLE_RGIP_DEL;
-							*rgip_v4 = 0;
+							*rgip_v4 = IPACM_Iface::ipacmcfg->rgip_ip != 0 ?
+								IPACM_Iface::ipacmcfg->rgip_ip :
+								IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+							IPACMDBG_H("IPA_HANDLE_RGIP_DEL (iface delete) with ip 0x%x\n", *rgip_v4);
 							rgip_evt_data.evt_data = rgip_v4;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
 						}
@@ -1840,6 +1937,12 @@ static int ipa_nl_decode_nlmsg
 					return IPACM_FAILURE;
 				}
 				memset(data_addr, 0, sizeof(ipacm_event_data_addr));
+				/* raw_host_addr preserves the full host address before prefix masking.
+				 * data_addr->ipv4_addr is masked to the network address for general
+				 * ADDR_ADD consumers; RGIP logic must use raw_host_addr so that host-
+				 * address comparisons (e.g. against neigh events) remain correct when
+				 * the interface is assigned a /24 prefix instead of /32. */
+				uint32_t raw_host_addr = 0;
 				if(AF_INET6 == msg_ptr->nl_addr_info.attr_info.prefix_addr.ss_family)
 				{
 					data_addr->iptype = IPA_IP_v6;
@@ -1857,6 +1960,7 @@ static int ipa_nl_decode_nlmsg
 					IPACM_NL_REPORT_ADDR( "IFA_ADDRESS:", msg_ptr->nl_addr_info.attr_info.prefix_addr );
 					IPACM_EVENT_COPY_ADDR_v4( data_addr->ipv4_addr, msg_ptr->nl_addr_info.attr_info.prefix_addr);
 					data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
+					raw_host_addr = data_addr->ipv4_addr;
 					prefix_len = ((prefix_len >> (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen)) << (IPV4_SIZE - msg_ptr->nl_addr_info.metainfo.ifa_prefixlen));
 					data_addr->ipv4_addr_mask = prefix_len;
 
@@ -1894,16 +1998,15 @@ static int ipa_nl_decode_nlmsg
 						}
 						else {
 							IPACMDBG_H("RGIP iface %s addr add, post IPA_HANDLE_RGIP_UP\n", dev_name);
-							ipacm_cmd_q_data rgip_evt_data;
-							uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
-							if(rgip_v4 == NULL)
+							if(raw_host_addr >> 24 == DUMMY_RGIP_ADDRESS)
 							{
 								IPACMDBG_H("RGIP iface %s got dummy IP 0x%x (169.x.x.x), "
 										"skip IPA_HANDLE_RGIP_UP and rgip_ip update\n",
-										dev_name, data_addr->ipv4_addr);
+										dev_name, raw_host_addr);
 
 								IPACMDBG_H("RGIP iface %s link up, post IPA_HANDLE_RGIP_UP with stored ip 0x%x\n",
 									dev_name, IPACM_Iface::ipacmcfg->rgip_ip_ippt);
+								IPACM_Iface::ipacmcfg->rgip_ip = IPACM_Iface::ipacmcfg->rgip_ip_ippt;
 								ipacm_cmd_q_data rgip_evt_data;
 								uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
 								if(rgip_v4 == NULL)
@@ -1930,12 +2033,12 @@ static int ipa_nl_decode_nlmsg
 								}
 								else
 								{
-									memcpy(rgip_v4,&data_addr->ipv4_addr,sizeof(rgip_v4));
+									memcpy(rgip_v4,&raw_host_addr,sizeof(uint32_t));
 									memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
 									rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
 									rgip_evt_data.evt_data = rgip_v4;
 									IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
-									IPACM_Iface::ipacmcfg->rgip_ip = data_addr->ipv4_addr;
+									IPACM_Iface::ipacmcfg->rgip_ip = raw_host_addr;
 								}
 							}
 						}
@@ -1945,11 +2048,11 @@ static int ipa_nl_decode_nlmsg
 					 * Identify it as the new RGIP interface and re-trigger RGIP UP. */
 					else if ((data_addr->iptype == IPA_IP_v4) &&
 					         (IPACM_Iface::ipacmcfg->rgip_ip != 0) &&
-					         (data_addr->ipv4_addr == IPACM_Iface::ipacmcfg->rgip_ip))
+					         (raw_host_addr == IPACM_Iface::ipacmcfg->rgip_ip))
 					{
 						IPACMDBG_H("New iface %s has IP 0x%x matching stored rgip_ip — "
 						           "treating as new RGIP iface (old name: %s)\n",
-						           dev_name, data_addr->ipv4_addr,
+						           dev_name, raw_host_addr,
 						           IPACM_Iface::ipacmcfg->rgip_iface_name);
 						/* Update rgip_iface_name to the new interface name */
 						strlcpy(IPACM_Iface::ipacmcfg->rgip_iface_name, dev_name,
@@ -1962,14 +2065,29 @@ static int ipa_nl_decode_nlmsg
 						}
 						else
 						{
-							memcpy(rgip_v4, &data_addr->ipv4_addr, sizeof(*rgip_v4));
+							*rgip_v4 = raw_host_addr;
 							memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
 							rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
 							rgip_evt_data.evt_data = rgip_v4;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
 							/* Refresh rgip_ip with the confirmed address */
-							IPACM_Iface::ipacmcfg->rgip_ip = data_addr->ipv4_addr;
+							IPACM_Iface::ipacmcfg->rgip_ip = raw_host_addr;
 						}
+					}
+					/* When an address is added to the GRE tunnel interface, notify
+					 * IPACM_Wan to install the DL exception filter rule. */
+					else if (strlen(IPACM_Iface::ipacmcfg->ipogre_tunnel_name) > 0 &&
+					         strncmp(dev_name, IPACM_Iface::ipacmcfg->ipogre_tunnel_name,
+					                 IPA_IFACE_NAME_LEN) == 0)
+					{
+						IPACMDBG_H("Address add on GRE tunnel iface %s (iptype=%d), "
+						           "post IPA_HANDLE_IPOGRE_ADDR_ADD\n",
+						           dev_name, data_addr->iptype);
+						ipacm_cmd_q_data gre_addr_evt;
+						memset(&gre_addr_evt, 0, sizeof(gre_addr_evt));
+						gre_addr_evt.event = IPA_HANDLE_IPOGRE_ADDR_ADD;
+						gre_addr_evt.evt_data = NULL;
+						IPACM_EvtDispatcher::PostEvt(&gre_addr_evt);
 					}
 #endif
 				}
@@ -1989,7 +2107,10 @@ static int ipa_nl_decode_nlmsg
 						{
 							memset(&rgip_evt_del_data, 0, sizeof(rgip_evt_del_data));
 							rgip_evt_del_data.event = IPA_HANDLE_RGIP_DEL;
-							*rgip_v4_del = 0;
+							*rgip_v4_del = IPACM_Iface::ipacmcfg->rgip_ip != 0 ?
+								IPACM_Iface::ipacmcfg->rgip_ip :
+								IPACM_Iface::ipacmcfg->rgip_ip_ippt;
+							IPACMDBG_H("IPA_HANDLE_RGIP_DEL (addr del) with ip 0x%x\n", *rgip_v4_del);
 							rgip_evt_del_data.evt_data = rgip_v4_del;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_del_data);
 						}
@@ -2136,7 +2257,7 @@ static int ipa_nl_decode_nlmsg
 					IPACMDBG("GOT RTM_NEWROUTE event, br-wan enabled %d \n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
 				}
 
-				if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+				if(IS_MAPE_IFACE(dev_name)){
 					IPACMDBG_H(" Ignoring route on %s \n",dev_name);
 					return IPACM_SUCCESS;
 				}
@@ -2167,7 +2288,25 @@ static int ipa_nl_decode_nlmsg
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 					data_addr->iptype = IPA_IP_v4;
 					data_addr->ipv4_addr = ntohl(if_ipv4_addr);
-					data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
+					/* Compute mask from prefix length (rtm_dst_len) if mask attr is 0 */
+					if (if_ipipv4_addr_mask != 0)
+					{
+						data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
+					}
+					else if (msg_ptr->nl_route_info.metainfo.rtm_dst_len > 0 &&
+					         msg_ptr->nl_route_info.metainfo.rtm_dst_len <= 32)
+					{
+						uint8_t plen = msg_ptr->nl_route_info.metainfo.rtm_dst_len;
+						data_addr->ipv4_addr_mask = (plen == 32) ? 0xFFFFFFFF :
+							(uint32_t)(~((1u << (32 - plen)) - 1));
+					}
+					else
+					{
+						data_addr->ipv4_addr_mask = 0xFFFFFFFF;
+					}
+					IPACM_EVENT_COPY_ADDR_v4(data_addr->ipv4_addr_gw,
+						msg_ptr->nl_route_info.attr_info.gateway_addr);
+					data_addr->ipv4_addr_gw = ntohl(data_addr->ipv4_addr_gw);
 
 					IPACMDBG("Posting IPA_ROUTE_ADD_EVENT with if index:%d, ipv4 address 0x%x, mask:0x%x\n",
 									 data_addr->if_index,
@@ -2306,9 +2445,25 @@ process:
 									}
 								}
 							}
-
-							IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name,
-									IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name);
+							if (data_fid->is_ppp_iface == false)
+							{
+								IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name,
+										   IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name);
+							}
+							else
+							{
+								if (IPACM_Iface::ipacmcfg->get_phy_name_from_proc(dev_name, phy_dev) == IPACM_SUCCESS)
+								{
+									IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name, phy_dev);
+									strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name, phy_dev, ETH_PHY_IFACE_LEN);
+								}
+								else
+								{
+									IPACMERR("Failed to get associated phy_name for wan dev name %s\n", dev_name);
+									free(data_fid);
+									return IPACM_FAILURE;
+								}
+							}
 							IPACMDBG("Posting IPA_USB_LINK_UP_EVENT with for dev_name %s \n", dev_name);
 							data_fid->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 							evt_data.event = IPA_USB_LINK_UP_EVENT;
@@ -2347,7 +2502,8 @@ process:
 			/* Check for delegate_prefix route for Prefix Delegation */
 			if((msg_ptr->nl_route_info.metainfo.rtm_family == AF_INET6) &&
 			   (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_BLACKHOLE || msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNREACHABLE) &&
-			   (msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST))
+			   (msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST) &&
+			   (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
 				IPACMDBG_H("Got RTM_NEWROUTE for delegate_prefix route with dst_len %d\n", msg_ptr->nl_route_info.metainfo.rtm_dst_len);
 
@@ -2413,6 +2569,14 @@ process:
 					data_addr->ipv6_addr[1] = ntohl(data_addr->ipv6_addr[1]);
 					data_addr->ipv6_addr[2] = ntohl(data_addr->ipv6_addr[2]);
 					data_addr->ipv6_addr[3] = ntohl(data_addr->ipv6_addr[3]);
+
+					/* Populate gateway address for static route handling */
+					IPACM_EVENT_COPY_ADDR_v6(data_addr->ipv6_addr_gw,
+						msg_ptr->nl_route_info.attr_info.gateway_addr);
+					data_addr->ipv6_addr_gw[0] = ntohl(data_addr->ipv6_addr_gw[0]);
+					data_addr->ipv6_addr_gw[1] = ntohl(data_addr->ipv6_addr_gw[1]);
+					data_addr->ipv6_addr_gw[2] = ntohl(data_addr->ipv6_addr_gw[2]);
+					data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
 
 					mask_value_v6 = msg_ptr->nl_route_info.metainfo.rtm_dst_len;
 					for(mask_index = 0; mask_index < 4; mask_index++)
@@ -2592,9 +2756,28 @@ process_v6:
 								}
 							}
 						}
+						if (data_fid->is_ppp_iface == false)
+						{
+							IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name,
+									   IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name);
+						}
+						else
+						{
 
+							if (IPACM_Iface::ipacmcfg->get_phy_name_from_proc(dev_name, phy_dev) == IPACM_SUCCESS)
+							{
+								IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name, phy_dev);
+								strlcpy(IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name, phy_dev, ETH_PHY_IFACE_LEN);
+							}
+							else
+							{
+								IPACMERR("Failed to get associated phy_name for wan dev name %s\n", dev_name);
+								free(data_fid);
+								return IPACM_FAILURE;
+							}
+						}
 						IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name,
-							IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name);
+								   IPACM_Iface::ipacmcfg->iface_table[instance_found].phy_dev_name);
 						IPACMDBG("Posting IPA_USB_LINK_UP_EVENT with for dev_name %s \n", dev_name);
 						data_fid->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 						evt_data.event = IPA_USB_LINK_UP_EVENT;
@@ -2645,7 +2828,8 @@ process_v6:
 			/* Check for delegate_prefix route delete for Prefix Delegation */
 			if((msg_ptr->nl_route_info.metainfo.rtm_family == AF_INET6) &&
 			   (msg_ptr->nl_route_info.metainfo.rtm_type == RTN_BLACKHOLE || msg_ptr->nl_route_info.metainfo.rtm_type == RTN_UNREACHABLE) &&
-			   (msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST))
+			   (msg_ptr->nl_route_info.attr_info.param_mask & IPA_RTA_PARAM_DST) &&
+			   (msg_ptr->nl_route_info.metainfo.rtm_table == RT_TABLE_MAIN))
 			{
 				uint32_t ipv6_addr[4];
 				IPACMDBG_H("Got RTM_DELROUTE for delegate_prefix route with dst_len %d\n", msg_ptr->nl_route_info.metainfo.rtm_dst_len);
@@ -2687,7 +2871,7 @@ process_v6:
 						IPACMERR("Error while getting interface name\n");
 						return IPACM_FAILURE;
 					}
-					if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+					if(IS_MAPE_IFACE(dev_name)){
 						IPACMDBG_H(" Ignoring route on %s \n",dev_name);
 						return IPACM_SUCCESS;
 					}
@@ -2704,14 +2888,26 @@ process_v6:
 						return IPACM_FAILURE;
 					}
 					IPACM_EVENT_COPY_ADDR_v4( if_ipv4_addr, msg_ptr->nl_route_info.attr_info.dst_addr);
-					temp = (-1);
-					if_ipipv4_addr_mask = ntohl(temp);
 
 					evt_data.event = IPA_ROUTE_DEL_EVENT;
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 					data_addr->iptype = IPA_IP_v4;
 					data_addr->ipv4_addr = ntohl(if_ipv4_addr);
-					data_addr->ipv4_addr_mask = ntohl(if_ipipv4_addr_mask);
+					/* Compute mask from prefix length (rtm_dst_len) */
+					if (msg_ptr->nl_route_info.metainfo.rtm_dst_len > 0 &&
+					    msg_ptr->nl_route_info.metainfo.rtm_dst_len <= 32)
+					{
+						uint8_t plen = msg_ptr->nl_route_info.metainfo.rtm_dst_len;
+						data_addr->ipv4_addr_mask = (plen == 32) ? 0xFFFFFFFF :
+							(uint32_t)(~((1u << (32 - plen)) - 1));
+					}
+					else
+					{
+						data_addr->ipv4_addr_mask = 0xFFFFFFFF;
+					}
+					IPACM_EVENT_COPY_ADDR_v4(data_addr->ipv4_addr_gw,
+						msg_ptr->nl_route_info.attr_info.gateway_addr);
+					data_addr->ipv4_addr_gw = ntohl(data_addr->ipv4_addr_gw);
 
 					IPACMDBG_H("Posting event IPA_ROUTE_DEL_EVENT with if index:%d, ipv4 address 0x%x, mask:0x%x\n",
 									 data_addr->if_index,
@@ -2730,7 +2926,7 @@ process_v6:
 						return IPACM_FAILURE;
 					}
 
-					if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+					if(IS_MAPE_IFACE(dev_name)){
 						IPACMDBG_H(" Ignoring route on %s \n",dev_name);
 						return IPACM_SUCCESS;
 					}
@@ -2879,6 +3075,12 @@ process_v6:
 					evt_data.event = IPA_ROUTE_DEL_EVENT;
 					data_addr->if_index = msg_ptr->nl_route_info.attr_info.oif_index;
 					data_addr->iptype = IPA_IP_v6;
+					IPACM_EVENT_COPY_ADDR_v6(data_addr->ipv6_addr_gw,
+						msg_ptr->nl_route_info.attr_info.gateway_addr);
+					data_addr->ipv6_addr_gw[0] = ntohl(data_addr->ipv6_addr_gw[0]);
+					data_addr->ipv6_addr_gw[1] = ntohl(data_addr->ipv6_addr_gw[1]);
+					data_addr->ipv6_addr_gw[2] = ntohl(data_addr->ipv6_addr_gw[2]);
+					data_addr->ipv6_addr_gw[3] = ntohl(data_addr->ipv6_addr_gw[3]);
 
 					IPACMDBG_H("posting event IPA_ROUTE_DEL_EVENT with if index:%d, ipv4 address\n",
 									 data_addr->if_index);
@@ -2907,6 +3109,22 @@ process_v6:
 				IPACMDBG("\n GOT RTM_NEWNEIGH event (%s) ip %d\n",dev_name,msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
 			}
 			IPACMDBG("Neighbour event with interface index %d master interface index %d family %d\n", msg_ptr->nl_neigh_info.metainfo.ndm_ifindex, msg_ptr->nl_neigh_info.master_interface_index, msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family);
+
+			if(msg_ptr->nl_neigh_info.metainfo.ndm_state == NUD_NOARP)
+			{
+				IPACMDBG_H("RTM_NEWNEIGH received with NOARP. Ignoring\n");
+				return IPACM_SUCCESS;;
+			}
+			if (IS_IPV6_MCAST_MAC(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data))
+			{
+				IPACMDBG_H("RTM_NEWNEIGH received with IPv6 multicast mac address. Ignoring\n");
+				return IPACM_SUCCESS;
+			}
+			if (IS_IPV4_MCAST_MAC(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data))
+			{
+				IPACMDBG_H("RTM_NEWNEIGH received with IPv4 multicast mac address. Ignoring\n");
+				return IPACM_SUCCESS;
+			}
 
 			if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != 0) && (msg_ptr->nl_neigh_info.master_interface_index == 0) &&
 								(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family != 0))
@@ -3090,6 +3308,16 @@ process_v6:
 			{
 			  IPACMDBG_H("RTM_DELNEIGH received with NULL MAC\n");
 			  return IPACM_SUCCESS;
+			}
+			if (IS_IPV6_MCAST_MAC(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data))
+			{
+				IPACMDBG_H("RTM_DELNEIGH received with IPv6 multicast mac address. Ignoring\n");
+				return IPACM_SUCCESS;
+			}
+			if (IS_IPV4_MCAST_MAC(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data))
+			{
+				IPACMDBG_H("RTM_DELNEIGH received with IPv4 multicast mac address. Ignoring\n");
+				return IPACM_SUCCESS;
 			}
 
 			/* insert to command queue */
@@ -3526,7 +3754,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 				IPACM_NL_REPORT_ADDR( "gw", nl_route_info_get_route.attr_info.gateway_addr );
 				IPACMDBG("dev %s\n",dev_name );
 
-				if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+				if(IS_MAPE_IFACE(dev_name)){
 					IPACMDBG_H(" Ignoring route on %s  \n",dev_name);
 					free(buf);
 					close(nl_sock);
@@ -3573,7 +3801,7 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type)
 					IPACMDBG_H("dev %s \n", dev_name);
 					IPACM_NL_REPORT_ADDR( "dstIP:\n", nl_route_info_get_route.attr_info.dst_addr );
 
-					if(strcmp(dev_name,MAPE_IFACE_NAME) == 0){
+					if(IS_MAPE_IFACE(dev_name)){
 						IPACMDBG_H(" Ignoring route on %s \n",dev_name);
 						free(buf);
 						close(nl_sock);
@@ -3950,7 +4178,7 @@ error:
 	return IPACM_FAILURE;
 }
 
-int ipa_nl_query_newneigh(int af_family)
+int ipa_nl_query_newneigh(int af_family, int if_index)
 {
 	IPACMDBG("ipa_nl_send_getneigh\n");
 	int ret_val = IPACM_FAILURE, msglen = 0, nl_sock = 0;
@@ -3978,6 +4206,7 @@ int ipa_nl_query_newneigh(int af_family)
 	nl_request.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
 	nl_request.nd.ndm_state = NUD_REACHABLE;
 	nl_request.nd.ndm_flags = NTF_MASTER|NTF_SELF;
+	nl_request.nd.ndm_ifindex = if_index;
 	nl_request.nlh.nlmsg_len = sizeof(nl_request_t);
 	nl_request.nlh.nlmsg_seq = 1;
 	nl_request.nlh.nlmsg_pid = 0;
@@ -4026,7 +4255,7 @@ int ipa_nl_query_newneigh(int af_family)
 			break;
 		}
 
-		if (ipa_nl_decode_nlmsg((const char*)h, msglen, msg_ptr)) {
+		if (ipa_nl_decode_nlmsg((const char*)h, h->nlmsg_len, msg_ptr)) {
 			IPACMERR("Failed to decode rtm link message\n");
 			h = NLMSG_NEXT(h, msglen);
 			continue;
@@ -4313,7 +4542,7 @@ int  ipa_nl_query_getlink(int af_family)
 			{
 				if(iface_info->ifi_flags & IFF_UP)
 				{
-					if (ipa_nl_decode_nlmsg((const char*)nl_hdr, ret_val, msg_ptr)) {
+					if (ipa_nl_decode_nlmsg((const char*)nl_hdr, nl_hdr->nlmsg_len, msg_ptr)) {
 						IPACMERR("Failed to decode rtm link message\n");
 						nl_hdr = NLMSG_NEXT(nl_hdr, ret_val);
 						continue;

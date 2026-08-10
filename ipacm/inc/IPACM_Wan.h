@@ -53,6 +53,7 @@
 #include <IPACM_Defs.h>
 #include <IPACM_Xml.h>
 #include <list>
+#include <vector>
 
 #define IPA_NUM_DEFAULT_WAN_FILTER_RULES 3 /*1 for v4, 2 for v6*/
 #define IPA_V2_NUM_DEFAULT_WAN_FILTER_RULE_IPV4 2
@@ -96,8 +97,7 @@ typedef struct
 	uint32_t ipv4_addr;
 	bool wan_up_vlan;
 	bool is_xlat;
-	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS] = {0};
-	uint8_t VID_cnt = 0;
+	std::vector<uint16_t> associated_VIDs;
 	IPACM_Wan *pIface;
 }ipacm_ipv4_wan_iface;
 
@@ -105,19 +105,16 @@ typedef struct
 {
 	uint32_t ipv6_prefix[2];
 	bool wan_up_vlan_v6;
-	uint16_t associated_VIDs[IPA_MAX_NUM_SW_PDNS] = {0};
-	uint8_t VID_cnt = 0;
+	std::vector<uint16_t> associated_VIDs;
 	IPACM_Wan *pIface;
 }ipacm_ipv6_wan_iface;
 
 /*
  * vlan_id : VLAN ID
- * v4_association: The WAN interface V4 VLAN is associated to 
+ * v4_association: The WAN interface V4 VLAN is associated to
  * v6_association: The WAN interface V6 VLAN is associated to
  * v4_idx: Index of the WAN interface in ipv4_to_iface to which VLAN is associated
  * v6_idx: Index of the WAN interface in ipv6_to_iface to which VLAN is associated
- * v4_vlan_idx: Index of vlan_id in the associated_VIDs[] of ipv4_to_iface[v6_idx]
- * v6_vlan_idx: Index of vlan_id in the associated_VIDs[] of ipv6_to_iface[v6_idx]
  */
 typedef struct
 {
@@ -125,8 +122,6 @@ typedef struct
 	ipacm_wan_iface_type v6_association;
 	int v4_idx[IFACE_MAX];
 	int v6_idx[IFACE_MAX];
-	int v4_vlan_idx[IFACE_MAX];
-	int v6_vlan_idx[IFACE_MAX];
 	uint16_t vlan_id;
 }ipacm_vlan_association_info;
 
@@ -380,10 +375,10 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	static struct ipacm_pdn_flt_rule pdn_flt_rule_v4[IPA_MAX_FLT_RULE];
 	static struct ipacm_pdn_flt_rule pdn_flt_rule_v6[IPA_MAX_FLT_RULE];
-	static int wlan_v4_vlan_index[IPA_MAX_WLAN_STA_IFACES];
-	static int wlan_v6_vlan_index[IPA_MAX_WLAN_STA_IFACES];
-	static int eth_sta_v4_vlan_index;
-	static int eth_sta_v6_vlan_index;
+	static int wlan_sta_v4_pdn_index[IPA_MAX_WLAN_STA_IFACES];
+	static int wlan_sta_v6_pdn_index[IPA_MAX_WLAN_STA_IFACES];
+	static int eth_sta_v4_pdn_index;
+	static int eth_sta_v6_pdn_index;
 #endif
 	static struct ipa_flt_rule_add flt_rule_v4[IPA_MAX_FLT_RULE];
 	static struct ipa_flt_rule_add flt_rule_v6[IPA_MAX_FLT_RULE];
@@ -438,7 +433,6 @@ public:
 	static int GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype);
 	static bool is_xlat_by_vid(uint16_t vlan_id);
 	static bool is_xlat_by_ipv4(uint32_t ipv4_addr);
-	static int get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t vlan_id);
 #endif
 private:
 
@@ -702,7 +696,7 @@ private:
 
 #ifdef FEATURE_VLAN_MPDN
 	void get_vlan_association_info(ipacm_vlan_association_info* vlan_info);
-	void post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vlan_idx, uint16_t vlan_id, bool vlan_up);
+	void post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, uint16_t vlan_id, bool vlan_up);
 	int handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data);
 	int handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool xlat_cfg = false);
 	int check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, bool xlat_cfg = false);

@@ -210,7 +210,8 @@ void* firewall_monitor(void *param)
 				}
 				else if (!strncmp(event->name, IPACM_CFG_EXT_FILE_NAME, event->len)) // IPACM_configuration change
 				{
-					if ((IPACM_Iface::ipacmcfg->ipacm_emesh_enable == TRUE) && (IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 3))
+					if (((IPACM_Iface::ipacmcfg->ipacm_emesh_enable == TRUE) && (IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 3)) ||
+									((IPACM_Iface::ipacmcfg->device_mode == DEVMODE_STABRIDGE ) && IPACM_Iface::ipacmcfg->device_vlan_mode))
 					{
 						char IPACM_config_ext_file[IPA_MAX_FILE_LEN];
 						IPACMDBG_H("File \"%s\" was 0x%x\n", event->name, event->mask);
@@ -229,6 +230,7 @@ void* firewall_monitor(void *param)
 							}
 							else
 							{
+								IPACM_Iface::ipacmcfg->update_dscp_pcp_mapping_table();
 								evt_data.event = IPA_DSCP_PCP_CONFIG_CHANGE_EVENT;
 								evt_data.evt_data = NULL;
 

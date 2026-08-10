@@ -1875,6 +1875,13 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 	IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 #endif
+	/* Sending Getneigh to receive missing neighbor in case if missed early */
+	IPACMDBG_H("Query Getneigh for vlan ifaces\n");
+	ipa_nl_query_newneigh(AF_BRIDGE);
+	IPACMDBG_H("Query Getneigh for v4\n");
+	ipa_nl_query_newneigh(AF_INET);
+	IPACMDBG_H("Query Getneigh for v6\n");
+	ipa_nl_query_newneigh(AF_INET6);
 	return;
 }
 
@@ -4638,6 +4645,83 @@ int IPACM_Config::SetSpclIface(char *event_iface_name) {
 	return ret;
 }
 
+void IPACM_Config::update_dscp_pcp_mapping_table()
+{
+	struct ipa_ioc_dscp_pcp_map_info dscp_pcp_map_info;
+	int fd;
+	dscp_pcp_map_info.add = IPACM_Iface::ipacmcfg->dscp_pcp_config.add;
+
+	/* Issue add/delete ioctl and update cache */
+	IPACMDBG_H("Issuing DSCP PCP %s command\n", (dscp_pcp_map_info.add)?"add":"delete");
+
+	memcpy(&(dscp_pcp_map_info.dscp_pcp_map[0]), IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
+		sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
+	fd = open(IPA_DEVICE_NAME, O_RDWR);
+	if (fd < 0)
+	{
+		IPACMDBG_H("Failed to open IPA device\n");
+		return;
+	}
+	if (0 != ioctl(fd, IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING, &dscp_pcp_map_info))
+	{
+		IPACMDBG_H("Failed ioctl IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING\n");
+		close(fd);
+		return;
+	}
+	close(fd);
+
+	IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add = IPACM_Iface::ipacmcfg->dscp_pcp_config.add;
+	memcpy(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.dscp_pcp_map, IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
+					sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
+
+}
+
+void IPACM_Config::add_dscp_pcp_mapping()
+{
+	int fd;
+	struct ipa_ioc_dscp_pcp_map_info dscp_pcp_map_info;
+
+	/* Ignoring DSCP PCP addition/deletion if it already issued and there is no change in config */
+	if((memcmp(&(IPACM_Iface::ipacmcfg->dscp_pcp_config), &(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache),
+		sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config)) == 0))
+	{
+		IPACMDBG_H("Ignore Config file change as there is no change in the config\n");
+		return;
+	}
+
+	if (IPACM_Iface::ipacmcfg->dscp_pcp_config.add == 1)
+	{
+		/* Issue add ioctl and update cache */
+		IPACMDBG_H("Issuing DSCP PCP add command\n");
+		dscp_pcp_map_info.add = 1;
+		memcpy(&(dscp_pcp_map_info.dscp_pcp_map[0]), IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
+			sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
+		fd = open(IPA_DEVICE_NAME, O_RDWR);
+		if (fd < 0)
+		{
+			IPACMDBG_H("Failed to open IPA device\n");
+			return;
+		}
+
+		if (0 != ioctl(fd, IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING, &dscp_pcp_map_info))
+		{
+			IPACMDBG_H("Failed ioctl IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING\n");
+			close(fd);
+			return;
+		}
+
+		IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add = 1;
+		memcpy(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.dscp_pcp_map, IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
+			sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
+		close(fd);
+	}
+	else
+	{
+		IPACMDBG_H("Ignoring addition of DSCP PCP mapping\n");
+	}
+	return;
+}
+
 void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 {
 	list<qos_param_info>::iterator it_qos_params;
@@ -4750,8 +4834,10 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 
 	new_qos_info.dscp = data->dscp;
 	new_qos_info.pcp = data->pcp;
+	new_qos_info.pcp_mask = data->pcp_mask;
 	new_qos_info.dscp_mark_val = data->dscp_mark_val;
 
+	IPACMDBG("added pcp val 0x%x mask 0x%x\n", new_qos_info.pcp, new_qos_info.pcp_mask);
 	m_qos_params.push_front(new_qos_info);
 	pthread_mutex_unlock(&qos_param_list_lock);
 
@@ -4839,15 +4925,20 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 			}
 
 			qos_param->client_cnt = it_qos_params->qos_client_list.size();
+			strlcpy(qos_param->iface_name, it_qos_params->iface_name, sizeof(qos_param->iface_name));
 			for (it_qos_client = it_qos_params->qos_client_list.begin(); it_qos_client != it_qos_params->qos_client_list.end(); ++it_qos_client)
 			{
 				qos_param->dir = data->dir;
 				qos_param->qos_client_list[i].qos_rt_rule_hdl_v4 = it_qos_client->qos_rt_rule_hdl_v4;
+				qos_param->qos_client_list[i].qos_l2l_rt_rule_hdl_v4 = it_qos_client->qos_l2l_rt_rule_hdl_v4;
 				qos_param->qos_client_list[i].qos_rt_rule_hdl_v6 = it_qos_client->qos_rt_rule_hdl_v6;
+				qos_param->qos_client_list[i].qos_l2l_rt_rule_hdl_v6 = it_qos_client->qos_l2l_rt_rule_hdl_v6;
 				IPACMDBG("v6 rule to delete wan hdl %d\n",
 						qos_param->qos_client_list[i].qos_rt_rule_hdl_v6);
 				qos_param->qos_client_list[i].route_rule_set_v4 = it_qos_client->route_rule_set_v4;
+				qos_param->qos_client_list[i].route_rule_l2l_set_v4 = it_qos_client->route_rule_l2l_set_v4;
 				qos_param->qos_client_list[i].route_rule_set_v6 = it_qos_client->route_rule_set_v6;
+				qos_param->qos_client_list[i].route_rule_l2l_set_v6 = it_qos_client->route_rule_l2l_set_v6;
 
 				qos_param->qos_client_list[i].dscp_hpc_hdl_v4 = it_qos_client->dscp_hpc_hdl_v4;
 				qos_param->qos_client_list[i].dscp_hpc_hdl_v6 = it_qos_client->dscp_hpc_hdl_v6;

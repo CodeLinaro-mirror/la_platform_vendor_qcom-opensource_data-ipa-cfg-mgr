@@ -63,6 +63,13 @@
 
 using std::string;
 
+typedef enum
+{
+	BE_INDEX,
+	QOS_OR_VLAN_INDEX
+} ipa_pipe_index;
+
+#define MAX_PIPES QOS_OR_VLAN_INDEX + 1
 
 typedef struct
 {
@@ -297,13 +304,18 @@ struct qos_client_info
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
 	uint32_t qos_rt_rule_hdl_v4;
 	uint32_t qos_rt_rule_hdl_v6;
+	uint32_t qos_l2l_rt_rule_hdl_v4;
+	uint32_t qos_l2l_rt_rule_hdl_v6;
+	ipa_hdr_l2_type peer_l2_hdr_type;
 	int client_iface;
-
+	char iface_name[IPA_RESOURCE_NAME_MAX];
 	uint32_t dscp_hpc_hdl_v4;
 	uint32_t dscp_hpc_hdl_v6;
 
 	bool route_rule_set_v4;
+	bool route_rule_l2l_set_v4;
 	bool route_rule_set_v6;
+	bool route_rule_l2l_set_v6;
 
 	uint32_t v4_ip_addr;
 	uint32_t v6_ip_addr[4];
@@ -323,6 +335,7 @@ struct qos_param_info {
 	uint16_t vlan_id;
 	uint8_t dscp;
 	uint8_t pcp;
+	uint8_t pcp_mask;
 	uint8_t dscp_mark_val;
 
 	uint32_t qos_rt_rule_hdl_v4;
@@ -343,6 +356,7 @@ struct qos_param_info {
 struct qos_delete_param_info {
 	uint8_t dir;
 	uint32_t client_cnt;
+	char iface_name[IPA_RESOURCE_NAME_MAX];
 	qos_client_info qos_client_list[];
 };
 
@@ -626,6 +640,8 @@ public:
 	int get_vlan_id(char *iface_name, uint16_t *vlan_id);
 	void extract_mlo_base_iface(char *input_iface);
 	void get_vlan_mode_ifaces();
+	void add_dscp_pcp_mapping();
+	void update_dscp_pcp_mapping_table();
 #endif
 
 	bool is_svap_related(const char *phy_inf);

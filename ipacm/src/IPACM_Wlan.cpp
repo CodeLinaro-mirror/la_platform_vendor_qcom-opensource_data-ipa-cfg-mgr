@@ -194,7 +194,7 @@ IPACM_Wlan::IPACM_Wlan(char *iface_name, int iface_index, bool ast_update_needed
 		/* Update DSCP PCP mapping if the mesh R3 */
 		if(is_svap_iface() && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 3)
 		{
-			add_dscp_pcp_mapping();
+			IPACM_Iface::ipacmcfg->add_dscp_pcp_mapping();
 		}
 	}
 	IPACMDBG_H("Svap interface %d for wlan ap index %d\n", is_svap_iface(), wlan_ap_index);
@@ -1417,24 +1417,6 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("Just storing the recent config change\n");
 			return;
 		}
-
-		/* Issue add/delete ioctl and update cache */
-		IPACMDBG_H("Issuing DSCP PCP %s command\n", (dscp_pcp_map_info.add)?"add":"delete");
-		dscp_pcp_map_info.add = IPACM_Iface::ipacmcfg->dscp_pcp_config.add;
-		memcpy(&(dscp_pcp_map_info.dscp_pcp_map[0]), IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
-			sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
-		m_fd = open(IPA_DEVICE_NAME, O_RDWR);
-		if (0 != ioctl(m_fd, IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING, &dscp_pcp_map_info))
-		{
-			IPACMDBG_H("Failed ioctl IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING\n");
-			close(m_fd);
-			return;
-		}
-		close(m_fd);
-
-		IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add = IPACM_Iface::ipacmcfg->dscp_pcp_config.add;
-		memcpy(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.dscp_pcp_map, IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
- 									sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
 		size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
 		hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
 		if (hdr_proc_ctx_table == NULL) {
@@ -6772,6 +6754,7 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr, uint16_t vlan_id)
 	get_client_memptr(wlan_client, clt_indx)->route_rule_set_v4 = false;
 	get_client_memptr(wlan_client, clt_indx)->route_rule_set_v6 = 0;
 	free(get_client_memptr(wlan_client, clt_indx)->p_hdr_info);
+	get_client_memptr(wlan_client, clt_indx)->p_hdr_info = NULL;
 	get_client_memptr(wlan_client, clt_indx)->ta_peer_id = 0;
 	get_client_memptr(wlan_client, clt_indx)->vlan_id = 0;
 	get_client_memptr(wlan_client, clt_indx)->is_vlan = 0;
@@ -6983,6 +6966,7 @@ int IPACM_Wlan::handle_wlan_primary_client_down_evt(uint8_t *mac_addr)
 	}
 
 	free(get_primary_client_memptr(wlan_primary_client, primary_clt_indx)->p_hdr_info);
+	get_primary_client_memptr(wlan_primary_client, primary_clt_indx)->p_hdr_info = NULL;
 
 	while (get_primary_client_memptr(wlan_primary_client, primary_clt_indx)->num_vlan_clients > 0)
 	{
@@ -9631,45 +9615,6 @@ int IPACM_Wlan::delete_wlan_client_lan2lan_flt_rule(uint8_t *mac, ipa_ip_type ip
 	return IPACM_SUCCESS;
 }
 
-void IPACM_Wlan::add_dscp_pcp_mapping()
-{
-	int m_fd;
-	struct ipa_ioc_dscp_pcp_map_info dscp_pcp_map_info;
-
-	/* Ignoring DSCP PCP addition/deletion if it already issued and there is no change in config */
-	if((memcmp(&(IPACM_Iface::ipacmcfg->dscp_pcp_config), &(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache),
-		sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config)) == 0))
-	{
-		IPACMDBG_H("Ignore Config file change as there is no change in the config\n");
-		return;
-	}
-
-	if (IPACM_Iface::ipacmcfg->dscp_pcp_config.add == 1)
-	{
-		/* Issue add ioctl and update cache */
-		IPACMDBG_H("Issuing DSCP PCP add command\n");
-		dscp_pcp_map_info.add = 1;
-		memcpy(&(dscp_pcp_map_info.dscp_pcp_map[0]), IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
-			sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
-		m_fd = open(IPA_DEVICE_NAME, O_RDWR);
-		if (0 != ioctl(m_fd, IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING, &dscp_pcp_map_info))
-		{
-			IPACMDBG_H("Failed ioctl IPA_IOC_ADD_DEL_DSCP_PCP_MAPPING\n");
-			close(m_fd);
-			return;
-		}
-
-		IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.add = 1;
-		memcpy(IPACM_Iface::ipacmcfg->dscp_pcp_config_cache.dscp_pcp_map, IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map,
-			sizeof(IPACM_Iface::ipacmcfg->dscp_pcp_config.dscp_pcp_map));
-		close(m_fd);
-	}
-	else
-	{
-		IPACMDBG_H("Ignoring addition of DSCP PCP mapping\n");
-	}
-	return;
-}
 
 void IPACM_Wlan::handle_hpc_rt_rules_for_easymesh_R3(struct ipa_ioc_add_hdr_proc_ctx *hdr_proc_ctx_table,
 	struct ipa_hdr_proc_ctx_add *hdr_proc_ctx,
@@ -9830,6 +9775,12 @@ int IPACM_Wlan::handle_wlan_vlan_client_init(int client_idx, ipacm_bridge *bridg
 	if (hdr_proc_ctx_table == NULL) {
 		IPACMERR("Failed to allocate memory.\n");
 		return IPACM_FAILURE;
+	}
+
+	if (data == NULL) {
+		IPACMERR("p_hdr_info is NULL for client_idx %d, cannot init vlan client\n", client_idx);
+		res = IPACM_FAILURE;
+		goto end;
 	}
 
 	if (tx_prop != NULL)
@@ -10511,6 +10462,10 @@ int IPACM_Wlan::handle_wlan_vlan_neighbor(ipacm_event_new_neigh_vlan *param) {
 
 	/* Post the delayed IPA_ETH_BRIDGE_CLIENT_ADD event*/
 	cached_data = get_client_memptr(wlan_client, wlan_index)->p_hdr_info;
+	if (cached_data == NULL) {
+		IPACMDBG_H("p_hdr_info is NULL for wlan_index %d, skip bridge event\n", wlan_index);
+		return 0;
+	}
 	for (int i = 0; i < cached_data->num_of_attribs; i++) {
 		if (!is_svap_iface() && !is_vlan_iface()) {
 			IPACMDBG_H("Wlan iface is NON-SVAP, break\n");

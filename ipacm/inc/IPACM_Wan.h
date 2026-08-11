@@ -515,7 +515,10 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	static ipacm_ipv4_wan_iface ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
 	static ipacm_ipv6_wan_iface ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
-	static uint8_t num_offloaded_pdns;
+	/* Number of distinct PDNs with an offloaded v4 and/or v6 leg, derived from
+	 * wan_up_vlan/wan_up_vlan_v6 on the live PDN tables. Computed on demand
+	 * rather than cached, so it can never drift from that state. */
+	static uint8_t compute_num_offloaded_pdns();
 	static int GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype);
 	static int GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype);
 	static int GetWanPDNinfo(uint16_t *mtu, uint32_t *ipv4_addr, ipa_ip_type iptype);

@@ -44,6 +44,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <set>
 #include <IPACM_Wan.h>
 #include <IPACM_Xml.h>
 #include <IPACM_Log.h>
@@ -136,11 +137,27 @@ int	IPACM_Wan::ipa_if_num_tether_v6[IPA_MAX_IFACE_ENTRIES];
 #ifdef FEATURE_VLAN_MPDN
 ipacm_ipv4_wan_iface IPACM_Wan::ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
 ipacm_ipv6_wan_iface IPACM_Wan::ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
-uint8_t IPACM_Wan::num_offloaded_pdns = 0;
 int IPACM_Wan::wlan_v4_vlan_index = -1;
 int IPACM_Wan::wlan_v6_vlan_index = -1;
 int IPACM_Wan::eth_sta_v4_vlan_index = -1;
 int IPACM_Wan::eth_sta_v6_vlan_index = -1;
+
+uint8_t IPACM_Wan::compute_num_offloaded_pdns()
+{
+	std::set<IPACM_Wan*> counted;
+
+	for (int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if (ipv4_to_iface[i].pIface != NULL && ipv4_to_iface[i].wan_up_vlan)
+			counted.insert(ipv4_to_iface[i].pIface);
+	}
+	for (int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+	{
+		if (ipv6_to_iface[i].pIface != NULL && ipv6_to_iface[i].wan_up_vlan_v6)
+			counted.insert(ipv6_to_iface[i].pIface);
+	}
+	return (uint8_t)counted.size();
+}
 #endif
 
 uint16_t IPACM_Wan::mtu_default_wan_v4 = DEFAULT_MTU_SIZE;
@@ -1653,8 +1670,6 @@ int IPACM_Wan::handle_addr_del_evt(ipacm_event_data_addr *data)
 					IPACMDBG_H("sta_ipv4_pdn_index: %d ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan :%d\n", sta_ipv4_pdn_index, ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan);
 					ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan = false;
 					wan_v4_is_default_gw = true;
-					if (sta_ipv6_pdn_index == -1)
-						num_offloaded_pdns--;
 
 					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 					if(vlandown_data == NULL)
@@ -2602,8 +2617,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						handle_route_add_vlan_pdn_evt(IPA_IP_v6, ip_pass_pdn_info.VlanID);
 					}
 					handle_route_add_vlan_pdn_evt(IPA_IP_v4, ip_pass_pdn_info.VlanID);
-					num_offloaded_pdns++;
-					IPACMDBG_H("Num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+					IPACMDBG_H("num_offloaded_pdns: %d\n", compute_num_offloaded_pdns());
 				}
 			}
 			break;
@@ -3431,10 +3445,13 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[k+1];
 				}
 				ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[k] = 0;
-				if(found == 1 && ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt == 0 && ((modem_ipv6_pdn_index >= 0 &&
-					ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt == 0) || modem_ipv6_pdn_index == -1))
+				if (found == 1 && ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt == 0)
 				{
-					num_offloaded_pdns--;
+					ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
+				}
+				if (found == 1)
+				{
+					IPACMDBG_H("dev_name:%s num_offloaded_pdns:%d\n", dev_name, compute_num_offloaded_pdns());
 				}
 			}
 			else if(vlandown->iptype == IPA_IP_v6)
@@ -3468,11 +3485,13 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[k+1];
 				}
 				ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[k] = 0;
-				if(((modem_ipv4_pdn_index >= 0 && ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt == 0)
-					|| modem_ipv4_pdn_index == -1) && found == 1 &&
-					ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt == 0)
+				if (found == 1 && ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt == 0)
 				{
-					num_offloaded_pdns--;
+					ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
+				}
+				if (found == 1)
+				{
+					IPACMDBG_H("dev_name:%s num_offloaded_pdns:%d\n", dev_name, compute_num_offloaded_pdns());
 				}
 			}
 			else if(vlandown->iptype == IPA_IP_MAX)
@@ -3507,6 +3526,10 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[k+1];
 				}
 				ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs[k] = 0;
+				if (ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt == 0)
+				{
+					ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
+				}
 
 handle_v6:
 				if(modem_ipv6_pdn_index < 0 || modem_ipv6_pdn_index >= IPA_MAX_NUM_SW_PDNS)
@@ -3538,6 +3561,10 @@ handle_v6:
 						ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[k+1];
 				}
 				ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[k] = 0;
+				if (ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt == 0)
+				{
+					ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
+				}
 
 handle_v4:
 				if(found == 0)
@@ -3545,25 +3572,9 @@ handle_v4:
 					IPACMDBG_H("Not found vlan id:%d in PDN %s\n", vlandown->VlanID, dev_name);
 					return;
 				}
-				else if(((modem_ipv4_pdn_index >= 0 && ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt == 0)
-					|| modem_ipv4_pdn_index == -1) && found == 1 &&
-					modem_ipv6_pdn_index >= 0 && ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt == 0)
-				{
-					num_offloaded_pdns--;
-					IPACMDBG_H("dev_name:%s num_offloaded_pdns:%d\n", dev_name, num_offloaded_pdns);
-				}
-				else if(found == 1 && modem_ipv4_pdn_index >= 0 && ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt == 0 &&
-					((modem_ipv6_pdn_index >= 0 && ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt == 0) ||
-					modem_ipv6_pdn_index == -1))
-				{
-					num_offloaded_pdns--;
-					IPACMDBG_H("dev_name:%s num_offloaded_pdns:%d\n", dev_name, num_offloaded_pdns);
-				}
 				else
 				{
-					IPACMDBG_H("dev_name:%s num_offloaded_pdns:%d vlanID:%d modem_ipv4_pdn_index:%d "
-						"modem_ipv6_pdn_index:%d\n",
-						dev_name, num_offloaded_pdns, vlandown->VlanID, modem_ipv4_pdn_index, modem_ipv6_pdn_index);
+					IPACMDBG_H("dev_name:%s num_offloaded_pdns:%d\n", dev_name, compute_num_offloaded_pdns());
 				}
 			}
 		}
@@ -4030,8 +4041,9 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 	ipacm_vlan_association_info *vlan_info = NULL;
 	ipacm_event_iface_up* wanup_data = NULL;
 	ipacm_cmd_q_data evt_data;
+	uint8_t offloaded_count = 0;
 
-	IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);
+	IPACMDBG_H("num_offloaded_pdns: %d\n", compute_num_offloaded_pdns());
 
 	if(data == NULL)
 	{
@@ -4051,7 +4063,7 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 				IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0],
 				IPACM_Wan::ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
 
-		IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);
+		IPACMDBG_H("num_offloaded_pdns: %d\n", compute_num_offloaded_pdns());
 		IPACMDBG_H("data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
 
 		if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
@@ -4089,13 +4101,7 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 						vlan_info->v4_vlan_idx[Q6_WAN] >= 0)
 							post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN],
 							 	vlan_info->v4_vlan_idx[Q6_WAN], data->VlanID, false);
-					if((vlan_info->v4_idx[Q6_WAN] == -1 || ((vlan_info->v4_idx[Q6_WAN] >= 0) &&
-						ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan == false)) &&
-						((vlan_info->v6_idx[Q6_WAN] >= 0) && ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 == false))
-					{
-						num_offloaded_pdns--;
-						IPACMDBG_H("Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
-					}
+					IPACMDBG_H("num_offloaded_pdns: %d\n", compute_num_offloaded_pdns());
 				}
 				else
 				{
@@ -4115,14 +4121,13 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 				(sta_ipv4_pdn_index == -1 || ((sta_ipv4_pdn_index >= 0) && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan == false)) &&
 				((sta_ipv6_pdn_index >= 0) && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 == false))
 			{
-				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+				offloaded_count = compute_num_offloaded_pdns();
+				if(offloaded_count >= IPA_MAX_NUM_HW_PDNS)
 				{
 					IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n",
-							 num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							 offloaded_count, IPA_MAX_NUM_HW_PDNS);
 					goto fail;
 				}
-				num_offloaded_pdns++;
-				IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 			}
 		}
 		else if(m_is_sta_mode == ECM_WAN)
@@ -4141,13 +4146,7 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 						vlan_info->v4_vlan_idx[Q6_WAN] >= 0)
 						post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN],
 							 vlan_info->v4_vlan_idx[Q6_WAN], data->VlanID, false);
-					if((vlan_info->v4_idx[Q6_WAN] == -1 && ((vlan_info->v4_idx[Q6_WAN] >= 0) &&
-						ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan == false)) &&
-						((vlan_info->v6_idx[Q6_WAN] >= 0) && ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 == false))
-					{
-						num_offloaded_pdns--;
-						IPACMDBG_H("Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
-					}
+					IPACMDBG_H("num_offloaded_pdns: %d\n", compute_num_offloaded_pdns());
 				}
 				else
 				{
@@ -4184,14 +4183,13 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 				(sta_ipv4_pdn_index == -1 || ((sta_ipv4_pdn_index >= 0) && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan == false)) &&
 				((sta_ipv6_pdn_index >= 0) && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 == false))
 			{
-				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+				offloaded_count = compute_num_offloaded_pdns();
+				if(offloaded_count >= IPA_MAX_NUM_HW_PDNS)
 				{
 					IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n",
-							 num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							 offloaded_count, IPA_MAX_NUM_HW_PDNS);
 					goto fail;
 				}
-				num_offloaded_pdns++;
-				IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 			}
 		}
 		else
@@ -4212,14 +4210,7 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 						vlan_info->v4_vlan_idx[vlan_info->v6_association] >= 0)
 							post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[vlan_info->v6_association],
 							 	vlan_info->v4_vlan_idx[vlan_info->v6_association], data->VlanID, false);
-					if((vlan_info->v4_idx[vlan_info->v6_association] == -1 || ((vlan_info->v4_idx[vlan_info->v6_association] >= 0) &&
-						ipv4_to_iface[vlan_info->v4_idx[vlan_info->v6_association]].wan_up_vlan == false)) &&
-						((vlan_info->v6_idx[vlan_info->v6_association] >= 0) &&
-						ipv6_to_iface[vlan_info->v6_idx[vlan_info->v6_association]].wan_up_vlan_v6 == false))
-					{
-						num_offloaded_pdns--;
-						IPACMDBG_H("Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
-					}
+					IPACMDBG_H("num_offloaded_pdns: %d\n", compute_num_offloaded_pdns());
 				}
 				else
 				{
@@ -4248,14 +4239,13 @@ v6_skip:
 				(modem_ipv4_pdn_index == -1 || ((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan == false)) &&
 				((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 == false))
 			{
-				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+				offloaded_count = compute_num_offloaded_pdns();
+				if(offloaded_count >= IPA_MAX_NUM_HW_PDNS)
 				{
 					IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n",
-							 num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							 offloaded_count, IPA_MAX_NUM_HW_PDNS);
 					goto fail;
 				}
-				num_offloaded_pdns++;
-				IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 			}
 		}
 		/* VLAN associated with PDN now add client backhaul prefix for vlan clients and flush neigh_cache */
@@ -4281,6 +4271,7 @@ v6_skip:
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 		handle_route_add_vlan_pdn_evt(IPA_IP_v6, data->VlanID);
+		IPACMDBG_H("num_offloaded_pdns: %d\n", compute_num_offloaded_pdns());
 		ret = IPACM_SUCCESS;
 	}
 fail:
@@ -4306,6 +4297,7 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 {
 	int ret = IPACM_FAILURE;
 	ipacm_vlan_association_info *vlan_info = NULL;
+	uint8_t offloaded_count = 0;
 
 	if(data == NULL)
 	{
@@ -4354,13 +4346,7 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 						vlan_info->v6_vlan_idx[Q6_WAN] >= 0)
 						post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN],
 						 vlan_info->v6_vlan_idx[Q6_WAN], data->VlanID, false);
-					if(((vlan_info->v4_idx[Q6_WAN] >= 0) && ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan == false) &&
-						(vlan_info->v6_idx[Q6_WAN] == -1 || ((vlan_info->v6_idx[Q6_WAN] >= 0) &&
-						ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 == false)))
-					{
-						num_offloaded_pdns--;
-						IPACMDBG_H("Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
-					}
+					IPACMDBG_H("num_offloaded_pdns: %d\n", compute_num_offloaded_pdns());
 				}
 				else
 				{
@@ -4380,14 +4366,13 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 				((sta_ipv4_pdn_index >= 0) && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan == false) &&
 				(sta_ipv6_pdn_index == -1 || ((sta_ipv6_pdn_index >= 0) && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 == false)))
 			{
-				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+				offloaded_count = compute_num_offloaded_pdns();
+				if(offloaded_count >= IPA_MAX_NUM_HW_PDNS)
 				{
 					IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n",
-							 num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							 offloaded_count, IPA_MAX_NUM_HW_PDNS);
 					goto fail;
 				}
-				num_offloaded_pdns++;
-				IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 			}
 		}
 		else if (m_is_sta_mode == ECM_WAN)
@@ -4406,13 +4391,7 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 						vlan_info->v6_vlan_idx[Q6_WAN] >= 0)
 							post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN],
 						 		vlan_info->v6_vlan_idx[Q6_WAN], data->VlanID, false);
-					if(((vlan_info->v4_idx[Q6_WAN] >= 0) && ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan == false) &&
-						(vlan_info->v6_idx[Q6_WAN] == -1 || ((vlan_info->v6_idx[Q6_WAN] >= 0) &&
-						ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 == false)))
-					{
-						num_offloaded_pdns--;
-						IPACMDBG_H("Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
-					}
+					IPACMDBG_H("num_offloaded_pdns: %d\n", compute_num_offloaded_pdns());
 				}
 				else
 				{
@@ -4454,14 +4433,13 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 				((sta_ipv4_pdn_index >= 0) && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan == false) &&
 				(sta_ipv6_pdn_index == -1 || ((sta_ipv6_pdn_index >= 0) && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 == false)))
 			{
-				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+				offloaded_count = compute_num_offloaded_pdns();
+				if(offloaded_count >= IPA_MAX_NUM_HW_PDNS)
 				{
 					IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n",
-							 num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							 offloaded_count, IPA_MAX_NUM_HW_PDNS);
 					goto fail;
 				}
-				num_offloaded_pdns++;
-				IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 			}
 		}
 		else
@@ -4482,14 +4460,7 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 						vlan_info->v6_vlan_idx[vlan_info->v4_association] >= 0)
 							post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[vlan_info->v4_association],
 							 	vlan_info->v6_vlan_idx[vlan_info->v4_association], data->VlanID, false);
-					if(((vlan_info->v4_idx[vlan_info->v4_association] >= 0) &&
-						ipv4_to_iface[vlan_info->v4_idx[vlan_info->v4_association]].wan_up_vlan == false) &&
-						(vlan_info->v6_idx[vlan_info->v4_association] == -1 || ((vlan_info->v6_idx[vlan_info->v4_association] >= 0) &&
-						ipv6_to_iface[vlan_info->v6_idx[vlan_info->v4_association]].wan_up_vlan_v6 == false)))
-					{
-						num_offloaded_pdns--;
-						IPACMDBG_H("Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
-					}
+					IPACMDBG_H("num_offloaded_pdns: %d\n", compute_num_offloaded_pdns());
 				}
 				else
 				{
@@ -4518,17 +4489,17 @@ v4_skip:
 				((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan == false) &&
 				(modem_ipv6_pdn_index == -1 || ((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 == false)))
 			{
-				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+				offloaded_count = compute_num_offloaded_pdns();
+				if(offloaded_count >= IPA_MAX_NUM_HW_PDNS)
 				{
 					IPACMERR("number of offloaded PDNs %d can't add more than %d, ignoring\n",
-							 num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+							 offloaded_count, IPA_MAX_NUM_HW_PDNS);
 					goto fail;
 				}
-				num_offloaded_pdns++;
-				IPACMDBG_H("this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 			}
 		}
 		handle_route_add_vlan_pdn_evt(IPA_IP_v4, data->VlanID);
+		IPACMDBG_H("num_offloaded_pdns: %d\n", compute_num_offloaded_pdns());
 		ret = IPACM_SUCCESS;
 	}
 fail:
@@ -4550,7 +4521,7 @@ int IPACM_Wan::check_vlan_pdn(ipa_ip_type iptype, ipacm_event_route_vlan *data, 
 	int pdn_idx, vlan_idx;
 
 	IPACMDBG_H("iptype: %d\n", iptype);
-	IPACMDBG_H("num_offloaded_pdns: %d\n", num_offloaded_pdns);
+	IPACMDBG_H("num_offloaded_pdns: %d\n", compute_num_offloaded_pdns());
 
 	if(data == NULL)
 	{
@@ -4631,6 +4602,11 @@ process_del_vlan_route:
 			post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[vlan_info->v6_association], vlan_info->v6_vlan_idx[vlan_info->v6_association],
 				data->VlanID, false);
 		}
+		/* PDN's HW-offload occupancy is derived from wan_up_vlan/wan_up_vlan_v6
+		 * directly (post_wan_vlan_pdn_event above already cleared them if this
+		 * was the last VLAN on either leg), so just query the current count. */
+		IPACMDBG_H("Vlan id %d torn down, num_offloaded_pdns: %d\n",
+			data->VlanID, compute_num_offloaded_pdns());
 		free(vlan_info);
 		return IPACM_SUCCESS;
 	}
@@ -8799,7 +8775,6 @@ int IPACM_Wan::handle_down_evt()
 
 		wan_v4_is_default_gw = true;
 		wan_v6_is_default_gw = true;
-		num_offloaded_pdns--;
 
 		/* Wan v4, v6 is down. post vlan pdn down evt for every associated vlans. */
 		/* Wan is down. post vlan pdn down evt for every associated vlans. */
@@ -8864,8 +8839,6 @@ int IPACM_Wan::handle_down_evt()
 		ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 = false;
 
 		wan_v6_is_default_gw = true;
-		if (sta_ipv4_pdn_index == -1)
-			num_offloaded_pdns--;
 
 		/* Wan is down. post vlan pdn down evt for every associated vlans. */
 		vid_cnt_v6 = ipv6_to_iface[sta_ipv6_pdn_index].VID_cnt;
@@ -8907,8 +8880,6 @@ int IPACM_Wan::handle_down_evt()
 		IPACMDBG_H("sta_ipv4_pdn_index: %d ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan :%d\n", sta_ipv4_pdn_index, ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan);
 		ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan = false;
 		wan_v4_is_default_gw = true;
-		if (sta_ipv6_pdn_index == -1)
-			num_offloaded_pdns--;
 
 		/* Wan is down. post vlan pdn down evt for every associated vlans. */
 		vid_cnt_v4 = ipv4_to_iface[sta_ipv4_pdn_index].VID_cnt;
@@ -9012,9 +8983,16 @@ int IPACM_Wan::handle_down_evt()
 			res = IPACM_FAILURE;
 			goto fail;
 		}
-		ipv4_to_iface[sta_ipv4_pdn_index].ipv4_addr = 0;
-		ipv4_to_iface[sta_ipv4_pdn_index].pIface = NULL;
-		sta_ipv4_pdn_index = -1;
+		if (sta_ipv4_pdn_index >= 0)
+		{
+			ipv4_to_iface[sta_ipv4_pdn_index].ipv4_addr = 0;
+			ipv4_to_iface[sta_ipv4_pdn_index].pIface = NULL;
+			sta_ipv4_pdn_index = -1;
+		}
+		else
+		{
+			IPACMERR("sta_ipv4_pdn_index already -1 in handle_down_evt, skipping ipv4_to_iface cleanup, num_offloaded_pdns:%d\n", compute_num_offloaded_pdns());
+		}
 		dft_rt_rule_hdl[0] = 0;
 #ifdef FEATURE_IPA_IPSEC
 		/* Delete default IPsec v4 RT rules */
@@ -9053,9 +9031,16 @@ int IPACM_Wan::handle_down_evt()
 			goto fail;
 		}
 #endif
-		ipv6_to_iface[sta_ipv6_pdn_index].pIface = NULL;
-		memset(&ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
-		sta_ipv6_pdn_index = -1;
+		if (sta_ipv6_pdn_index >= 0)
+		{
+			ipv6_to_iface[sta_ipv6_pdn_index].pIface = NULL;
+			memset(&ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
+			sta_ipv6_pdn_index = -1;
+		}
+		else
+		{
+			IPACMERR("sta_ipv6_pdn_index already -1 in handle_down_evt, skipping ipv6_to_iface cleanup, num_offloaded_pdns:%d\n", compute_num_offloaded_pdns());
+		}
 		IPACMDBG_H("finished delete default v6 RT rules\n ");
 	}
 
@@ -9336,8 +9321,6 @@ int IPACM_Wan::handle_down_evt_ex()
 					//the memory will be freed by handler of the evt
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 				}
-				num_offloaded_pdns--;
-				IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
 			}
 			else //remove this in future. Should always be consistent with array.
 			{
@@ -9366,6 +9349,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipv4_to_iface[modem_ipv4_pdn_index].is_xlat = false;
 			memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
 			ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
+			IPACMDBG_H("num_offloaded_pdns: %d\n", compute_num_offloaded_pdns());
 
 			/* clear reserved slot for offloading v6 prefix */
 			if (is_xlat) {
@@ -9525,12 +9509,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_cmd_q_data evt_data;
 			ipacm_event_vlan_pdn *vlandown_data;
 
-			/* Xlat cfg offload pdn count is updated during v4 handling */
-			if (!xlat_cfg)
-				num_offloaded_pdns--;
-
-			IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
-
 			if(!isVlanWanUP_V6())
 			{
 				if(wan_route_rule_wan_v6_hdl_a5)
@@ -9609,6 +9587,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
 			memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
 			ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
+			IPACMDBG_H("num_offloaded_pdns: %d\n", compute_num_offloaded_pdns());
 
 			/* in also default gateway, DL filtering rules will be reconfigured later */
 			if(!is_default_gateway)
@@ -9784,12 +9763,6 @@ int IPACM_Wan::handle_down_evt_ex()
 			}
 			memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
 
-			if (ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt || ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt)
-			{
-				num_offloaded_pdns--;
-				IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
-			}
-
 			if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan &&
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
 			{
@@ -9824,11 +9797,7 @@ int IPACM_Wan::handle_down_evt_ex()
 				ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
 			}
 
-			if (ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt || ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt)
-			{
-				num_offloaded_pdns--;
-				IPACMDBG_H("now num offloaded PDNs is %d\n", num_offloaded_pdns);
-			}
+			IPACMDBG_H("num_offloaded_pdns: %d\n", compute_num_offloaded_pdns());
 
 			vlandown_data->VlanID = associated_VID; /* Wan is down. setting this value to 0, to delete all rules. */
 			vlandown_data->mux_id = ext_prop->ext[0].mux_id;

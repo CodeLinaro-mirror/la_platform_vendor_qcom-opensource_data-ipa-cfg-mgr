@@ -3243,7 +3243,13 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			install_wan_filtering_rule(false);
 
 			IPACM_LOG(IPACM_LOG_INFO, "new VLAN PDN prefix is 0x%08x%08x.\n", ipv6_prefix[0], ipv6_prefix[1]);
-
+			if (is_xlat)
+			{
+				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0] = IPA_DUMMY_PREFIX;
+				ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1] = IPA_DUMMY_PREFIX;
+				IPACM_LOG(IPACM_LOG_INFO, "XLAT case, new VLAN PDN prefix is 0x%08x%08x.\n",
+					ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0], ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1]);
+			}
 			ipacm_event_vlan_pdn *wanup_vlan_data;
 			wanup_vlan_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 			if(wanup_vlan_data == NULL)

@@ -31,6 +31,7 @@
 
 #include <list>
 #include <stdint.h>
+#include <vector>
 #include <IOffloadManager.h>
 #include "IPACM_Defs.h"
 

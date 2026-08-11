@@ -52,7 +52,6 @@
 #include <IPACM_Wan.h>
 #include <IPACM_Iface.h>
 #include <IPACM_Log.h>
-#include <IPACM_Bridge.h>
 
 iface_instances *IPACM_IfaceManager::head = NULL;
 
@@ -663,12 +662,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 			break;
 		case VIRTUAL_IF:
 			{
-					IPACM_LOG(IPACM_LOG_DEBUG, "Creating br-lan interface bridge instance\n");
-					IPACM_Bridge *br_lan = new IPACM_Bridge();
-					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, br_lan);
-					IPACM_EvtDispatcher::registr(IPA_ADDR_DEL_EVENT, br_lan);
-					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, br_lan);
-					registr(param->iface_name, ipa_interface_index, br_lan);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Bridge interface %s detected, querying address\n", param->iface_name);
 					IPACM_Iface::iface_addr_query(if_index);
 			}
 			break;

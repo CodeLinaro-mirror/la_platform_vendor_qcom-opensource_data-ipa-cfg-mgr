@@ -2906,7 +2906,7 @@ bool IPACM_Lan::is_vlan_IF(uint16_t vlan_id)
 {
 	char vlan_iface_name[IPA_RESOURCE_NAME_MAX];
 	char vlan_suffix[6];
-	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
+	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS] = {0};
 
 #ifdef FEATURE_SOCKSv5
 	/* handle socksv5 MPDN logic */

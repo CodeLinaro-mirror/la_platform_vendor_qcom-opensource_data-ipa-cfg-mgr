@@ -425,8 +425,8 @@ void IPACM_LanToLan::handle_client_cross_proc_ctx(ipacm_event_eth_bridge *data)
 #ifdef FEATURE_VLAN_MPDN
 	bool IsVlan = (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable &&
 		IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->p_iface->dev_name));
-	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
-	uint16_t cl_Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
+	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS] = {0};
+	uint16_t cl_Ids[IPA_MAX_NUM_OFFLOAD_VLANS] = {0};
 	int i;
 	ipa_bridge_vlan_mapping_info mapping_info;
 	bool client_found = false;
@@ -1094,8 +1094,8 @@ void IPACM_LanToLan_Iface::add_client_rt_rule_for_new_iface()
 
 void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client_info *client)
 {
-	int i, num_rt_rule;
-	uint32_t rt_rule_hdl[MAX_NUM_PROP];
+	int i, num_rt_rule = 0;
+	uint32_t rt_rule_hdl[MAX_NUM_PROP] = {0};
 	ipa_hdr_l2_type peer_l2_hdr_type;
 #ifdef FEATURE_VLAN_MPDN
 	std::array<uint8_t, 6> mac = {0};
@@ -2382,7 +2382,7 @@ void IPACM_LanToLan_Iface::handle_wlan_scc_mcc_switch()
 
 void IPACM_LanToLan_Iface::handle_intra_interface_info()
 {
-	uint32_t hdr_proc_ctx_hdl;
+	uint32_t hdr_proc_ctx_hdl = 0;
 
 	if(m_p_iface->tx_prop == NULL || m_p_iface->tx_prop->num_tx_props <= 0)
 	{
@@ -2657,7 +2657,7 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 
 void IPACM_LanToLan_Iface::add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type, char* peer_dev_name)
 {
-	uint32_t hdr_proc_ctx_hdl;
+	uint32_t hdr_proc_ctx_hdl = 0;
 
 	if(ref_cnt_peer_l2_hdr_type[peer_l2_type] == 1)
 	{

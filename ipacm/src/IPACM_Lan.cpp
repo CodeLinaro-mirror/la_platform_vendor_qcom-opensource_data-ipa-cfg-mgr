@@ -18312,6 +18312,15 @@ int IPACM_Lan::eth_bridge_add_rt_rule(uint8_t *mac, char *rt_tbl_name, uint32_t 
 	{
 		if(tx_prop->tx[i].ip == iptype)
 		{
+			/* Do not install MAC-based (catch-all) rules on a QoS pipe.
+			   A non-zero tc_bmap marks the pipe as a QoS pipe; QoS traffic is
+			   routed via the WAN QoS rules, not the eth-bridge MAC rules. */
+			if (tx_prop->tx[i].tc_bmap)
+			{
+				IPACMDBG_H("Tx:%d tc bit map is set, this is qos pipe. Not installing eth-bridge rule.\n", i);
+				continue;
+			}
+
 			if (IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2) {
 				if (is_if_svap || is_wlan_if_vlan) {
 					if (i < IPA_IP_v4_VLAN) continue;

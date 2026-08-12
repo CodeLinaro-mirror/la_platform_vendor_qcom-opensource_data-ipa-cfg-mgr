@@ -8170,7 +8170,7 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			}
 #endif
 			res = add_catchup_all_filtering_rule_each_pdn(iptype,
-				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos,true);
+				curr_interface->rx_prop->rx[0].attrib, rules[pos].flt_rule, pos, isPmipv6);
 #if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 			if(isPmipv6 || IPACM_Iface::ipacmcfg->ipogre_enabled)
 			{

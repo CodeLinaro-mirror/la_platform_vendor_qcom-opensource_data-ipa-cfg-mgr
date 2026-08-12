@@ -2717,17 +2717,18 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, uint16_
 }
 
 /**
- * --STA--
- *  1. Check if it is LTE to STA switch.
- *  2. Check if the intended action of V6 association to STA is done.
- *  3. Check if V4 is already associated. Proceed to add V6
- *  4. Both V4 and V6 association is not available. Add new PDN.
- * --LTE--
- *  1. Check if it is STA to LTE switch.
- *  2. Check if the intended action of V6 association to this LTE instance is done. If so, return.
- *  3. Check if the Vlan is mapped to another V6 PDN. If so, return.
- *  4. Check if the Vlan is mapped to another V4 PDN. If so, return.
- *  5. Both V4 and V6 association is not available. Add new PDN.
+ * This function support V6 VLAN switch with below steps:
+ * 1. Get VLAN association. It could have been binded to ETH/WLAN/Modem (WAN_TYPE)
+ * 2. For each WAN_TYPE, check if the VLAN is inter switching (different type
+ *    WAN) or intra switching (same type WAN - WLAN and Modem supports this)
+ *    or already associated with intended backhaul.
+ * 3. If it is not associated anywhere, consider it a new association.
+ * 4. Use post_wan_vlan_pdn_event with vlan_up false to dissociate from a WAN
+ * 5. Decrement num_offload_pdns
+ * 6. Increment num_offload_pdns before calling handle_route_add_vlan_pdn_evt
+ *    in the end
+ * Note: Increment/decrement of num_offload_pdns during switch are done only in
+ * in the switch handler functions.
  */
 int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool v4_only_xlat)
 {
@@ -2799,7 +2800,7 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 				{
 					post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[WLAN_WAN], data->VlanID, false);
 					if(vlan_info->v4_association == WLAN_WAN && ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].wan_up_vlan)
-							post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[WLAN_WAN], data->VlanID, false);
+						post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[WLAN_WAN], data->VlanID, false);
 					if(is_v4_pdn_slot_free(vlan_info->v4_idx[WLAN_WAN]) &&
 					   is_v6_pdn_slot_free(vlan_info->v6_idx[WLAN_WAN]) &&
 					   (num_offloaded_pdns > 0))
@@ -2811,6 +2812,19 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 				else
 				{
 					IPACM_LOG(IPACM_LOG_DEBUG, "Already posted IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) and (v4) for old STA\n");
+				}
+				/* Admit new WLAN PDN for this VID if not yet counted */
+				if(is_v4_pdn_slot_free(sta_ipv4_pdn_index) &&
+				   is_v6_pdn_slot_free(sta_ipv6_pdn_index))
+				{
+					if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "number of offloaded PDNs %d can't add more than %d, ignoring\n",
+								num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+						goto fail;
+					}
+					num_offloaded_pdns++;
+					IPACM_LOG(IPACM_LOG_DEBUG, "this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 				}
 			}
 			else if(vlan_info->v4_association == WLAN_WAN)
@@ -2915,49 +2929,38 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 			}
 			else if(vlan_info->v6_association == Q6_WAN && vlan_info->v6_idx[Q6_WAN] != modem_ipv6_pdn_index)
 			{
-#ifdef IPA_L2TP_TUNNEL_UDP
-				/* check if l2tp vlan associated with other than current PDN */
-				if(IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(data->VlanID))
+				IPACM_LOG(IPACM_LOG_DEBUG, "Backhaul switch from LTE to LTE - V6\n");
+				if(ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6)
 				{
-					/* remove l2tp vlan from the PDN */
-					if(ipv6_to_iface[vlan_info->v6_idx[vlan_info->v6_association]].wan_up_vlan_v6)
+					post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN], data->VlanID, false);
+					if(vlan_info->v4_association == Q6_WAN && vlan_info->v4_idx[Q6_WAN] >= 0 &&
+						ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan)
+							post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN], data->VlanID, false);
+					if(is_v4_pdn_slot_free(vlan_info->v4_idx[Q6_WAN]) &&
+					   is_v6_pdn_slot_free(vlan_info->v6_idx[Q6_WAN]) &&
+					   (num_offloaded_pdns > 0))
 					{
-						post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[vlan_info->v6_association], data->VlanID, false);
-						if(vlan_info->v4_idx[vlan_info->v6_association] >= 0 &&
-							ipv4_to_iface[vlan_info->v4_idx[vlan_info->v6_association]].wan_up_vlan)
-								post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[vlan_info->v6_association], data->VlanID, false);
-						if(is_v4_pdn_slot_free(vlan_info->v4_idx[vlan_info->v6_association]) &&
-						   is_v6_pdn_slot_free(vlan_info->v6_idx[vlan_info->v6_association]) &&
-						    (num_offloaded_pdns > 0))
-						{
-							num_offloaded_pdns--;
-							IPACM_LOG(IPACM_LOG_DEBUG, "Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
-						}
-					}
-					if(is_v4_pdn_slot_free(modem_ipv4_pdn_index) &&
-					   is_v6_pdn_slot_free(modem_ipv6_pdn_index))
-					{
-						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
-						{
-							IPACM_LOG(IPACM_LOG_ERR, "number of offloaded PDNs %d can't add more than %d, ignoring\n",
-									num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
-							goto fail;
-						}
-						num_offloaded_pdns++;
-						IPACM_LOG(IPACM_LOG_DEBUG, "this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+						num_offloaded_pdns--;
+						IPACM_LOG(IPACM_LOG_DEBUG, "Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
 					}
 				}
 				else
 				{
-					IPACM_LOG(IPACM_LOG_ERR, "VID (%d) already mapped to v6 PDN %d, can't map to v6 PDN %d\n",data->VlanID,
-					vlan_info->v6_idx[Q6_WAN], modem_ipv6_pdn_index);
-					goto fail;
+					IPACM_LOG(IPACM_LOG_DEBUG, "Already posted IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) and (v4) for old LTE PDN\n");
 				}
-#else
-				IPACM_LOG(IPACM_LOG_ERR, "VID (%d) already mapped to v6 PDN %d, can't map to v6 PDN %d\n",data->VlanID,
-				vlan_info->v6_idx[Q6_WAN], modem_ipv6_pdn_index);
-				goto fail;
-#endif
+				/* Admit new Q6 PDN for this VID if not yet counted */
+				if(is_v4_pdn_slot_free(modem_ipv4_pdn_index) &&
+				   is_v6_pdn_slot_free(modem_ipv6_pdn_index))
+				{
+					if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "number of offloaded PDNs %d can't add more than %d, ignoring\n",
+								num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+						goto fail;
+					}
+					num_offloaded_pdns++;
+					IPACM_LOG(IPACM_LOG_DEBUG, "this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+				}
 			}
 			else if(vlan_info->v4_idx[Q6_WAN] != -1 && vlan_info->v4_idx[Q6_WAN] != modem_ipv4_pdn_index)
 			{
@@ -3012,17 +3015,18 @@ fail:
 }
 
 /**
- * --STA--
- *  1. Check if it is LTE to STA switch.
- *  2. Check if the intended action of V4 association to STA is done.
- *  3. Check if V6 is already associated. Proceed to add V4
- *  4. Both V4 and V6 association is not available. Add new PDN.
- * --LTE--
- *  1. Check if it is STA to LTE switch.
- *  2. Check if the intended action of V4 association to this LTE instance is done. If so, return.
- *  3. Check if the Vlan is mapped to another V4 PDN. If so, return.
- *  4. Check if the Vlan is mapped to another V6 PDN. If so, return.
- *  5. Both V4 and V6 association is not available. Add new PDN.
+ * This function support V4 VLAN switch with below steps:
+ * 1. Get VLAN association. It could have been binded to ETH/WLAN/Modem (WAN_TYPE)
+ * 2. For each WAN_TYPE, check if the VLAN is inter switching (different type
+ *    WAN) or intra switching (same type WAN - WLAN STA and Modem supports this)
+ *    or already associated with intended backhaul.
+ * 3. If it is not associated anywhere, consider it a new association.
+ * 4. Use post_wan_vlan_pdn_event with vlan_up false to dissociate from a WAN
+ * 5. Decrement num_offload_pdns
+ * 6. Increment num_offload_pdns before calling handle_route_add_vlan_pdn_evt
+ *    in the end
+ * Note: Increment/decrement of num_offload_pdns during switch are done only in
+ * in the switch handler functions.
  */
 int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 {
@@ -3097,6 +3101,19 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 				else
 				{
 					IPACM_LOG(IPACM_LOG_DEBUG, "Already posted IPA_HANDLE_WAN_VLAN_PDN_DOWN (v4) and (v6) for old STA\n");
+				}
+				/* Admit new WLAN PDN for this VID if not yet counted */
+				if(is_v4_pdn_slot_free(sta_ipv4_pdn_index) &&
+				   is_v6_pdn_slot_free(sta_ipv6_pdn_index))
+				{
+					if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "number of offloaded PDNs %d can't add more than %d, ignoring\n",
+								num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+						goto fail;
+					}
+					num_offloaded_pdns++;
+					IPACM_LOG(IPACM_LOG_DEBUG, "this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 				}
 			}
 			else if(vlan_info->v6_association == WLAN_WAN)
@@ -3201,49 +3218,38 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 			}
 			else if(vlan_info->v4_idx[Q6_WAN] != -1 && vlan_info->v4_idx[Q6_WAN] != modem_ipv4_pdn_index)
 			{
-#ifdef IPA_L2TP_TUNNEL_UDP
-				/* check if l2tp vlan associated with other than current PDN */
-				if(IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(data->VlanID))
+				IPACM_LOG(IPACM_LOG_DEBUG, "Backhaul switch from LTE to LTE - V4\n");
+				if(ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan)
 				{
-					/* remove l2tp vlan from the PDN */
-					if(ipv4_to_iface[vlan_info->v4_idx[vlan_info->v4_association]].wan_up_vlan)
+					post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN], data->VlanID, false);
+					if(vlan_info->v6_association == Q6_WAN && vlan_info->v6_idx[Q6_WAN] >= 0 &&
+						ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6)
+							post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN], data->VlanID, false);
+					if(is_v4_pdn_slot_free(vlan_info->v4_idx[Q6_WAN]) &&
+					   is_v6_pdn_slot_free(vlan_info->v6_idx[Q6_WAN]) &&
+					   (num_offloaded_pdns > 0))
 					{
-						post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[vlan_info->v4_association], data->VlanID, false);
-						if(vlan_info->v6_idx[vlan_info->v4_association] >=0 &&
-							ipv6_to_iface[vlan_info->v6_idx[vlan_info->v4_association]].wan_up_vlan_v6)
-								post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[vlan_info->v4_association], data->VlanID, false);
-						if(is_v4_pdn_slot_free(vlan_info->v4_idx[vlan_info->v4_association]) &&
-						   is_v6_pdn_slot_free(vlan_info->v6_idx[vlan_info->v4_association]) &&
-						    (num_offloaded_pdns > 0))
-						{
-							num_offloaded_pdns--;
-							IPACM_LOG(IPACM_LOG_DEBUG, "Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
-						}
-					}
-					if(is_v4_pdn_slot_free(modem_ipv4_pdn_index) &&
-					   is_v6_pdn_slot_free(modem_ipv6_pdn_index))
-					{
-						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
-						{
-							IPACM_LOG(IPACM_LOG_ERR, "number of offloaded PDNs %d can't add more than %d, ignoring\n",
-							 		num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
-							goto fail;
-						}
-						num_offloaded_pdns++;
-						IPACM_LOG(IPACM_LOG_DEBUG, "this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+						num_offloaded_pdns--;
+						IPACM_LOG(IPACM_LOG_DEBUG, "Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
 					}
 				}
 				else
 				{
-					IPACM_LOG(IPACM_LOG_ERR, "VID (%d) already mapped to v4 PDN %d, can't map to v4 PDN %d\n",data->VlanID,
-						vlan_info->v4_idx[Q6_WAN], modem_ipv4_pdn_index);
-					goto fail;
+					IPACM_LOG(IPACM_LOG_DEBUG, "Already posted IPA_HANDLE_WAN_VLAN_PDN_DOWN (v4) and (v6) for old LTE PDN\n");
 				}
-#else
-				IPACM_LOG(IPACM_LOG_ERR, "VID (%d) already mapped to v4 PDN %d, can't map to v4 PDN %d\n",data->VlanID,
-						vlan_info->v4_idx[Q6_WAN], modem_ipv4_pdn_index);
-				goto fail;
-#endif
+				/* Admit new Q6 PDN for this VID if not yet counted */
+				if((modem_ipv4_pdn_index >= 0) && is_v4_pdn_slot_free(modem_ipv4_pdn_index) &&
+				   is_v6_pdn_slot_free(modem_ipv6_pdn_index))
+				{
+					if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "number of offloaded PDNs %d can't add more than %d, ignoring\n",
+								num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+						goto fail;
+					}
+					num_offloaded_pdns++;
+					IPACM_LOG(IPACM_LOG_DEBUG, "this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+				}
 			}
 			else if(vlan_info->v6_idx[Q6_WAN] != -1 && vlan_info->v6_idx[Q6_WAN] != modem_ipv6_pdn_index)
 			{

@@ -332,7 +332,7 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 								return;
 							}
 
-							if(strcmp(it->bridge->bridge_name, BRIDGE_0) != 0)
+							if(it->bridge && strcmp(it->bridge->bridge_name, BRIDGE_0) != 0)
 							{
 								if(config->is_added_vlan_iface(iface_name))
 								{

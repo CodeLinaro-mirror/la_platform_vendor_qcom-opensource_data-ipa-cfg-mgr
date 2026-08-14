@@ -86,6 +86,10 @@ IPACM_Config *pConfig;
           IPACM_LOG_IPV4_ADDR( prefix, (*(unsigned int*)&(addr).__data) );               \
         }
 
+/* skip multicast addresses (ff00::/8), e.g. NDP/NS solicited-node neighbors */
+#define IS_IPV6_MCAST_ADDR(addr) \
+        ( AF_INET6 == (addr).ss_family && ((unsigned char)(addr).__data[0]) == 0xFF )
+
 #else/* defined(FEATURE_IPA_ANDROID) */
 
 #define IPACM_NL_COPY_ADDR( event_info, element )                                        \
@@ -109,6 +113,11 @@ IPACM_Config *pConfig;
         } else {                                                                         \
           IPACM_LOG_IPV4_ADDR( prefix, (*(unsigned int*)&(addr).__ss_padding) );         \
         }
+
+/* skip multicast addresses (ff00::/8), e.g. NDP/NS solicited-node neighbors */
+#define IS_IPV6_MCAST_ADDR(addr) \
+        ( AF_INET6 == (addr).ss_family && ((unsigned char)(addr).__ss_padding[0]) == 0xFF )
+
 #endif /* defined(FEATURE_IPA_ANDROID)*/
 
 #define NDA_RTA(r)  ((struct rtattr*)(((char*)(r)) + NLMSG_ALIGN(sizeof(struct ndmsg))))
@@ -3125,6 +3134,11 @@ process_v6:
 				IPACMDBG_H("RTM_NEWNEIGH received with IPv4 multicast mac address. Ignoring\n");
 				return IPACM_SUCCESS;
 			}
+			if (IS_IPV6_MCAST_ADDR(msg_ptr->nl_neigh_info.attr_info.local_addr))
+			{
+				IPACMDBG_H("RTM_NEWNEIGH received with multicast IPv6 addr (ff00::/8). Ignoring\n");
+				return IPACM_SUCCESS;
+			}
 
 			if((msg_ptr->nl_neigh_info.metainfo.ndm_ifindex != 0) && (msg_ptr->nl_neigh_info.master_interface_index == 0) &&
 								(msg_ptr->nl_neigh_info.attr_info.local_addr.ss_family != 0))
@@ -3317,6 +3331,11 @@ process_v6:
 			if (IS_IPV4_MCAST_MAC(msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data))
 			{
 				IPACMDBG_H("RTM_DELNEIGH received with IPv4 multicast mac address. Ignoring\n");
+				return IPACM_SUCCESS;
+			}
+			if (IS_IPV6_MCAST_ADDR(msg_ptr->nl_neigh_info.attr_info.local_addr))
+			{
+				IPACMDBG_H("RTM_DELNEIGH received with multicast IPv6 addr (ff00::/8). Ignoring\n");
 				return IPACM_SUCCESS;
 			}
 

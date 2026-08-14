@@ -850,6 +850,8 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				ipa_nl_query_newneigh(AF_BRIDGE, dev_name);
 				IPACM_LOG(IPACM_LOG_DEBUG, "Query Getneigh for v4\n");
 				ipa_nl_query_newneigh(AF_INET, "bridge");
+				IPACM_LOG(IPACM_LOG_DEBUG,"Query Getneigh for v6\n");
+				ipa_nl_query_newneigh(AF_INET6, "bridge");
 			}
 		}
 		break;

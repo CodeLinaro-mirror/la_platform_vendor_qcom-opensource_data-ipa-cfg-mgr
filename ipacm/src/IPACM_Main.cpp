@@ -1080,7 +1080,6 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	void *array[MAX_IPACM_TRACE_STACK];
 	int size = 0, i;
 	char **messages;
-	void* res = NULL;
 
 	IPACM_LOG(IPACM_LOG_WARN, "Received Signal: %d %s\n", sig, strsignal(sig));
 	memset(&evt_data, 0, sizeof(evt_data));
@@ -1102,7 +1101,6 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 	case SIGILL:
 	case SIGBUS:
 	case SIGABRT:
-	case SIGTERM:
 		log_ipacm_crash_info("IPACM EXIT ABNORMALLY !!!!!");
 		p = (ucontext_t *)extra;
 		IPACM_LOG(IPACM_LOG_ERR, "siginfo address=%x\n", info->si_addr);
@@ -1130,34 +1128,13 @@ static void IPACM_Signals_handler(int sig, siginfo_t *info, void *extra)
 		fflush(stdout);
 
 		free(messages);
-		close(sk_info.sk_fd); /* closing netlink socket */
+		if(sk_info.sk_fd > 0){
+			close(sk_info.sk_fd); /* closing netlink socket */
+		}
 		/* got regular kill <PID>, kill -9 <PID> generates SIGKILL that cannot be handled by a signal handler */
 		IPACM_LOG(IPACM_LOG_WARN, "IPACM process stoped, So ipa path is broken\n");
 
-		if(sig == SIGTERM)
-		{
-			IPACM_LOG(IPACM_LOG_ERR, "IPACM gracefully requested to quit by PID %d, complying\n", info->si_pid);
-
-			for (int t_itr = 0; t_itr < IPACM_CHILD_THREADS_MAX; t_itr++)
-			{
-				if (IPACM_SUCCESS != pthread_cancel(ipacm_child_threads[t_itr].tid))
-				{
-					IPACM_LOG(IPACM_LOG_ERR, "unable to cancel %s THREAD\n",ipacm_child_threads[t_itr].t_name);
-				}
-				else
-				{
-					pthread_join(ipacm_child_threads[t_itr].tid, &res);
-					if(res == PTHREAD_CANCELED)
-					{
-						IPACM_LOG(IPACM_LOG_DEBUG, "%s THREAD cancelled sucessfully\n",ipacm_child_threads[t_itr].t_name);
-					}
-				}
-			}
-			log_deinit(); // before exit deregister from DLT fmwk
-			exit(0);
-		}
-
-		log_deinit(); // If the case is not SIGTERM then need to invoke here
+		log_deinit(); // deregister from DLT before falling through to default handler
 
 		/* restore to default signal handler so core dump is generated from original fault point */
 		RegisterForSignals(true);
@@ -1200,9 +1177,6 @@ void RegisterForSignals(bool default_handler)
 	if(sigaction(SIGBUS, &action, NULL) == -1) {
 		printf("couldn't register for SIGBUS\n");
 	}
-	if(sigaction(SIGTERM, &action, NULL) == -1) {
-		printf("couldn't register for SIGTERM\n");
-	}
 	if(sigaction(SIGABRT, &action, NULL) == -1) {
 		printf("couldn't register for SIGABRT\n");
 	}
@@ -1225,6 +1199,7 @@ int main(int argc, char **argv)
 	/* Initialize ret to IPACM_SUCCESS to prevent use of uninitialized variable
 	 * if no pthread_create call is made (e.g., all thread tids are already non-zero) */
 	int ret = IPACM_SUCCESS;
+	int sig_received = 0;
 	struct sched_param param = {0};
 	int max_priority = sched_get_priority_max(SCHED_FIFO);
 	if (max_priority == -1) {
@@ -1319,6 +1294,22 @@ int main(int argc, char **argv)
 	IPACM_LOG(IPACM_LOG_DEBUG, "using DATA_CONFIG_DIR_PATH %s\n", DATA_CONFIG_DIR_PATH);
 #endif
 
+	/* Block SIGTERM and SIGINT in this thread BEFORE installing any other signal
+	 * handlers or spawning child threads. All child threads spawned below inherit
+	 * this mask, so both signals are delivered synchronously to sigwait() below
+	 * instead of any async signal handler. Blocking first also closes the race
+	 * window in which SIGTERM/SIGINT would otherwise take their default action
+	 * (immediate process termination) before the mask is applied.
+	 */
+	sigset_t termset;
+	sigemptyset(&termset);
+	sigaddset(&termset, SIGTERM);
+	sigaddset(&termset, SIGINT);
+	if(pthread_sigmask(SIG_BLOCK, &termset, NULL) != 0)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to block SIGTERM/SIGINT in main thread\n");
+	}
+
 	RegisterForSignals(false);
 
 	for(int t_itr = 0; t_itr< IPACM_CHILD_THREADS_MAX; t_itr++)
@@ -1339,10 +1330,19 @@ int main(int argc, char **argv)
 	/* Create Conntrack listener threads here to support on-demand PDNs connections before WAN is up */
 	CtList->CreateConnTrackThreads();
 
-	for(int t_itr = 0; t_itr< IPACM_CHILD_THREADS_MAX; t_itr++)
+	/* Wait synchronously for SIGTERM. Child threads keep running in the
+	 * background. On receipt, deregister from DLT and _exit(0);
+	 * the kernel reaps threads, remaining fds, heap, and mmaps. IPACM is
+	 * auto-restarted by systemd.
+	 */
+	if(sigwait(&termset, &sig_received) == 0)
 	{
-		pthread_join(ipacm_child_threads[t_itr].tid, NULL);
+		IPACM_LOG(IPACM_LOG_INFO, "IPACM received signal %d, exiting\n", sig_received);
 	}
+	log_deinit();
+	fflush(stdout);
+	_exit(0);
+
 handle_ret:
 	log_deinit();
 	return ret;

@@ -93,6 +93,9 @@ typedef struct _ipa_wan_client
 	uint32_t sta_hdr_proc_hdl_v6;
 	bool sta_hdr_proc_ctx_set;
 	bool power_save_set;
+	bool is_v4_gateway;
+	bool is_v6_gateway;
+	bool is_stub; /* slot created for pending static routes, no header/MAC yet */
 	wan_client_rt_hdl wan_rt_hdl[0]; /* depends on number of tx properties */
 }ipa_wan_client;
 
@@ -116,8 +119,11 @@ typedef struct {
 struct MapRule {
 	std::vector<MapeFMR> fmr_rules;
 	uint32_t br_ipaddr[4];
+	uint32_t br_ll_ipaddr[4];
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
 	bool draft03;
+	bool br_static_route_pending;
+	bool br_v4_static_route_pending;
 };
 
 class IPACM_Wan;
@@ -248,7 +254,8 @@ typedef struct v6_ipgre_hdr_s
  */
 #define IPV6_SRC_ADDR_IDX   2
 #define IPV6_DST_ADDR_IDX   6
-#define IPV6_GRE_PROT_IDX  12
+#define IPV6_GRE_PROT_IDX  10
+#define IPV6_GRE_PROT_IDX_OP  12
 #define IPV6_GRE_PMIP_PROT_IDX  10
 
 /* wan iface */
@@ -260,6 +267,7 @@ public:
 	static int ipa_pm_q6_check;
 	static bool wan_up;
 	static bool wan_up_v6;
+	static bool mape_wan_up_pending;
 	static uint8_t xlat_mux_id;
 #ifdef FEATURE_VLAN_MPDN
 #ifdef FEATURE_IPACM_UL_FIREWALL
@@ -276,7 +284,7 @@ public:
 	static uint16_t mtu_gre_v4;
 	static uint16_t mtu_gre_v6;
 #endif
-#ifdef FEATURE_PMIPV6
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 	/*
 	 * The following is for keeping gre route rule state...
 	 *
@@ -328,6 +336,10 @@ public:
 
 	int ipgre_make_header_rmv_rt_rule(
 		ipa_ipgre_info& ipgre_info);
+
+	int ipgre_install_dl_exception_flt_rule(
+		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add,
+		int fltr_rule_number, enum ipa_ip_type iptype);
 
 	void ipgre_clear_route_data(
 		enum ipa_ip_type             iptype);
@@ -735,6 +747,7 @@ public:
 	static const uint8_t v6_gre_header[];
 	static const uint8_t v4_ipogre_header[];
 	static const uint8_t v6_ipogre_header[];
+	static const uint8_t v6_ipogre_header_op[];
 	static int GetMuxByAddr(
 		enum ipa_ip_type iptype,
 		void*            addr,
@@ -770,6 +783,7 @@ private:
 	uint32_t dft_wan_fl_hdl[IPA_NUM_DEFAULT_WAN_FILTER_RULES];
 #ifdef FEATURE_IPV6_NAT
 	uint32_t ipv6_ula_prefix_hdl;
+	uint32_t ipv6_nat_second_pass_flt_hdl;
 #endif
 	uint32_t ipv6_dest_flt_rule_hdl[MAX_DEFAULT_v6_ROUTE_RULES];
 	int num_ipv6_dest_flt_rule;
@@ -796,6 +810,7 @@ private:
 	uint8_t ext_router_mac_addr[IPA_MAC_ADDR_SIZE];
 	uint8_t netdev_mac[IPA_MAC_ADDR_SIZE];
 
+	/* _a5 = IPA_CLIENT_APPS_WAN_CONS: catch-all /0 IPv6 route rule to the AP (a5) */
 	static uint32_t wan_route_rule_lan_v6_hdl_a5;
 	static uint32_t wan_route_rule_wan_v6_hdl_a5;
 
@@ -914,6 +929,18 @@ private:
 		return IPACM_INVALID_INDEX;
 	}
 
+	/* Find a stub slot (no MAC yet) by GW IPv4 address */
+	inline int get_wan_stub_index_ipv4(uint32_t gw_v4_addr)
+	{
+		for (int cnt = 0; cnt < num_wan_client; cnt++)
+		{
+			if (get_client_memptr(wan_client, cnt)->is_stub &&
+			    get_client_memptr(wan_client, cnt)->v4_addr == gw_v4_addr)
+				return cnt;
+		}
+		return IPACM_INVALID_INDEX;
+	}
+
 	inline int get_wan_client_index_ipv6(uint32_t* ipv6_addr)
 	{
 		int cnt, v6_num;
@@ -971,9 +998,42 @@ private:
 				IPACMDBG_H("Delete client index %d ipv4 Qos rules for tx:%d \n",clt_indx,tx_index);
 				rt_hdl = get_client_memptr(wan_client, clt_indx)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4;
 
-				if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
+				/* MAP-E BR: the per-slot handle mirrors mape_wan_rt_rule_hdl_v4 —
+				 * a single shared IPA rule.  Skip per-slot deletion here; the
+				 * mape_wan_rt_rule_hdl_v4 cleanup block below deletes the live
+				 * handle.  Only applies to is_v6_gateway (BR role) to match that
+				 * cleanup block — a pure is_v4_gateway client must delete normally
+				 * here; without this restriction its per-slot handle would be zeroed
+				 * without the IPA rule ever being deleted, leaking it permanently. */
+				bool is_mape_gw_br =
+					IPACM_Iface::ipacmcfg->mape_enable &&
+					(IPACM_Iface::ipacmcfg->mape_wan_iface_table_index <
+						IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces) &&
+					(strcmp(dev_name, IPACM_Iface::ipacmcfg->iface_table[
+						IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0) &&
+					get_client_memptr(wan_client, clt_indx)->is_v6_gateway;
+				if (is_mape_gw_br)
 				{
-					return IPACM_FAILURE;
+					/* Zero stale/duplicate per-slot handle; live rule cleaned up below */
+					get_client_memptr(wan_client, clt_indx)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4 = 0;
+				}
+				else
+				{
+					if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
+					{
+						return IPACM_FAILURE;
+					}
+					get_client_memptr(wan_client, clt_indx)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4 = 0;
+					/* rebuild_mape_hdr calls delete_wan_rtrules before setting
+					 * is_v6_gateway, so is_mape_gw_br=false above and the handle
+					 * is deleted here instead of being zeroed.  If it aliases
+					 * mape_wan_rt_rule_hdl_v4, zero the global now so
+					 * handle_wan_client_route_rule does not try to delete a
+					 * stale handle and abort the BR rule reinstall. */
+					if (IPACM_Iface::ipacmcfg->mape_enable &&
+					    rt_hdl != 0 &&
+					    rt_hdl == IPACM_Wan::mape_wan_rt_rule_hdl_v4)
+						IPACM_Wan::mape_wan_rt_rule_hdl_v4 = 0;
 				}
 			}
 		     } /* end of for loop */
@@ -982,7 +1042,56 @@ private:
 		     if(get_client_memptr(wan_client, clt_indx)->route_rule_set_v4==true) /* for ipv4 */
 		     {
 				get_client_memptr(wan_client, clt_indx)->route_rule_set_v4 = false;
+				/* Delete and clear the shared MAP-E BR v4 route rule when the GW/BR
+				 * client is torn down.  Previously this only zeroed the handle without
+				 * calling DeleteRoutingHdl, leaking the IPA hardware rule until WAN
+				 * teardown and depleting routing table entries on reconnect. */
+				if (IPACM_Iface::ipacmcfg->mape_enable &&
+				    (IPACM_Iface::ipacmcfg->mape_wan_iface_table_index <
+				            IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces) &&
+				    (strcmp(dev_name, IPACM_Iface::ipacmcfg->iface_table[
+				            IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0) &&
+				    get_client_memptr(wan_client, clt_indx)->is_v6_gateway)
+				{
+					if (IPACM_Wan::mape_wan_rt_rule_hdl_v4 != 0)
+					{
+						IPACMDBG_H("DEL GW_NEIGH: deleting mape_wan_rt_rule_hdl_v4=0x%x "
+							"before GW client removal\n",
+							IPACM_Wan::mape_wan_rt_rule_hdl_v4);
+						if (m_routing.DeleteRoutingHdl(
+								IPACM_Wan::mape_wan_rt_rule_hdl_v4, IPA_IP_v4) == false)
+							IPACMERR("Failed to delete mape_wan_rt_rule_hdl_v4 "
+								"on GW client DEL\n");
+						IPACM_Wan::mape_wan_rt_rule_hdl_v4 = 0;
+						/* Mark BR route pending so it is reinstalled when
+						 * the GW/BR neighbor is re-resolved. */
+						IPACM_Wan::mape_rules.br_static_route_pending = true;
+					}
+					else
+					{
+						IPACMDBG_H("GW client delete: mape_wan_rt_rule_hdl_v4 already 0\n");
+					}
+				}
 		     }
+		     /* delete IPv4 static route rules */
+		     for (auto it = rt_hdl_v4_list[clt_indx].begin();
+		          it != rt_hdl_v4_list[clt_indx].end(); ++it)
+		     {
+		         if (!it->second.route_rule_set_v4)
+		             continue;
+		         for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+		         {
+		             if (tx_prop->tx[tx_index].ip != IPA_IP_v4)
+		                 continue;
+		             uint32_t hdl = it->second.hdl_v4[tx_index].rt_rule_hdl_v4;
+		             if (hdl && m_routing.DeleteRoutingHdl(hdl, IPA_IP_v4) == false)
+		             {
+		                 IPACMERR("Failed to delete IPv4 static route hdl=%x\n", hdl);
+		                 return IPACM_FAILURE;
+		             }
+		         }
+		     }
+		     rt_hdl_v4_list[clt_indx].clear();
 		}
 
 		if(iptype == IPA_IP_v6)
@@ -1023,6 +1132,30 @@ private:
 					} /* end of for loop */
 				} /* end of for loop */
 			}
+
+			if(mape_wan_rt_rule_hdl_v6 && get_client_memptr(wan_client, clt_indx)->is_v6_gateway){
+				if(m_routing.DeleteRoutingHdl(mape_wan_rt_rule_hdl_v6, IPA_IP_v6) == false)
+				{
+					return IPACM_FAILURE;
+				}
+				mape_wan_rt_rule_hdl_v6 = 0;
+			}
+			/* Delete IPv6 dst-prefix static route rules */
+			for (auto &entry : rt_hdl_v6_dst_list[clt_indx])
+			{
+				if (!entry.second.route_rule_set_v6) continue;
+				for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+				{
+					if (tx_prop->tx[tx_index].ip != IPA_IP_v6) continue;
+					uint32_t hdl = entry.second.hdl_v6[tx_index].rt_rule_hdl_v6;
+					if (hdl && m_routing.DeleteRoutingHdl(hdl, IPA_IP_v6) == false)
+					{
+						IPACMERR("Failed to delete IPv6 static route rule hdl=%x\n", hdl);
+						return IPACM_FAILURE;
+					}
+				}
+			}
+			rt_hdl_v6_dst_list[clt_indx].clear();
 			IPACMDBG_H("Current clnt-index:%d ipv6_set= %d, route_rule_set_v6= %d, update ipa_num_clients_ipv6:%d\n",
 				clt_indx, get_client_memptr(wan_client, clt_indx)->ipv6_set,
 				get_client_memptr(wan_client, clt_indx)->route_rule_set_v6,
@@ -1033,6 +1166,11 @@ private:
 
 	int handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr);
 	int handle_mape_wan_fmr_hdr_init(uint8_t *mac_addr, MapeFMR* fmr_rule);
+	int create_wan_client_stub(uint32_t gw_v4_addr);
+	void handle_wan_static_route(ipa_ip_type iptype, uint32_t dst_v4_addr,
+	                               uint32_t dst_v4_mask, uint32_t gw_v4_addr,
+	                               bool is_br);
+	void install_wan_v6_static_route(int wan_index, const std::array<uint32_t,4> &dst_v6);
 	int handle_wan_client_ipaddr(ipacm_event_data_all *data);
 	int handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptype);
 #ifdef FEATURE_DUAL_BACKHAUL
@@ -1171,6 +1309,14 @@ private:
 #endif
 
 	int add_ipv6_nat_ula_prefix_flt_rule(ipa_ioc_add_flt_rule *m_pFilteringTable);
+	int add_ipv6_nat_second_pass_filter_rule();
+#ifdef FEATURE_VLAN_MPDN
+	int add_ipv6_nat_second_pass_filter_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,
+		ipacm_pdn_flt_rule* rules, int fltr_rule_number);
+#else
+	int add_ipv6_nat_second_pass_filter_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,
+		struct ipa_flt_rule_add *rules, int fltr_rule_number);
+#endif
 #endif // FEATURE_IPV6_NAT
 	int add_ipv6_frag_filtering_rule_ex(const struct ipa_rule_attrib& rx_prop_attrib,
 		struct ipa_flt_rule_add& flt_rule_add, int fltr_rule_number);

@@ -268,6 +268,7 @@ public:
 	pthread_mutex_t ip_collision_lock;
 	map<string, int> ip_collision_map;
 
+	pthread_mutex_t get_vlan_association_lock;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipacm_lan_stats_enable;
 	bool ipacm_lan_stats_enable_set;

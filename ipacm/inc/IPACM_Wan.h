@@ -186,8 +186,6 @@ public:
 	static int GetV6PrefixByVid(int vid, uint32_t *v6_prefix);
 	static int GetV6MTUByPrefix(uint16_t *mtu, uint32_t *v6_prefix);
 	static IPACM_firewall_conf_t* get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* dev_name);
-	static int get_wan_v4_index(ipacm_wan_iface_type sta_mode);
-	static int get_wan_v6_index(ipacm_wan_iface_type sta_mode);
 #endif
 	static bool isWanUP(int ipa_if_num_tether)
 	{
@@ -429,6 +427,21 @@ public:
 	static ipacm_ipv4_wan_iface ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
 	static ipacm_ipv6_wan_iface ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
 	static uint8_t num_offloaded_pdns;
+
+	/* True if the v4 PDN slot is either absent or if VLAN is not currently offloaded. */
+	static inline bool is_v4_pdn_slot_free(int v4_idx)
+	{
+		return (v4_idx == -1) ||
+			(v4_idx >= 0 && ipv4_to_iface[v4_idx].wan_up_vlan == false);
+	}
+
+	/* True if the v6 PDN slot is either absent or if VLAN not currently offloaded. */
+	static inline bool is_v6_pdn_slot_free(int v6_idx)
+	{
+		return (v6_idx == -1) ||
+			(v6_idx >= 0 && ipv6_to_iface[v6_idx].wan_up_vlan_v6 == false);
+	}
+
 	static int GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype);
 	static int GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype);
 	static bool is_xlat_by_vid(uint16_t vlan_id);

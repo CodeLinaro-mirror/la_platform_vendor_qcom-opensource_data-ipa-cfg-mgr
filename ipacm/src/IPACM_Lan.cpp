@@ -3206,7 +3206,7 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 					if (handle_mpdn_ul_xlat_filter_rule(IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
 								data->iptype, data->mux_id, data->VlanID))
 					{
-						remove_pdn_xlat_ctx(data->mux_id);
+						remove_pdn_xlat_ctx(data->mux_id, data->VlanID);
 						IPACM_LOG(IPACM_LOG_ERR, "Failed to install xlat rules\n");
 						return IPACM_FAILURE;
 					}
@@ -3238,13 +3238,21 @@ int IPACM_Lan::handle_vlan_pdn_up(ipacm_event_vlan_pdn *data, bool set_mux)
 	else
 	{
 		IPACM_LOG(IPACM_LOG_ERR, "Failed installing UL rules. Don't set mux up for mux id %d\n", data->mux_id);
+		/* Unwind: any rules that may have been partially installed must be removed,
+		 * otherwise a failed UP after a completed DOWN strands the VID with rules
+		 * on no valid backhaul. */
 		if(data->iptype == IPA_IP_v6)
 		{
-
+			if (num_wan_ul_fl_rule_v6[0] > 0)
+				del_ul_flt_rules(IPA_IP_v6);
 			modem_ul_v6_set[0] = false;
 		}
 		else
+		{
+			if(num_wan_ul_fl_rule_v4[0] > 0)
+				del_ul_flt_rules(IPA_IP_v4);
 			modem_ul_v4_set[0] = false;
+		}
 	}
 	IPACM_LOG(IPACM_LOG_DEBUG, "ret: %d, modem_ul_v4_set: %d, modem_ul_v6_set: %d\n", ret, modem_ul_v4_set[0], modem_ul_v6_set[0]);
 
@@ -3281,11 +3289,11 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 				(IPACM_Wan::isWanUP(ipa_if_num) || IPACM_Wan::isVlanWanUP()))
 				notif_only = true;
 #endif //FEATURE_SOCKSv5
-			xlat_pdn_ctx_id = get_pdn_xlat_ctx(data->mux_id, 0);
+			xlat_pdn_ctx_id = get_pdn_xlat_ctx(data->mux_id, data->VlanID);
 			if (xlat_pdn_ctx_id != -1)
 			{
 				delete_mdpn_ul_xlat_filter_rule(data->mux_id);
-				remove_pdn_xlat_ctx(data->mux_id);
+				remove_pdn_xlat_ctx(data->mux_id, data->VlanID);
 			}
 
 			/* Clean up MTU rule */
@@ -3450,12 +3458,12 @@ int IPACM_Lan::handle_vlan_pdn_down(ipacm_event_vlan_pdn *data)
 			/* Clean up MTU rule */
 			modify_private_subnet();
 
-			xlat_pdn_ctx_id = get_pdn_xlat_ctx(data->mux_id, 0);
+			xlat_pdn_ctx_id = get_pdn_xlat_ctx(data->mux_id, data->VlanID);
 
 			if (xlat_pdn_ctx_id != -1)
 			{
 				delete_mdpn_ul_xlat_filter_rule(data->mux_id);
-				remove_pdn_xlat_ctx(data->mux_id);
+				remove_pdn_xlat_ctx(data->mux_id, data->VlanID);
 			}
 
 			if(!notif_only)
@@ -13312,9 +13320,9 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			flt_rule.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
 			flt_rule.rule.attrib.u.v6.dst_addr_mask[2] = 0x0;
 			flt_rule.rule.attrib.u.v6.dst_addr_mask[3] = 0x0;
-			flt_rule.rule.attrib.u.v6.dst_addr_mask[3] = 0x0;
 
-			if(vid[i] && IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+			if(vid[i] && !IPACM_Iface::ipacmcfg->is_dummy_VID(vid[i]) &&
+				IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 			{
 				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 				flt_rule.rule.attrib.vlan_id = vid[i];

@@ -266,6 +266,7 @@ IPACM_Config::IPACM_Config()
 	memset(vlan_devices, 0, IPA_VLAN_IF_MAX * sizeof(vlan_devices[0]));
 	memset(ip_pass_mpdn_table, 0, sizeof(ip_pass_mpdn_table));
 	pthread_mutex_init(&ip_pass_mpdn_lock, NULL);
+	pthread_mutex_init(&get_vlan_association_lock, NULL);
 #endif
 #if defined(FEATURE_L2TP) || defined(FEATURE_VLAN_MPDN)
 	pthread_mutex_init(&vlan_l2tp_lock, NULL);

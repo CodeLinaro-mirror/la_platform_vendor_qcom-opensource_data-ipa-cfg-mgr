@@ -1037,22 +1037,50 @@ protected:
 		IPACM_LOG(IPACM_LOG_DEBUG, "Max number of pdns reached, can't add pdn to ctx!\n");
 	}
 
-	inline void remove_pdn_xlat_ctx(int pdn_mux_id) //mike remove all vlans, if we need to remove vlan one by one need to change
+	inline void remove_pdn_xlat_ctx(int pdn_mux_id, uint16_t vid = 0)
 	{
 		for (int i = 0; i < IPA_MAX_NUM_HW_PDNS ; ++i)
 		{
-			if (xlat_ctx.active_pdn_list[i].pdn_mux_id == pdn_mux_id)
+			if (xlat_ctx.active_pdn_list[i].pdn_mux_id != pdn_mux_id)
+				continue;
+
+			if (vid != 0)
+			{
+				bool found = false;
+				for (int j = 0; j < IPA_MAX_NUM_SW_PDNS; ++j)
+				{
+					if (xlat_ctx.active_pdn_list[i].associated_VIDs[j] == vid)
+					{
+						xlat_ctx.active_pdn_list[i].associated_VIDs[j] = 0;
+						if (xlat_ctx.active_pdn_list[i].active_vlan_count > 0)
+							xlat_ctx.active_pdn_list[i].active_vlan_count--;
+						IPACM_LOG(IPACM_LOG_DEBUG, "Removed vid %d from xlat ctx mux %d, active_vlan_count %d\n",
+							vid, pdn_mux_id, xlat_ctx.active_pdn_list[i].active_vlan_count);
+						found = true;
+						break;
+					}
+				}
+				if (!found)
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "vid %d not found in xlat ctx mux %d\n", vid, pdn_mux_id);
+					return;
+				}
+			}
+
+			if (vid == 0 || xlat_ctx.active_pdn_list[i].active_vlan_count == 0)
 			{
 				xlat_ctx.active_pdn_list[i].pdn_mux_id = 0;
-				xlat_ctx.active_pdn_count--;
-				memset(xlat_ctx.active_pdn_list[i].associated_VIDs, 0, IPA_MAX_NUM_SW_PDNS * sizeof(xlat_ctx.active_pdn_list[i].associated_VIDs[0]));
+				if (xlat_ctx.active_pdn_count > 0)
+					xlat_ctx.active_pdn_count--;
+				memset(xlat_ctx.active_pdn_list[i].associated_VIDs, 0,
+					IPA_MAX_NUM_SW_PDNS * sizeof(xlat_ctx.active_pdn_list[i].associated_VIDs[0]));
 				xlat_ctx.active_pdn_list[i].active_vlan_count = 0;
-				IPACM_LOG(IPACM_LOG_INFO, "Removing pdn from xlat ctx mux id %d total active xlat pdn:%d\n",
+				IPACM_LOG(IPACM_LOG_INFO, "Freed xlat ctx for mux %d, total %d\n",
 					pdn_mux_id, xlat_ctx.active_pdn_count);
-				return;
 			}
+			return;
 		}
-		IPACM_LOG(IPACM_LOG_DEBUG, "Pdn not found in ctx!\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Pdn not found in ctx! mux_id=%d, vid=%d\n", pdn_mux_id, vid);
 	}
 
 	inline int get_pdn_xlat_ctx(int pdn_mux_id, uint16_t vid)
@@ -1098,7 +1126,7 @@ public:
 				}
 
 				//vlan case
-				for(int j = 0; j < IPA_MAX_NUM_HW_PDNS; j++)
+				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 				{
 					if((mux[i].associated_VIDs[j]!=0) &&
 					(mux[i].associated_VIDs[j] == vid))
@@ -1208,7 +1236,7 @@ private:
 		if(is_mux_up(mux_id, iptype, vid))
 		{
 			IPACM_LOG(IPACM_LOG_ERR, "mux id %d is already up, not setting it iptype %d\n", mux_id, iptype);
-			return IPACM_FAILURE;
+			return IPACM_SUCCESS;
 		}
 
 		if(iptype == IPA_IP_v6)
@@ -1256,6 +1284,7 @@ private:
 	inline int set_mux_down(uint8_t mux_id, ipa_ip_type iptype, uint16_t vid)
 	{
 		ipacm_mux_struct *mux = v4_mux_up;
+		bool match = false;
 
 		if(mux_id == 0)
 		{
@@ -1278,20 +1307,35 @@ private:
 						   (mux[i].associated_VIDs[j] == vid))
 						{
 							mux[i].associated_VIDs[j] = 0;
-							mux[i].VID_cnt--;
+							if(mux[i].VID_cnt > 0)
+								mux[i].VID_cnt--;
+							else
+								IPACM_LOG(IPACM_LOG_WARN, "VID_cnt underflow"
+									"detected for mux %d, iptype %d, vid %d\n",
+									mux_id, iptype, vid);
+							match = true;
+							break;
 						}
+                                        }
+					if(!match)
+					{
+						IPACM_LOG(IPACM_LOG_DEBUG, "vid %d not associated with mux %d,"
+								" iptype %d, no-op\n", vid, mux_id, iptype);
+						return IPACM_SUCCESS;
 					}
 				}
 				if(mux[i].VID_cnt == 0 || vid == 0)
 				{
 					memset(&mux[i], 0, sizeof(mux[i]));
-					IPACM_LOG(IPACM_LOG_DEBUG, "successfully removed mux id %d for dev %s, i = %d, iptype %d, VID_cnt = %d\n", mux_id, dev_name, i, iptype, mux[i].VID_cnt);
-					return IPACM_SUCCESS;
+					IPACM_LOG(IPACM_LOG_DEBUG, "successfully removed mux id %d "
+							"for dev %s, i = %d, iptype %d, VID_cnt = %d\n",
+							mux_id, dev_name, i, iptype, mux[i].VID_cnt);
 				}
+				return IPACM_SUCCESS;
 			}
 		}
 
-		IPACM_LOG(IPACM_LOG_ERR, "could not find mux %d or associated vid %d, iptype %d\n", mux_id, vid, iptype);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Not found: mux %d or associated vid %d, iptype %d\n", mux_id, vid, iptype);
 		return IPACM_FAILURE;
 	}
 #endif

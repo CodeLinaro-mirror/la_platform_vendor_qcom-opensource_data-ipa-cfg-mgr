@@ -915,14 +915,9 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 			 * client (and therefore has it in its wlan_client list) should process
 			 * this neighbor event; the other link instance skips it.
 			 */
-			if ((ipa_interface_index == ipa_if_num) && (get_wlan_client_index(data->mac_addr) != IPACM_INVALID_INDEX))
+			int wlan_index = get_wlan_client_index(data->mac_addr);
+			if ((ipa_interface_index == ipa_if_num) && (wlan_index != IPACM_INVALID_INDEX))
 			{
-				int wlan_index = get_wlan_client_index(data->mac_addr);
-				if (wlan_index == IPACM_INVALID_INDEX)
-				{
-					IPACM_LOG(IPACM_LOG_INFO,"wlan client not found/attached \n");
-					return;
-				}
 #ifdef IPA_VLAN_PRIORITY
 				if(IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id, &priority))
 #else
@@ -3625,10 +3620,29 @@ fail:
 }
 
 /*handle reset wifi-client rt-rules */
-int IPACM_Wlan::handle_wlan_client_reset_rt(ipa_ip_type iptype)
+int IPACM_Wlan::handle_wlan_client_reset_rt(ipa_ip_type iptype,  uint16_t vlan_id)
 {
 	int i, res = IPACM_SUCCESS;
+	uint16_t iface_vlan_id = 0;
 
+	/* If caller scoped by VID, only reset when the passed VID matches this
+	 * interface's VLAN (or dummy VLAN for a WLAN AP). A WLAN AP is always
+	 * non-VLAN, so its VID is the dummy DUMMY_VLAN_ID_BASE + if_index. */
+	if(vlan_id != 0)
+	{
+		if(IPACM_Iface::ipacmcfg->get_vlan_id(dev_name, &iface_vlan_id) != IPACM_SUCCESS)
+			iface_vlan_id = 0;
+
+		if(iface_vlan_id == 0)
+			iface_vlan_id = DUMMY_VLAN_ID_BASE + ipa_if_num;
+
+		if(iface_vlan_id != vlan_id)
+		{
+			IPACM_LOG(IPACM_LOG_DEBUG, "vlan_id %d does not match iface vlan_id %d, skip reset\n",
+						vlan_id, iface_vlan_id);
+			return IPACM_SUCCESS;
+		}
+	}
 	/* clean wifi-client routing rules */
 	IPACM_LOG(IPACM_LOG_INFO, "left %d wifi clients to reset ip-type(%d) rules \n \n", num_wifi_client, iptype);
 

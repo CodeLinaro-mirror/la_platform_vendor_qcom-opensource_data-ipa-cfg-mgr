@@ -26,6 +26,13 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+/*
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 #ifndef IPACM_CONNTRACK_FILTER_H
 #define IPACM_CONNTRACK_FILTER_H
 
@@ -35,6 +42,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <errno.h>
+#include <pthread.h>
 
 #include "IPACM_ConntrackClient.h"
 #include "IPACM_CmdQueue.h"
@@ -72,6 +80,7 @@ class IPACM_ConntrackClient
 
 private:
    static IPACM_ConntrackClient *pInstance;
+   static pthread_mutex_t ct_mutex;
 
    struct nfct_handle *tcp_hdl;
    struct nfct_handle *udp_hdl;

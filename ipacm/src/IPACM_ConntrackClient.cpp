@@ -49,6 +49,7 @@ extern IPACM_EvtDispatcher cm_dis;
 extern void ParseCTMessage(struct nf_conntrack *ct);
 
 IPACM_ConntrackClient *IPACM_ConntrackClient::pInstance = NULL;
+pthread_mutex_t IPACM_ConntrackClient::ct_mutex = PTHREAD_MUTEX_INITIALIZER;
 IPACM_ConntrackListener *CtList = NULL;
 
 /* ================================
@@ -120,10 +121,19 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 	int max_entries;
 	int max_ct_entries;
 
-	u_int8_t  protocol, tcp_state;
+	u_int8_t  protocol, tcp_state = 0;
+
+	/* Read all ct attributes under one lock/unlock to exclude concurrent
+	 * nfct_filter_attach() calls from the main event thread. */
+	pthread_mutex_lock(&IPACM_ConntrackClient::ct_mutex);
 	protocol = nfct_get_attr_u8(ct, ATTR_REPL_L4PROTO);
-	if((protocol == IPPROTO_TCP))
+	if (protocol == IPPROTO_TCP)
 		tcp_state = nfct_get_attr_u8(ct, ATTR_TCP_STATE);
+	ip_type = nfct_get_attr_u8(ct, ATTR_REPL_L3PROTO);
+	sport   = ntohs(nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC));
+	dport   = ntohs(nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST));
+	pthread_mutex_unlock(&IPACM_ConntrackClient::ct_mutex);
+
 	IPACMDBG("Event callback called with msgtype is :%d\n",type);
 
 	/*Avoiding processing of tcp conntracks if state is not established, if not fin_wait, if msg type is not destroy*/
@@ -137,14 +147,7 @@ int IPACM_ConntrackClient::IPAConntrackEventCB
 		goto IGNORE;
 	}
 
-	/* Retrieve ip type */
-	ip_type = nfct_get_attr_u8(ct, ATTR_REPL_L3PROTO);
 	IPACMDBG("iptype: %d\n", ip_type);
-
-	sport = nfct_get_attr_u16(ct, ATTR_ORIG_PORT_SRC);
-	sport = ntohs(sport);
-	dport = nfct_get_attr_u16(ct, ATTR_ORIG_PORT_DST);
-	dport = ntohs(dport);
 
 	/* Avoid processing conntrack with DNS 53 port */
 	if(dport == 53 || sport == 53)
@@ -406,7 +409,9 @@ void IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Local_Iface_v6(struct n
 	}
 
 	IPACMDBG("attaching the filter to the handle\n");
+	pthread_mutex_lock(&IPACM_ConntrackClient::ct_mutex);
 	int ret = nfct_filter_attach(nfct_fd(handle), filter);
+	pthread_mutex_unlock(&IPACM_ConntrackClient::ct_mutex);
 	if (ret)
 	{
 		PERROR("unable to attach the filter to the handle\n");
@@ -430,7 +435,9 @@ void IPACM_ConntrackClient::IPA_Conntrack_Filters_Accept_Local_Iface_v6(struct n
 	IPA_Conntrack_Filters_Ipv6_Add_Src_Dst_Attr(filter, filter_ipv6_addr, ACCEPT_CT);
 
 	IPACMDBG("attaching the filter to the handle\n");
+	pthread_mutex_lock(&IPACM_ConntrackClient::ct_mutex);
 	int ret = nfct_filter_attach(nfct_fd(handle), filter);
+	pthread_mutex_unlock(&IPACM_ConntrackClient::ct_mutex);
 	if (ret)
 	{
 		PERROR("unable to attach the filter to the handle\n");
@@ -1106,7 +1113,9 @@ void IPACM_ConntrackClient::UpdateUDPFilters(void *param, bool isWan)
 	if(pClient->udp_hdl != NULL)
 	{
 		IPACMDBG("attaching the filter to udp handle\n");
+		pthread_mutex_lock(&IPACM_ConntrackClient::ct_mutex);
 		ret = nfct_filter_attach(nfct_fd(pClient->udp_hdl), pClient->udp_filter);
+		pthread_mutex_unlock(&IPACM_ConntrackClient::ct_mutex);
 		if(ret == -1)
 		{
 			PERROR("unable to attach the filter to udp handle\n");
@@ -1173,7 +1182,9 @@ void IPACM_ConntrackClient::UpdateTCPFilters(void *param, bool isWan)
 	if(pClient->tcp_hdl != NULL)
 	{
 		IPACMDBG("attaching the filter to tcp handle\n");
+		pthread_mutex_lock(&IPACM_ConntrackClient::ct_mutex);
 		ret = nfct_filter_attach(nfct_fd(pClient->tcp_hdl), pClient->tcp_filter);
+		pthread_mutex_unlock(&IPACM_ConntrackClient::ct_mutex);
 		if(ret == -1)
 		{
 			PERROR("unable to attach the filter to tcp handle\n");

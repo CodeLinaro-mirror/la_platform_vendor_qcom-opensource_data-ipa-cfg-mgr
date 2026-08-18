@@ -41,6 +41,7 @@
 	Skylar Chang
 
 */
+#include <algorithm>
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -86,11 +87,15 @@ int find_mask(int ip_v4_last, int *mask_value);
 
 #else/* defined(FEATURE_IPA_ANDROID) */
 
-#define IPACM_NL_COPY_ADDR( event_info, element ) \
-	do { \
-		memcpy( &event_info->attr_info.element.__ss_padding, RTA_DATA(rtah), sizeof(event_info->attr_info.element.__ss_padding) ); \
-	} while (0)
-
+#define IPACM_NL_COPY_ADDR( event_info, element )                                        \
+        do {                                                                              \
+            memset( &event_info->attr_info.element.__ss_padding, 0,                      \
+                    sizeof(event_info->attr_info.element.__ss_padding) );                 \
+            memcpy( &event_info->attr_info.element.__ss_padding,                         \
+                    RTA_DATA(rtah),                                                       \
+                    std::min<size_t>(RTA_PAYLOAD(rtah),                                   \
+                             sizeof(event_info->attr_info.element.__ss_padding)) );       \
+        } while (0)
 
 #define IPACM_EVENT_COPY_ADDR_v6( event_data, element)                                   \
         memcpy( event_data, element.__ss_padding, sizeof(event_data));
@@ -2780,6 +2785,11 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type, char * iface_name)
 	}
 
 	msgsent_len = send(nl_sock, &nl_request, sizeof(nl_request), 0);
+	if (msgsent_len < 0 || (size_t)msgsent_len != sizeof(nl_request))
+	{
+		IPACMERR("Failed to send netlink request, sent %zd\n", msgsent_len);
+		goto error;
+	}
 
 	msg = {
 		.msg_name = &nladdr,
@@ -2796,6 +2806,14 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type, char * iface_name)
 		goto error;
 	}
 
+	/* This socket sends a unicast RTM_GETROUTE request; only the kernel
+	 * (nl_pid == 0) is expected to respond. A non-zero nl_pid means a
+	 * non-kernel sender, which is never valid here — treat as fatal. */
+	if (nladdr.nl_pid != 0) {
+		IPACMERR("Netlink msg not from kernel (nl_pid=%u)\n", nladdr.nl_pid);
+		goto error;
+	}
+
 	h = (struct nlmsghdr *)buf;
 
 	IPACMDBG("Route msg_len : %d\n", msglen);
@@ -2807,19 +2825,36 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type, char * iface_name)
 			IPACMERR("Dump was interrupted\n");
 			goto error;
 		}
-
-		if (nladdr.nl_pid != 0)
+		if (h->nlmsg_type == NLMSG_DONE)
 		{
-			continue;
+			break;
 		}
-
 		if (h->nlmsg_type == NLMSG_ERROR)
 		{
 			IPACMERR("Netlink message error");
 			goto error;
 		}
 		memset(&nl_route_info_get_route, 0, sizeof(ipa_nl_route_info_t));
-		ipa_nl_decode_rtm_route((char*)h,msglen,&nl_route_info_get_route);
+
+		/* h->nlmsg_len is header-inclusive (nlmsghdr + rtmsg + RTAs).
+		 * ipa_nl_decode_rtm_route strips NLMSG_LENGTH(sizeof(struct rtmsg))
+		 * from buflen and positions rtah past both headers, so the RTA_OK
+		 * loop is correctly bounded to this message's RTAs only.
+		 * The prior code passed msglen (the entire recv buffer), which caused
+		 * the RTA loop to overrun into subsequent messages. */
+		if (h->nlmsg_len < NLMSG_LENGTH(sizeof(struct rtmsg))) {
+			IPACMERR("Bad nlmsg_len %u (too small)\n", h->nlmsg_len);
+			goto error;
+		}
+		/* msglen is int but guaranteed > 0 here (validated above).
+		 * Cast to uint32_t to match the type of h->nlmsg_len and avoid
+		 * a signed/unsigned comparison warning. */
+		if (h->nlmsg_len > (uint32_t)msglen) {
+			IPACMERR("Bad nlmsg_len %u > remaining %d\n", h->nlmsg_len, msglen);
+			goto error;
+		}
+		ipa_nl_decode_rtm_route((char*)h, h->nlmsg_len, &nl_route_info_get_route);
+
 		IPACMDBG("In case RTM_GETROUTE\n");
 		IPACMDBG("rtm_type: %d\n", nl_route_info_get_route.metainfo.rtm_type);
 		IPACMDBG("protocol: %d\n", nl_route_info_get_route.metainfo.rtm_protocol);
@@ -3577,6 +3612,12 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name, bool query)
 	}
 
 	msgsent_len = send(nl_sock, &nl_request, sizeof(nl_request), 0);
+	if (msgsent_len < 0 || (size_t)msgsent_len != sizeof(nl_request))
+	{
+		IPACMERR("Failed to send netlink request, sent %zd\n", msgsent_len);
+		ret_val = IPACM_FAILURE;
+		goto end;
+	}
 
 	msg = {
 		.msg_name = &nladdr,

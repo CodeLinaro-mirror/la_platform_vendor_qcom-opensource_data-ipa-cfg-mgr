@@ -608,13 +608,13 @@ protected:
 	{
 		int cnt;
 
-		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Is ODU client? %s\n", is_odu?"Yes":"No");
 		if (is_odu)
 		{
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (active_lan_client_index_odu[cnt].lan_stats_idx == -1) {
-					IPACMDBG_H("Available free index :%d\n", cnt);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Available free index :%d\n", cnt);
 					return true;
 				}
 			}
@@ -624,13 +624,13 @@ protected:
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (active_lan_client_index[cnt].lan_stats_idx == -1) {
-					IPACMDBG_H("Available free index :%d\n", cnt);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Available free index :%d\n", cnt);
 					return true;
 				}
 			}
 		}
 
-		IPACMDBG_H("No free index available\n");
+		IPACM_LOG(IPACM_LOG_WARN, "No free index available\n");
 		return false;
 	}
 
@@ -640,21 +640,21 @@ protected:
 
 		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
-			IPACMDBG_H("LAN stats functionality is not enabled.\n");
+			IPACM_LOG(IPACM_LOG_WARN, "LAN stats functionality is not enabled.\n");
 			return -1;
 		}
 
-		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		IPACM_LOG(IPACM_LOG_INFO, "Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
 
-		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Is ODU client? %s\n", is_odu?"Yes":"No");
 		if (is_odu)
 		{
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (active_lan_client_index_odu[cnt].lan_stats_idx == -1) {
-					IPACMDBG_H("Got active lan stats index :%d, reserve it\n", cnt);
+					IPACM_LOG(IPACM_LOG_INFO, "Got active lan stats index :%d, reserve it\n", cnt);
 					active_lan_client_index_odu[cnt].lan_stats_idx = cnt;
 					memcpy(active_lan_client_index_odu[cnt].mac,
 							mac_addr,
@@ -669,7 +669,7 @@ protected:
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (active_lan_client_index[cnt].lan_stats_idx == -1) {
-					IPACMDBG_H("Got active lan stats index :%d, reserve it\n", cnt);
+					IPACM_LOG(IPACM_LOG_INFO, "Got active lan stats index :%d, reserve it\n", cnt);
 					active_lan_client_index[cnt].lan_stats_idx = cnt;
 					memcpy(active_lan_client_index[cnt].mac,
 							mac_addr,
@@ -680,7 +680,7 @@ protected:
 			}
 		}
 
-		IPACMDBG_H("index not available\n");
+		IPACM_LOG(IPACM_LOG_WARN, "index not available\n");
 		return -1;
 	}
 
@@ -690,21 +690,21 @@ protected:
 
 		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
-			IPACMDBG_H("LAN stats functionality is not enabled.\n");
+			IPACM_LOG(IPACM_LOG_WARN, "LAN stats functionality is not enabled.\n");
 			return -1;
 		}
 
-		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		IPACM_LOG(IPACM_LOG_INFO, "Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
 
-		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Is ODU client? %s\n", is_odu?"Yes":"No");
 		if (is_odu)
 		{
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (inactive_lan_client_index_odu[cnt].lan_stats_idx == -1) {
-					IPACMDBG_H("Got inactive lan stats index :%d, reserve it\n", cnt);
+					IPACM_LOG(IPACM_LOG_INFO, "Got inactive lan stats index :%d, reserve it\n", cnt);
 					inactive_lan_client_index_odu[cnt].lan_stats_idx = cnt;
 					memcpy(inactive_lan_client_index_odu[cnt].mac,
 							mac_addr,
@@ -719,7 +719,7 @@ protected:
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (inactive_lan_client_index[cnt].lan_stats_idx == -1) {
-					IPACMDBG_H("Got inactive lan stats index :%d, reserve it\n", cnt);
+					IPACM_LOG(IPACM_LOG_INFO, "Got inactive lan stats index :%d, reserve it\n", cnt);
 					inactive_lan_client_index[cnt].lan_stats_idx = cnt;
 					memcpy(inactive_lan_client_index[cnt].mac,
 							mac_addr,
@@ -730,7 +730,7 @@ protected:
 			}
 		}
 
-		IPACMDBG_H("index not available\n");
+		IPACM_LOG(IPACM_LOG_WARN, "index not available\n");
 		return -1;
 	}
 
@@ -740,15 +740,15 @@ protected:
 
 		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
-			IPACMDBG_H("LAN stats functionality is not enabled.\n");
+			IPACM_LOG(IPACM_LOG_WARN, "LAN stats functionality is not enabled.\n");
 			return -1;
 		}
 
-		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		IPACM_LOG(IPACM_LOG_INFO, "Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
 
-		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Is ODU client? %s\n", is_odu?"Yes":"No");
 		if (is_odu)
 		{
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
@@ -758,7 +758,7 @@ protected:
 						IPA_MAC_ADDR_SIZE) == 0) &&
 						(active_lan_client_index_odu[cnt].ipa_if_num
 						== ipa_if_num)) {
-					IPACMDBG_H("Got lan stats index :%d, return\n", cnt);
+					IPACM_LOG(IPACM_LOG_INFO, "Got lan stats index :%d, return\n", cnt);
 					active_lan_client_index_odu[cnt].lan_stats_idx = cnt;
 					memcpy(active_lan_client_index_odu[cnt].mac,
 							mac_addr,
@@ -776,7 +776,7 @@ protected:
 						IPA_MAC_ADDR_SIZE) == 0) &&
 						(active_lan_client_index[cnt].ipa_if_num
 						== ipa_if_num)) {
-					IPACMDBG_H("Got lan stats index :%d, return\n", cnt);
+					IPACM_LOG(IPACM_LOG_INFO, "Got lan stats index :%d, return\n", cnt);
 					active_lan_client_index[cnt].lan_stats_idx = cnt;
 					memcpy(active_lan_client_index[cnt].mac,
 							mac_addr,
@@ -786,7 +786,7 @@ protected:
 			}
 			}
 
-		IPACMDBG_H("index not available\n");
+		IPACM_LOG(IPACM_LOG_WARN, "index not available\n");
 		return -1;
 	}
 
@@ -796,20 +796,20 @@ protected:
 
 		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
-			IPACMDBG_H("LAN stats functionality is not enabled.\n");
+			IPACM_LOG(IPACM_LOG_WARN, "LAN stats functionality is not enabled.\n");
 			return IPACM_FAILURE;
 		}
 
-		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		IPACM_LOG(IPACM_LOG_INFO, "Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
-		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Is ODU client? %s\n", is_odu?"Yes":"No");
 		if (is_odu)
 		{
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (inactive_lan_client_index_odu[cnt].lan_stats_idx != -1) {
-					IPACMDBG_H("Got inactive lan stats index :%d, return the mac\n", cnt);
+					IPACM_LOG(IPACM_LOG_INFO, "Got inactive lan stats index :%d, return the mac\n", cnt);
 					memcpy(mac_addr, inactive_lan_client_index_odu[cnt].mac, IPA_MAC_ADDR_SIZE);
 					return IPACM_SUCCESS;
 				}
@@ -820,14 +820,14 @@ protected:
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
 			{
 				if (inactive_lan_client_index[cnt].lan_stats_idx != -1) {
-					IPACMDBG_H("Got inactive lan stats index :%d, return the mac\n", cnt);
+					IPACM_LOG(IPACM_LOG_INFO, "Got inactive lan stats index :%d, return the mac\n", cnt);
 					memcpy(mac_addr, inactive_lan_client_index[cnt].mac, IPA_MAC_ADDR_SIZE);
 					return IPACM_SUCCESS;
 				}
 			}
 		}
 
-		IPACMDBG_H("No inactive client\n");
+		IPACM_LOG(IPACM_LOG_WARN, "No inactive client\n");
 		return IPACM_FAILURE;
 	}
 
@@ -835,15 +835,15 @@ protected:
 	{
 		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
-			IPACMDBG_H("LAN stats functionality is not enabled.\n");
+			IPACM_LOG(IPACM_LOG_WARN, "LAN stats functionality is not enabled.\n");
 			return IPACM_FAILURE;
 		}
 
-		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		IPACM_LOG(IPACM_LOG_INFO, "Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
 
-		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Is ODU client? %s\n", is_odu?"Yes":"No");
 		if (is_odu)
 		{
 			if (idx < 0 || idx >= IPA_MAX_NUM_HW_PATH_CLIENTS ||
@@ -851,7 +851,7 @@ protected:
 								mac_addr,
 								IPA_MAC_ADDR_SIZE))
 			{
-				IPACMDBG_H("Index :%d invalid\n", idx);
+				IPACM_LOG(IPACM_LOG_WARN, "Index :%d invalid\n", idx);
 				return IPACM_FAILURE;
 			}
 			memset(&active_lan_client_index_odu[idx], -1, sizeof(ipa_lan_client_idx));
@@ -863,7 +863,7 @@ protected:
 								mac_addr,
 								IPA_MAC_ADDR_SIZE))
 			{
-				IPACMDBG_H("Index :%d invalid\n", idx);
+				IPACM_LOG(IPACM_LOG_WARN, "Index :%d invalid\n", idx);
 				return IPACM_FAILURE;
 			}
 			memset(&active_lan_client_index[idx], -1, sizeof(ipa_lan_client_idx));
@@ -877,15 +877,15 @@ protected:
 
 		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
-			IPACMDBG_H("LAN stats functionality is not enabled.\n");
+			IPACM_LOG(IPACM_LOG_WARN, "LAN stats functionality is not enabled.\n");
 			return IPACM_FAILURE;
 		}
 
-		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		IPACM_LOG(IPACM_LOG_INFO, "Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
 
-		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Is ODU client? %s\n", is_odu?"Yes":"No");
 		if (is_odu)
 		{
 			for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS; cnt++)
@@ -921,12 +921,12 @@ protected:
 
 		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
-			IPACMDBG_H("LAN stats functionality is not enabled.\n");
+			IPACM_LOG(IPACM_LOG_WARN, "LAN stats functionality is not enabled.\n");
 			return;
 		}
 
 		/* Reset everything based on ipa_if_num. */
-		IPACMDBG_H ("Is ODU client? %s\n", is_odu?"Yes":"No");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Is ODU client? %s\n", is_odu?"Yes":"No");
 		if (is_odu)
 		{
 			for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS; i++)
@@ -1010,7 +1010,7 @@ protected:
 						xlat_ctx.active_pdn_list[i].associated_VIDs[j] = vid;
 						xlat_ctx.active_pdn_list[i].active_vlan_count++;
 
-						IPACMDBG_H("Updating pdn with vlan id %d to xlat ctx mux id %d total active xlat pdn:%d vlan count %d\n",
+						IPACM_LOG(IPACM_LOG_DEBUG, "Updating pdn with vlan id %d to xlat ctx mux id %d total active xlat pdn:%d vlan count %d\n",
 							vid, pdn_mux_id, xlat_ctx.active_pdn_count, xlat_ctx.active_pdn_list[i].active_vlan_count);
 						return;
 					}
@@ -1027,14 +1027,14 @@ protected:
 				xlat_ctx.active_pdn_count++;
 				xlat_ctx.active_pdn_list[i].associated_VIDs[0] = vid;
 				xlat_ctx.active_pdn_list[i].active_vlan_count++;
-				IPACMDBG_H("Adding new pdn with vlan id %d to xlat ctx mux id %d total active xlat pdn:%d\n",
+				IPACM_LOG(IPACM_LOG_INFO, "Adding new pdn with vlan id %d to xlat ctx mux id %d total active xlat pdn:%d\n",
 					vid, pdn_mux_id, xlat_ctx.active_pdn_count);
 				return;
 			}
 		}
 
 		//neither case passed, which means pdn list is full
-		IPACMDBG_H("Max number of pdns reached, can't add pdn to ctx!\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Max number of pdns reached, can't add pdn to ctx!\n");
 	}
 
 	inline void remove_pdn_xlat_ctx(int pdn_mux_id) //mike remove all vlans, if we need to remove vlan one by one need to change
@@ -1047,12 +1047,12 @@ protected:
 				xlat_ctx.active_pdn_count--;
 				memset(xlat_ctx.active_pdn_list[i].associated_VIDs, 0, IPA_MAX_NUM_SW_PDNS * sizeof(xlat_ctx.active_pdn_list[i].associated_VIDs[0]));
 				xlat_ctx.active_pdn_list[i].active_vlan_count = 0;
-				IPACMDBG_H("Removing pdn from xlat ctx mux id %d total active xlat pdn:%d\n",
+				IPACM_LOG(IPACM_LOG_INFO, "Removing pdn from xlat ctx mux id %d total active xlat pdn:%d\n",
 					pdn_mux_id, xlat_ctx.active_pdn_count);
 				return;
 			}
 		}
-		IPACMDBG_H("Pdn not found in ctx!\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Pdn not found in ctx!\n");
 	}
 
 	inline int get_pdn_xlat_ctx(int pdn_mux_id, uint16_t vid)
@@ -1065,13 +1065,13 @@ protected:
 				{
 					if (vid == 0 || xlat_ctx.active_pdn_list[i].associated_VIDs[j] == vid) //vid == 0 means we care only for the mux id not the vlan
 					{
-						IPACMDBG_H("got xlat ctx %d for mux id %d, vid %d\n", i, pdn_mux_id, vid);
+						IPACM_LOG(IPACM_LOG_DEBUG, "got xlat ctx %d for mux id %d, vid %d\n", i, pdn_mux_id, vid);
 						return i;
 					}
 				}
 			}
 		}
-		IPACMDBG_H("PDN not found in ctx for mux id %d, vid %d\n", pdn_mux_id, vid);
+		IPACM_LOG(IPACM_LOG_DEBUG, "PDN not found in ctx for mux id %d, vid %d\n", pdn_mux_id, vid);
 		return IPACM_FAILURE;
 	}
 
@@ -1093,7 +1093,7 @@ public:
 				//vid = 0 means just check if mux is up
 				if(vid == 0)
 				{
-						IPACMDBG_H("mux id %d is up for dev %s, iptype %d\n", mux_id, dev_name, iptype);
+						IPACM_LOG(IPACM_LOG_INFO, "mux id %d is up for dev %s, iptype %d\n", mux_id, dev_name, iptype);
 						return true;
 				}
 
@@ -1103,13 +1103,13 @@ public:
 					if((mux[i].associated_VIDs[j]!=0) &&
 					(mux[i].associated_VIDs[j] == vid))
 					{
-						IPACMDBG_H("mux id %d is up for dev %s, iptype %d, vid %d, VID_cnt = %d\n", mux_id, dev_name, iptype, vid, mux[i].VID_cnt);
+						IPACM_LOG(IPACM_LOG_INFO, "mux id %d is up for dev %s, iptype %d, vid %d, VID_cnt = %d\n", mux_id, dev_name, iptype, vid, mux[i].VID_cnt);
 						return true;
 					}
 				}
 			}
 		}
-		IPACMDBG_H("mux id %d is not up for dev %s iptype %d, vid %d\n", mux_id, dev_name, iptype, vid);
+		IPACM_LOG(IPACM_LOG_INFO, "mux id %d is not up for dev %s iptype %d, vid %d\n", mux_id, dev_name, iptype, vid);
 		return false;
 	}
 	inline bool is_any_mux_up(ipa_ip_type iptype)
@@ -1124,7 +1124,7 @@ public:
 		{
 			if(mux[i].mux_id)
 			{
-				IPACMDBG("mux id %d up for dev %s, i = %d, iptype %d\n", mux[i].mux_id, dev_name, i, iptype);
+				IPACM_LOG(IPACM_LOG_INFO,"mux id %d up for dev %s, i = %d, iptype %d\n", mux[i].mux_id, dev_name, i, iptype);
 				res = true;
 			}
 		}
@@ -1132,7 +1132,7 @@ public:
 		if(res)
 			return res;
 
-		IPACMDBG_H("no vlan mux up for dev %s, iptype %d\n", dev_name, iptype);
+		IPACM_LOG(IPACM_LOG_INFO, "no vlan mux up for dev %s, iptype %d\n", dev_name, iptype);
 		return false;
 	}
 #endif
@@ -1201,13 +1201,13 @@ private:
 
 		if(mux_id == 0)
 		{
-			IPACMERR("0 mux id!\n");
+			IPACM_LOG(IPACM_LOG_ERR, "0 mux id!\n");
 			return IPACM_FAILURE;
 		}
 
 		if(is_mux_up(mux_id, iptype, vid))
 		{
-			IPACMERR("mux id %d is already up, not setting it iptype %d\n", mux_id, iptype);
+			IPACM_LOG(IPACM_LOG_ERR, "mux id %d is already up, not setting it iptype %d\n", mux_id, iptype);
 			return IPACM_FAILURE;
 		}
 
@@ -1226,11 +1226,11 @@ private:
 						mux[i].associated_VIDs[j] = vid;
 						mux[i].VID_cnt++;
 						mux[i].mux_id = mux_id;
-						IPACMDBG_H("successfully added vid %d for mux id %d, dev %s, i = %d, j = %d, iptype %d, VID_cnt = %d\n", vid, mux_id, dev_name, i, j, iptype, mux[i].VID_cnt);
+						IPACM_LOG(IPACM_LOG_DEBUG, "successfully added vid %d for mux id %d, dev %s, i = %d, j = %d, iptype %d, VID_cnt = %d\n", vid, mux_id, dev_name, i, j, iptype, mux[i].VID_cnt);
 						return IPACM_SUCCESS;
 					}
 				}
-				IPACMERR("maximum allowed number of vlans are associated to the mux %d\n", mux_id);
+				IPACM_LOG(IPACM_LOG_ERR, "maximum allowed number of vlans are associated to the mux %d\n", mux_id);
 				return IPACM_FAILURE;
 			}
 		}
@@ -1245,11 +1245,11 @@ private:
 				mux[i].associated_VIDs[0] = vid;
 				mux[i].VID_cnt++;
 				mux[i].mux_id = mux_id;
-				IPACMDBG_H("successfully added mux id %d with vid %d, dev %s, i = %d, iptype %d, VID_cnt = %d\n", mux_id, vid, dev_name, i, iptype, mux[i].VID_cnt);
+				IPACM_LOG(IPACM_LOG_INFO, "successfully added mux id %d with vid %d, dev %s, i = %d, iptype %d, VID_cnt = %d\n", mux_id, vid, dev_name, i, iptype, mux[i].VID_cnt);
 				return IPACM_SUCCESS;
 			}
 		}
-		IPACMERR("exceeded max num mux ids, couldn't set mux %d, iptype %d, vid %d\n", mux_id, iptype, vid);
+		IPACM_LOG(IPACM_LOG_ERR, "exceeded max num mux ids, couldn't set mux %d, iptype %d, vid %d\n", mux_id, iptype, vid);
 		return IPACM_FAILURE;
 	}
 
@@ -1259,7 +1259,7 @@ private:
 
 		if(mux_id == 0)
 		{
-			IPACMERR("0 mux id!\n");
+			IPACM_LOG(IPACM_LOG_WARN, "0 mux id!\n");
 			return IPACM_FAILURE;
 		}
 
@@ -1285,13 +1285,13 @@ private:
 				if(mux[i].VID_cnt == 0 || vid == 0)
 				{
 					memset(&mux[i], 0, sizeof(mux[i]));
-					IPACMDBG_H("successfully removed mux id %d for dev %s, i = %d, iptype %d, VID_cnt = %d\n", mux_id, dev_name, i, iptype, mux[i].VID_cnt);
+					IPACM_LOG(IPACM_LOG_DEBUG, "successfully removed mux id %d for dev %s, i = %d, iptype %d, VID_cnt = %d\n", mux_id, dev_name, i, iptype, mux[i].VID_cnt);
 					return IPACM_SUCCESS;
 				}
 			}
 		}
 
-		IPACMERR("could not find mux %d or associated vid %d, iptype %d\n", mux_id, vid, iptype);
+		IPACM_LOG(IPACM_LOG_ERR, "could not find mux %d or associated vid %d, iptype %d\n", mux_id, vid, iptype);
 		return IPACM_FAILURE;
 	}
 #endif
@@ -1351,13 +1351,13 @@ private:
 		int cnt;
 		int num_eth_client_tmp = num_eth_client;
 
-		IPACMDBG_H("Passed MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "Passed MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 						mac_addr[0], mac_addr[1], mac_addr[2],
 						mac_addr[3], mac_addr[4], mac_addr[5]);
 
 		for(cnt = 0; cnt < num_eth_client_tmp; cnt++)
 		{
-			IPACMDBG_H("stored MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "stored MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 							 get_client_memptr(eth_client, cnt)->mac[0],
 							 get_client_memptr(eth_client, cnt)->mac[1],
 							 get_client_memptr(eth_client, cnt)->mac[2],
@@ -1372,18 +1372,18 @@ private:
 #ifdef FEATURE_VLAN_MPDN
 				if(vlan_id)
 				{
-					IPACMDBG("VLAN IF MAC match, looking for vlan ID %d, current %d\n", vlan_id,
+					IPACM_LOG(IPACM_LOG_DEBUG,"VLAN IF MAC match, looking for vlan ID %d, current %d\n", vlan_id,
 						get_client_memptr(eth_client, cnt)->vlan_id);
 					if(get_client_memptr(eth_client, cnt)->vlan_id == vlan_id)
 					{
-						IPACMDBG_H("Matched client index: %d for vid %d\n", cnt, vlan_id);
+						IPACM_LOG(IPACM_LOG_DEBUG, "Matched client index: %d for vid %d\n", cnt, vlan_id);
 						return cnt;
 					}
 				}
 				else
 #endif
 				{
-					IPACMDBG_H("Matched client index: %d\n", cnt);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Matched client index: %d\n", cnt);
 					return cnt;
 				}
 			}
@@ -1399,19 +1399,19 @@ private:
 		clnt_indx = get_eth_client_index(mac_addr, vlan_id);
 		if(clnt_indx == IPACM_INVALID_INDEX)
 		{
-			IPACMERR("eth client not found/attached \n");
+			IPACM_LOG(IPACM_LOG_ERR, "eth client not found/attached \n");
 			return IPACM_FAILURE;
 		}
 
 		if(get_client_memptr(eth_client, clnt_indx)->ipv4_set)
 		{
 			ip_addr = get_client_memptr(eth_client, clnt_indx)->v4_addr;
-			IPACMDBG_H("ip addr is 0x%X\n", ip_addr);
+			IPACM_LOG(IPACM_LOG_DEBUG, "ip addr is 0x%X\n", ip_addr);
 			return IPACM_SUCCESS;
 		}
 		else
 		{
-			IPACMDBG_H("ipv4 address not set\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "ipv4 address not set\n");
 			return IPACM_FAILURE;
 		}
 	}
@@ -1428,7 +1428,7 @@ private:
 		    {
 		        if((tx_prop->tx[tx_index].ip == IPA_IP_v4) && (get_client_memptr(eth_client, clt_indx)->route_rule_set_v4==true)) /* for ipv4 */
 				{
-					IPACMDBG_H("Delete client index %d ipv4 RT-rules for tx:%d\n",clt_indx,tx_index);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Delete client index %d ipv4 RT-rules for tx:%d\n",clt_indx,tx_index);
 					rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v4;
 
 					if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v4) == false)
@@ -1453,7 +1453,7 @@ private:
 				{
 					for(num_v6 =0;num_v6 < get_client_memptr(eth_client, clt_indx)->route_rule_set_v6;num_v6++)
 					{
-						IPACMDBG_H("Delete client index %d ipv6 RT-rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
+						IPACM_LOG(IPACM_LOG_DEBUG, "Delete client index %d ipv6 RT-rules for %d-st ipv6 for tx:%d\n", clt_indx,num_v6,tx_index);
 						rt_hdl = get_client_memptr(eth_client, clt_indx)->eth_rt_hdl[tx_index].eth_rt_rule_hdl_v6[num_v6];
 						if(m_routing.DeleteRoutingHdl(rt_hdl, IPA_IP_v6) == false)
 							{

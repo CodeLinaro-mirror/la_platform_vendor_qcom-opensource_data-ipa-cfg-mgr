@@ -226,8 +226,15 @@
 			<IPACMQOSEnabled>0</IPACMQOSEnabled>
 		</IPACMQOS>
 		<IPACMLog>
+			<IPACMLogTimestampEnable>1</IPACMLogTimestampEnable>
+				<!-- 1 = enable timestamp, 0 = disable timestamp printing(max perf) -->
 			<IPACMfileQuota>30</IPACMfileQuota>
 			<IPACMfilevar>0</IPACMfilevar>
+				<!-- 0 = disable file logging. 20971520 = enable file (size: 20MB) logging. -->
+			<IPACMLogLevel>8</IPACMLogLevel>
+				<!-- logging levels 4 = ERR, 6 = ERR+WARN, 7 = ERR+WARN+INFO, 8 = ERR+WARN+INFO+DEBUG, 0 = disabled -->
+			<IPACMSyslogLevel>7</IPACMSyslogLevel>
+				<!-- Syslog levels 4 = ERR, 6 = ERR+NOTICE, 7 = ERR+NOTICE+INFO, 8 = ERR+NOTICE+INFO+DEBUG, 0 = disabled -->
 		</IPACMLog>
 		<IPACMSOCKSv5>
 			<IPACMSOCKSv5Enabled>0</IPACMSOCKSv5Enabled>

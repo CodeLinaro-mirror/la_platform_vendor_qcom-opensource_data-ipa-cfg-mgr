@@ -198,6 +198,9 @@ class IPACM_Config
 public:
 
 	int64_t max_file_size;
+	uint8_t ipacm_log_level;
+	uint8_t ipacm_syslog_level;
+	bool ipacm_log_timestamp_enable;
 
 	/* IPACM ipa_client map to rm_resource*/
 	ipa_rm_resource_name ipa_client_rm_map_tbl[IPA_CLIENT_MAX];
@@ -518,11 +521,11 @@ public:
 		bool result = false;
 
 		if (dev_name == nullptr || dev_name[0] == '\0') {
-			IPACMERR("Invalid dev_name parameter\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Invalid dev_name parameter\n");
 			return false;
 		}
 		if (pthread_mutex_lock(&ip_collision_lock) != 0) {
-			IPACMERR("Unable to lock collision mutex\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to lock collision mutex\n");
 			return false;
 		}
 
@@ -548,7 +551,7 @@ public:
 						ip_pass_mpdn_table[indx].dev_name,
 						sizeof(ip_pass_mpdn_table[indx].dev_name)) == 0)
 			{
-				IPACMDBG("Interface (%s) is already present in IP Pass table\n", dev_name);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Interface (%s) is already present in IP Pass table\n", dev_name);
 				return MAX_NUM_IP_PASS_MPDN;
 			}
 		}
@@ -585,7 +588,7 @@ public:
 
 		if(pthread_mutex_lock(&ip_pass_mpdn_lock) != 0)
 		{
-			IPACMERR("Unable to lock the mutex\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 			return ret;
 		}
 
@@ -643,18 +646,18 @@ public:
 	{
 		if((index >= IPA_CLIENT_MAX) || (index < 0))
 		{
-			IPACMERR("Index is out of range: %d.\n", index);
+			IPACM_LOG(IPACM_LOG_ERR, "Index is out of range: %d.\n", index);
 			return;
 		}
 		if(iptype == IPA_IP_v4)
 		{
 			flt_rule_count_v4[index] += increment;
-			IPACMDBG_H("Now num of v4 flt rules on client %d is %d.\n", index, flt_rule_count_v4[index]);
+			IPACM_LOG(IPACM_LOG_INFO, "Now num of v4 flt rules on client %d is %d.\n", index, flt_rule_count_v4[index]);
 		}
 		else
 		{
 			flt_rule_count_v6[index] += increment;
-			IPACMDBG_H("Now num of v6 flt rules on client %d is %d.\n", index, flt_rule_count_v6[index]);
+			IPACM_LOG(IPACM_LOG_INFO, "Now num of v6 flt rules on client %d is %d.\n", index, flt_rule_count_v6[index]);
 		}
 		return;
 	}
@@ -663,18 +666,18 @@ public:
 	{
 		if((index >= IPA_CLIENT_MAX) || (index < 0))
 		{
-			IPACMERR("Index is out of range: %d.\n", index);
+			IPACM_LOG(IPACM_LOG_ERR, "Index is out of range: %d.\n", index);
 			return;
 		}
 		if(iptype == IPA_IP_v4)
 		{
 			flt_rule_count_v4[index] -= decrement;
-			IPACMDBG_H("Now num of v4 flt rules on client %d is %d.\n", index, flt_rule_count_v4[index]);
+			IPACM_LOG(IPACM_LOG_INFO, "Now num of v4 flt rules on client %d is %d.\n", index, flt_rule_count_v4[index]);
 		}
 		else
 		{
 			flt_rule_count_v6[index] -= decrement;
-			IPACMDBG_H("Now num of v6 flt rules on client %d is %d.\n", index, flt_rule_count_v6[index]);
+			IPACM_LOG(IPACM_LOG_INFO, "Now num of v6 flt rules on client %d is %d.\n", index, flt_rule_count_v6[index]);
 		}
 		return;
 	}
@@ -683,7 +686,7 @@ public:
 	{
 		if((index >= IPA_CLIENT_MAX) || (index < 0))
 		{
-			IPACMERR("Index is out of range: %d.\n", index);
+			IPACM_LOG(IPACM_LOG_ERR, "Index is out of range: %d.\n", index);
 			return -1;
 		}
 		if(iptype == IPA_IP_v4)
@@ -734,7 +737,7 @@ public:
 
 		if(pthread_mutex_lock(&nat_iface_lock) != 0)
 		{
-			IPACMERR("Unable to lock the mutex\n");
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 			return 0;
 		}
 		nat_iface_entries = ipa_nat_iface_entries;
@@ -801,7 +804,7 @@ public:
 
 		if((0 == ip_addr) || (ipv4_addr_mask ==0))
 		{
-			IPACMDBG("Invalid IPACM private subnet_addr as: 0x%x in entry(%d) \n", ip_addr, ipa_num_private_subnet);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Invalid IPACM private subnet_addr as: 0x%x in entry(%d) \n", ip_addr, ipa_num_private_subnet);
 			return false;
 		}
 
@@ -809,14 +812,14 @@ public:
 		{
 			if(private_subnet_table[cnt].subnet_addr == ip_addr)
 			{
-				IPACMDBG("Already has private subnet_addr as: 0x%x in entry(%d) \n", ip_addr, cnt);
+				IPACM_LOG(IPACM_LOG_WARN, "Already has private subnet_addr as: 0x%x in entry(%d) \n", ip_addr, cnt);
 				return true;
 			}
 		}
 
 		if(ipa_num_private_subnet < IPA_MAX_PRIVATE_SUBNET_ENTRIES)
 		{
-			IPACMDBG("Add IPACM private subnet_addr as: 0x%x in entry(%d) \n", ip_addr, ipa_num_private_subnet);
+			IPACM_LOG(IPACM_LOG_INFO, "Add IPACM private subnet_addr as: 0x%x in entry(%d) \n", ip_addr, ipa_num_private_subnet);
 			private_subnet_table[ipa_num_private_subnet].subnet_addr = ip_addr;
 			private_subnet_table[ipa_num_private_subnet].subnet_mask = ipv4_addr_mask;
 			private_subnet_table[ipa_num_private_subnet].if_index = ipa_if_index;
@@ -830,7 +833,7 @@ public:
 			data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 			if(data_fid == NULL)
 			{
-				IPACMERR("unable to allocate memory for event data_fid\n");
+				IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_fid\n");
 				return IPACM_FAILURE;
 			}
 			data_fid->if_index = ipa_if_index; // already ipa index, not fid index
@@ -841,7 +844,7 @@ public:
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 			return true;
 		}
-		IPACMERR("IPACM private subnet_addr overflow, total entry(%d)\n", ipa_num_private_subnet);
+		IPACM_LOG(IPACM_LOG_ERR, "IPACM private subnet_addr overflow, total entry(%d)\n", ipa_num_private_subnet);
 		return false;
 	}
 
@@ -853,7 +856,7 @@ public:
 		{
 			if(private_subnet_table[cnt].subnet_addr == ip_addr)
 			{
-				IPACMDBG("Found private subnet_addr as: 0x%x in entry(%d) \n", ip_addr, cnt);
+				IPACM_LOG(IPACM_LOG_INFO, "Found private subnet_addr as: 0x%x in entry(%d) \n", ip_addr, cnt);
 				for(; cnt < ipa_num_private_subnet - 1; cnt++)
 				{
 					private_subnet_table[cnt].subnet_addr = private_subnet_table[cnt + 1].subnet_addr;
@@ -866,7 +869,7 @@ public:
 				data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 				if(data_fid == NULL)
 				{
-					IPACMERR("unable to allocate memory for event data_fid\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_fid\n");
 					return IPACM_FAILURE;
 				}
 				data_fid->if_index = ipa_if_index; // already ipa index, not fid index
@@ -878,7 +881,7 @@ public:
 				return true;
 			}
 		}
-		IPACMDBG("can't find private subnet_addr as: 0x%x \n", ip_addr);
+		IPACM_LOG(IPACM_LOG_WARN, "can't find private subnet_addr as: 0x%x \n", ip_addr);
 		return false;
 	}
 	inline bool DelPrivateSubnetByIfIndex(int ipa_if_index)
@@ -889,7 +892,7 @@ public:
 		{
 			if(ipa_if_index && private_subnet_table[cnt].if_index == ipa_if_index)
 			{
-				IPACMDBG("Found private subnet_addr as: 0x%x in entry(%d) \n", private_subnet_table[cnt].subnet_addr, cnt);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Found private subnet_addr as: 0x%x in entry(%d) \n", private_subnet_table[cnt].subnet_addr, cnt);
 				for(; cnt < ipa_num_private_subnet - 1; cnt++)
 				{
 					private_subnet_table[cnt].subnet_addr = private_subnet_table[cnt + 1].subnet_addr;
@@ -902,7 +905,7 @@ public:
 				data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 				if(data_fid == NULL)
 				{
-					IPACMERR("unable to allocate memory for event data_fid\n");
+					IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_fid\n");
 					return IPACM_FAILURE;
 				}
 				data_fid->if_index = ipa_if_index; // already ipa index, not fid index
@@ -914,7 +917,7 @@ public:
 				return true;
 			}
 		}
-		IPACMDBG("can't find entry %d \n", ipa_if_index);
+		IPACM_LOG(IPACM_LOG_DEBUG, "can't find entry %d \n", ipa_if_index);
 		return false;
 	}
 
@@ -926,14 +929,14 @@ public:
 		data_fid = (ipacm_event_data_fid *)malloc(sizeof(ipacm_event_data_fid));
 		if(data_fid == NULL)
 		{
-			IPACMERR("unable to allocate memory for event data_fid\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_fid\n");
 			return ;
 		}
 		data_fid->if_index = ipa_if_num;
 		evt_data.event = IPA_PREFIX_CHANGE_EVENT;
 		evt_data.evt_data = data_fid;
 		/* Insert IPA_PREFIX_CHANGE_EVENT to command queue */
-		IPACMDBG("posting IPA_PREFIX_CHANGE_EVENT\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "posting IPA_PREFIX_CHANGE_EVENT\n");
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
 
@@ -945,7 +948,7 @@ public:
 		{
 			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1]))
 			{
-				IPACMERR("prefix 0x[%X][%X] already exists in offload list\n", prefix[0], prefix[1]);
+				IPACM_LOG(IPACM_LOG_ERR, "prefix 0x[%X][%X] already exists in offload list\n", prefix[0], prefix[1]);
 				return false;
 			}
 		}
@@ -957,12 +960,12 @@ public:
 		}
 		else
 		{
-			IPACMERR("Reached maximum No offload PDN, unable to add pdn into list:prefix 0x[%X][%X]\n",
+			IPACM_LOG(IPACM_LOG_ERR, "Reached maximum No offload PDN, unable to add pdn into list:prefix 0x[%X][%X]\n",
 				prefix[0], prefix[1]);
 			return false;
 		}
 
-		IPACMDBG("added no offload v6 prefix 0x[%X][%X]\n", prefix[0], prefix[1]);
+		IPACM_LOG(IPACM_LOG_INFO, "added no offload v6 prefix 0x[%X][%X]\n", prefix[0], prefix[1]);
 
 		/* tell all LAN interfaces that we have a change in v6 prefixes */
 		SendPrefixChangeEvent(-1);
@@ -983,7 +986,7 @@ public:
 				&& (prefix[1] == ipa_ipv6_prefixes[i].addr[1])
 				&& (vlan_id == ipa_ipv6_prefixes[i].vlan_id))
 			{
-				IPACMDBG_H("prefix 0x[%X][%X] already exists vlan_id inp %d saved %d\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "prefix 0x[%X][%X] already exists vlan_id inp %d saved %d\n",
 					prefix[0], prefix[1], vlan_id, ipa_ipv6_prefixes[i].vlan_id);
 				return false;
 			}
@@ -1000,26 +1003,26 @@ public:
 					ipa_no_offload_ipv6_prefixes[i][1] = ipa_no_offload_ipv6_prefixes[i + 1][1];
 				}
 				num_no_offload_ipv6_prefix--;
-				IPACMDBG_H("removed prefix 0x[%X][%X] from no offload list\n", prefix[0], prefix[1]);
+				IPACM_LOG(IPACM_LOG_DEBUG, "removed prefix 0x[%X][%X] from no offload list\n", prefix[0], prefix[1]);
 				break;
 			}
 		}
 
 		if(no_offload_temp == num_no_offload_ipv6_prefix && prefix[0] != IPA_DUMMY_PREFIX)
 		{
-			IPACMERR("could not find prefix 0x[%X][%X] in no offload list\n", prefix[0], prefix[1]);
+			IPACM_LOG(IPACM_LOG_ERR, "could not find prefix 0x[%X][%X] in no offload list\n", prefix[0], prefix[1]);
 		}
 		/* Update v6_prefix/vlan id if slot is reserved*/
 		for(i = 0; i < num_ipv6_prefixes; i++)
 		{
 			if (ipa_ipv6_prefixes[i].addr[0] == IPA_DUMMY_PREFIX && vlan_id == ipa_ipv6_prefixes[i].vlan_id)
 			{
-				IPACMDBG_H("Updating old prefix 0x[%X][%X] of vlan_id %d\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "Updating old prefix 0x[%X][%X] of vlan_id %d\n",
 					ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1], ipa_ipv6_prefixes[i].vlan_id);
 				ipa_ipv6_prefixes[i].addr[0] = prefix[0];
 				ipa_ipv6_prefixes[i].addr[1] = prefix[1];
 				updated_reserved_slot =true;
-				IPACMDBG_H("Updated v6 prefix 0x[%X][%X] for vlan id %d\n", prefix[0], prefix[1], ipa_ipv6_prefixes[i].vlan_id);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Updated v6 prefix 0x[%X][%X] for vlan id %d\n", prefix[0], prefix[1], ipa_ipv6_prefixes[i].vlan_id);
 			}
 			else if ((prefix[0] == ipa_ipv6_prefixes[i].addr[0])
 				&& (prefix[1] == ipa_ipv6_prefixes[i].addr[1])
@@ -1027,25 +1030,25 @@ public:
 				/* Update the vlan id if prefix already saved but vlan id not associated
 				 * e.g Wlan for default pdn reserves a slot with vlan id 0, then eth vlan
 				 * for default pdn associates with vlan id */
-				IPACMDBG_H("Updating vlan id %d for prefix 0x[%X][%X] \n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "Updating vlan id %d for prefix 0x[%X][%X] \n",
 					ipa_ipv6_prefixes[i].vlan_id, ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
 				ipa_ipv6_prefixes[i].vlan_id = vlan_id;
 				updated_reserved_slot =true;
-				IPACMDBG_H("Updated vlan id %d v6 prefix 0x[%X][%X] for vlan id %d\n",ipa_ipv6_prefixes[i].vlan_id, prefix[0], prefix[1]);
+				IPACM_LOG(IPACM_LOG_DEBUG, "Updated vlan id %d v6 prefix 0x[%X][%X]\n",ipa_ipv6_prefixes[i].vlan_id, prefix[0], prefix[1]);
 			}
 		}
 
 		if (!updated_reserved_slot) {
 			if(num_ipv6_prefixes >= IPA_MAX_IPV6_PREFIX_FLT_RULE)
 			{
-				IPACMERR("we already reached maximum prefix rules\n");
+				IPACM_LOG(IPACM_LOG_ERR, "we already reached maximum prefix rules\n");
 				return false;
 			}
 			ipa_ipv6_prefixes[num_ipv6_prefixes].addr[0] = prefix[0];
 			ipa_ipv6_prefixes[num_ipv6_prefixes].addr[1] = prefix[1];
 			ipa_ipv6_prefixes[num_ipv6_prefixes].vlan_id = vlan_id;
 			num_ipv6_prefixes++;
-			IPACMDBG("added v6 prefix 0x[%X][%X] for vlan id %d\n", prefix[0], prefix[1], ipa_ipv6_prefixes[i].vlan_id);
+			IPACM_LOG(IPACM_LOG_INFO, "added v6 prefix 0x[%X][%X] for vlan id %d\n", prefix[0], prefix[1], ipa_ipv6_prefixes[i].vlan_id);
 		}
 
 		/* tell other LAN interfaces that we have a change in v6 prefixes */
@@ -1059,22 +1062,22 @@ public:
 		int i = 0, j = 0, k = 0;
 		int first_zeroed_index = -1;
 		int num_deleted_prefixes = 0;
-		IPACMDBG_H("number of prefixes %d\n", num_ipv6_prefixes);
+		IPACM_LOG(IPACM_LOG_DEBUG, "number of prefixes %d\n", num_ipv6_prefixes);
 
 		for(i = 0; i < num_ipv6_prefixes; i++)
 		{
-			IPACMDBG("prefix 0x[%X][%X] and check prefix 0x[%X][%X] Vlan id: %d\n",
+			IPACM_LOG(IPACM_LOG_DEBUG,"prefix 0x[%X][%X] and check prefix 0x[%X][%X] Vlan id: %d\n",
 					prefix[0], prefix[1], ipa_ipv6_prefixes[i].addr[0],
 					ipa_ipv6_prefixes[i].addr[1], ipa_ipv6_prefixes[i].vlan_id);
 			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1]))
 			{
 				if (reserve_slot) {
-					IPACMDBG_H("Reserve slot for ipa_if_num %d\n", ipa_if_num);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Reserve slot for ipa_if_num %d\n", ipa_if_num);
 					ipa_ipv6_prefixes[i].addr[0] = IPA_DUMMY_PREFIX;
 					ipa_ipv6_prefixes[i].addr[1] = IPA_DUMMY_PREFIX;
 				}
 				else {
-					IPACMDBG_H("prefix 0x[%X][%X] Vlan %d will be removed\n",
+					IPACM_LOG(IPACM_LOG_INFO,"prefix 0x[%X][%X] Vlan %d will be removed\n",
 							prefix[0], prefix[1],
 							ipa_ipv6_prefixes[i].vlan_id);
 					ipa_ipv6_prefixes[i].addr[0] = 0;
@@ -1113,16 +1116,16 @@ public:
 					k++;
 			}
 			num_ipv6_prefixes -= num_deleted_prefixes;
-			IPACMDBG_H("After delete: number of prefixes %d\n", num_ipv6_prefixes);
+			IPACM_LOG(IPACM_LOG_DEBUG, "After delete: number of prefixes %d\n", num_ipv6_prefixes);
 			return IPACM_SUCCESS;
 		}
-		IPACMDBG_H("Could not find the Prefix 0x[%X][%X] in ipa_ipv6_prefixes\n", prefix[0], prefix[1]);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Could not find the Prefix 0x[%X][%X] in ipa_ipv6_prefixes\n", prefix[0], prefix[1]);
 		/* remove from no offload list */
 		for(i = 0; i < num_no_offload_ipv6_prefix; i++)
 		{
 			if((prefix[0] == ipa_no_offload_ipv6_prefixes[i][0]) && (prefix[1] == ipa_no_offload_ipv6_prefixes[i][1]))
 			{
-				IPACMDBG_H("removed prefix 0x[%X][%X] from no offload list\n", prefix[1], prefix[2]);
+				IPACM_LOG(IPACM_LOG_DEBUG, "removed prefix 0x[%X][%X] from no offload list\n", prefix[1], prefix[2]);
 				ipa_no_offload_ipv6_prefixes[i][0] = 0;
 				ipa_no_offload_ipv6_prefixes[i][1] = 0;
 				num_deleted_prefixes++;
@@ -1153,28 +1156,28 @@ public:
 					k++;
 			}
 			num_no_offload_ipv6_prefix -= num_deleted_prefixes;
-			IPACMDBG_H("After delete: number of no offload prefixes %d\n", num_no_offload_ipv6_prefix);
+			IPACM_LOG(IPACM_LOG_DEBUG, "After delete: number of no offload prefixes %d\n", num_no_offload_ipv6_prefix);
 			return IPACM_SUCCESS;
 		}
-		IPACMERR("couldn't find prefix 0x[%X][%X] in either no offload nor offload list\n", prefix[0], prefix[1]);
+		IPACM_LOG(IPACM_LOG_ERR, "couldn't find prefix 0x[%X][%X] in either no offload nor offload list\n", prefix[0], prefix[1]);
 		return IPACM_FAILURE;
 	}
 
 	/* returns true if a VLAN PDN or default PDN should be offloaded */
 	inline bool is_offload_ipv6_prefix(uint32_t *prefix)
 	{
-		IPACMDBG_H("checking prefix 0x[%X][%X]\n", prefix[0], prefix[1]);
+		IPACM_LOG(IPACM_LOG_DEBUG, "checking prefix 0x[%X][%X]\n", prefix[0], prefix[1]);
 		for(int i = 0; i < num_ipv6_prefixes; i++)
 		{
 			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0]) && (prefix[1] == ipa_ipv6_prefixes[i].addr[1]))
 			{
-				IPACMDBG_H("prefix 0x[%X][%X] is a known ipv6 prefix for vlan id %d\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "prefix 0x[%X][%X] is a known ipv6 prefix for vlan id %d\n",
 					prefix[0], prefix[1], ipa_ipv6_prefixes[i].vlan_id);
 				return true;
 			}
 			else
 			{
-				IPACMDBG("no match with [%X][%X]\n", ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
+				IPACM_LOG(IPACM_LOG_DEBUG,"no match with [%X][%X]\n", ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
 			}
 		}
 		return false;
@@ -1190,7 +1193,7 @@ public:
 
 		evt_data.event = IPA_UPDATE_SOCKSv5_v6_CONN;
 		evt_data.evt_data = NULL;
-		IPACMDBG("posting IPA_UPDATE_SOCKSv5_v6_CONN\n");
+		IPACM_LOG(IPACM_LOG_INFO, "posting IPA_UPDATE_SOCKSv5_v6_CONN\n");
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 		return IPACM_SUCCESS;
 	}
@@ -1205,7 +1208,7 @@ public:
 		data_socksv5 = (ipa_socksv5_msg *)malloc(sizeof(ipa_socksv5_msg));
 		if(data_socksv5 == NULL)
 		{
-			IPACMERR("unable to allocate memory for event data_socksv5\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_socksv5\n");
 			return IPACM_FAILURE;
 		}
 		memcpy(data_socksv5, socksv5_info, sizeof(ipa_socksv5_msg));
@@ -1214,12 +1217,12 @@ public:
 		if (is_add == true)
 		{
 			evt_data.event = IPA_ADD_SOCKSv5_CONN;
-			IPACMDBG("posting IPA_ADD_SOCKSv5_CONN\n");
+			IPACM_LOG(IPACM_LOG_INFO, "posting IPA_ADD_SOCKSv5_CONN\n");
 		}
 		else
 		{
 			evt_data.event = IPA_DEL_SOCKSv5_CONN;
-			IPACMDBG("posting IPA_DEL_SOCKSv5_CONN\n");
+			IPACM_LOG(IPACM_LOG_INFO, "posting IPA_DEL_SOCKSv5_CONN\n");
 		}
 		/* Insert IPA_ADD/DEL_SOCKSv5_CONN to command queue */
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1236,7 +1239,7 @@ public:
 		vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
 		if(vlan_data == NULL)
 		{
-			IPACMERR("unable to allocate memory for event data_socksv5\n");
+			IPACM_LOG(IPACM_LOG_ERR, "unable to allocate memory for event data_socksv5\n");
 			return IPACM_FAILURE;
 		}
 		memset(vlan_data, 0, sizeof(ipacm_event_route_vlan));
@@ -1254,13 +1257,13 @@ public:
 		}
 		else
 		{
-			IPACMERR("wrong ip-type %d\n", vlan_data->iptype);
+			IPACM_LOG(IPACM_LOG_ERR, "wrong ip-type %d\n", vlan_data->iptype);
 			free(vlan_data);
 			return IPACM_FAILURE;
 		}
 
 		evt_data.evt_data = vlan_data;
-		IPACMDBG("sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+		IPACM_LOG(IPACM_LOG_INFO, "sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
 						vlan_data->VlanID,
 						vlan_data->iptype);
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1301,15 +1304,15 @@ public:
 	 * @return bool true if the pair exist, false otherwise.
 	 */
 	bool isKnownVlanLowerPair(const char *interfaceName, const char *lowerInterfaceName) {
-		IPACMDBG("interfaceName %s, lowerInterfaceName %s\n", interfaceName, lowerInterfaceName);
+		IPACM_LOG(IPACM_LOG_DEBUG, "interfaceName %s, lowerInterfaceName %s\n", interfaceName, lowerInterfaceName);
 		for (auto &it: m_vlan_iface) {
-			IPACMDBG("it.vlan_iface_name %s, it.lower_iface_name %s\n", it.vlan_iface_name, it.lower_iface_name);
+			IPACM_LOG(IPACM_LOG_DEBUG, "it.vlan_iface_name %s, it.lower_iface_name %s\n", it.vlan_iface_name, it.lower_iface_name);
 			if (string(interfaceName) == string(it.vlan_iface_name) &&
 				string(lowerInterfaceName) == string(it.lower_iface_name))
 				return true;
 		}
 
-		IPACMDBG("VLAN-lower interfaces names pair not in m_vlan_iface. Search in archive\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "VLAN-lower interfaces names pair not in m_vlan_iface. Search in archive\n");
 		struct vlan_iface_info vlanInfo = {0};
 
 		strlcpy(vlanInfo.vlan_iface_name, interfaceName, sizeof(vlanInfo.vlan_iface_name));
@@ -1344,11 +1347,11 @@ public:
 		system(cmd);
 		fp = fopen("/tmp/lower_interface_name.txt", "r");
 		if (!fp) {
-			IPACMERR("can't open /tmp/lower_interface_name.txt\n");
+			IPACM_LOG(IPACM_LOG_ERR, "can't open /tmp/lower_interface_name.txt\n");
 			return false;
 		}
 		if (!fgets(lowerInterfaceName, IF_NAME_LEN, fp)) {
-			IPACMERR("fgets failed\n");
+			IPACM_LOG(IPACM_LOG_ERR, "fgets failed\n");
 			remove("/tmp/lower_interface_name.txt");
 			fclose(fp);
 			return false;
@@ -1356,7 +1359,7 @@ public:
 		fclose(fp);
 		remove("/tmp/lower_interface_name.txt");
 		lowerInterfaceName[strcspn(lowerInterfaceName, "\r\n")] = 0;
-		IPACMDBG("lowerInterfaceName %s\n", lowerInterfaceName);
+		IPACM_LOG(IPACM_LOG_DEBUG, "lowerInterfaceName %s\n", lowerInterfaceName);
 		return true;
 	}
 	/**
@@ -1409,7 +1412,7 @@ private:
 	 *         interfaceName otherwise.
 	 */
 	string getNameForVlanQuery(const string &interfaceName) {
-		IPACMDBG("interfaceName = %s\n", interfaceName.c_str());
+		IPACM_LOG(IPACM_LOG_DEBUG, "interfaceName = %s\n", interfaceName.c_str());
 		for (int i = 0; i < ipa_num_ipa_interfaces; i++) {
 			if (string(interfaceName).rfind(string(iface_table[i].iface_name), 0) == 0 && iface_table[i].virtualIface) {
 				return string(iface_table[i].physDevName);
@@ -1439,7 +1442,7 @@ private:
 		}
 		auto it = std::find_if(iface_table, iface_table + ipa_num_ipa_interfaces,
 			[interfaceIndex](const decltype(iface_table[0])& item) {
-				IPACMDBG("iface_name:%s, physDevName:%s, virtualIface:%d, netlink_interface_index:%d\n", item.iface_name,
+				IPACM_LOG(IPACM_LOG_DEBUG, "iface_name:%s, physDevName:%s, virtualIface:%d, netlink_interface_index:%d\n", item.iface_name,
 					item.physDevName, item.virtualIface, item.netlink_interface_index);
 				return item.netlink_interface_index == interfaceIndex && item.virtualIface;
 		});

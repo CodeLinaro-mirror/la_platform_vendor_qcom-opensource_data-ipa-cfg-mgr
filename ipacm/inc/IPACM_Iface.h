@@ -101,7 +101,7 @@ public:
 	/* Returns true only for MLO per-link WLAN ifaces */
 	bool get_is_mlo_link() const
 	{
-		IPACMDBG_H("get_is_mlo_link: iface %s mlo_link_name %s is_mlo_link %d\n",
+		IPACM_LOG(IPACM_LOG_DEBUG, "get_is_mlo_link: iface %s mlo_link_name %s is_mlo_link %d\n",
 			dev_name, mlo_link_name, is_mlo_link);
 		return is_mlo_link;
 	}

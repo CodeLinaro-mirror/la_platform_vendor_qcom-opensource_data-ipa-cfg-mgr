@@ -65,6 +65,11 @@ void* write_addr = 0;
 int64_t max_filesize = 0;
 int log_init_done = 0;
 pthread_mutex_t file_lock;
+
+uint8_t ipacm_global_log_level    = IPACM_DEF_LOG_LEVEL;
+uint8_t ipacm_global_syslog_level = IPACM_DEF_SYSLOG_LEVEL;
+bool ipacm_global_log_timestamp_enable = IPACM_DEF_LOG_TIMESTAMP_ENABLE;
+
 #ifdef USE_DLT
 DLT_DECLARE_CONTEXT(ctx);
 #endif
@@ -125,6 +130,23 @@ bool is_kernel_version_newer_than(
 	else
 		return false;
 }
+
+void get_kernel_version(char *kernel_ver)
+{
+	struct utsname utsname;
+	int ret;
+	memset(kernel_ver, 0, KERNEL_VERSION_LENGTH);
+	ret = uname(&utsname);
+	if (ret)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "Error: uname %d (%s)\n",
+			ret, strerror(errno));
+		return;
+	}
+	memcpy(kernel_ver, utsname.release, KERNEL_VERSION_LENGTH - 1);
+	IPACM_LOG(IPACM_LOG_DEBUG, "kernel_ver %s\n", kernel_ver);
+}
+
 /* start IPACMDIAG socket*/
 int create_socket(unsigned int *sockfd)
 {
@@ -142,7 +164,7 @@ int create_socket(unsigned int *sockfd)
 
   return IPACM_SUCCESS;
 }
-void ipacm_log_send( void * user_data)
+void ipacm_send_log_to_qxdm( void * user_data)
 {
 	ipacm_log_buffer_t ipacm_log_buffer;
 	int numBytes=0, len;
@@ -163,7 +185,7 @@ void ipacm_log_send( void * user_data)
 	strlcpy(ipacmlog_socket.sun_path, IPACMLOG_FILE,sizeof(ipacmlog_socket.sun_path));
 	len = strlen(ipacmlog_socket.sun_path) + sizeof(ipacmlog_socket.sun_family);
 
-	memcpy(ipacm_log_buffer.user_data, user_data, MAX_BUF_LEN);
+	memcpy(ipacm_log_buffer.user_data, user_data, IPACM_LOG_MAX_CORE_BUF_LEN);
 
         if ((numBytes = sendto(ipacm_log_sockfd, (void *)&ipacm_log_buffer, sizeof(ipacm_log_buffer.user_data), 0,
 			(struct sockaddr *)&ipacmlog_socket, len)) == -1)
@@ -173,29 +195,99 @@ void ipacm_log_send( void * user_data)
 	}
 	return;
 }
+
+static inline char *u64_to_dec_rev(char *end, unsigned long long v)
+{
+	char *p = end;
+
+	do {
+		*--p = (char)('0' + (v % 10));
+		v /= 10;
+	} while (v);
+
+	return p;
+}
+
+/*
+ * Low latency timestamp formatter for hot-path logging.
+ * Output format preserved from old implementation:
+ *     "HH:MM:SS" + epoch_ms
+ * Example:
+ *     16:42:131719399733123
+ * Optimization:
+ * - Uses clock_gettime(), usually served through vDSO.
+ * - Uses CLOCK_REALTIME_COARSE if available for lower overhead.
+ * - Uses localtime_r(), thread-safe.
+ * - Caches HH:MM:SS once per second per thread.
+ * - Caches epoch seconds string once per second per thread.
+ * - Appends millisecond digits manually.
+ * - Avoids snprintf(), strftime(), localtime().
+ * - 20 digits for ULLONG_MAX (year ~292B), no NUL needed since memcpy'd.
+ */
 char *get_time_string(char *buffer, int len)
 {
-   struct timeval tv;
-   struct tm *tm;
-   unsigned long long milliseconds = 0;
-   char timestamp_buf[TimeStamp_buff_len];
+	struct timespec ts;
+	struct tm tm_local;
+	static __thread time_t last_sec = (time_t)-1;
+	static __thread char hhmmss[8];
+	static __thread char sec_str[21];
+	static __thread size_t sec_len;
+	static __thread char dummy_time[] = "00:00:0000000000000000";
+	unsigned int msec;
+	char numbuf[21];
+	char *start;
+	char *end;
+	size_t required_len;
 
-   if (!buffer || len <= 0)
-     return NULL;
+	if (!buffer || len <= 0)
+		return dummy_time;
 
-   gettimeofday(&tv, NULL);
-   tm = localtime(&tv.tv_sec);
+#ifdef CLOCK_REALTIME_COARSE
+	if (clock_gettime(CLOCK_REALTIME_COARSE, &ts) != 0)
+		return dummy_time;
+#else
+	if (clock_gettime(CLOCK_REALTIME, &ts) != 0)
+		return dummy_time;
+#endif
 
-   if (!tm)
-     return NULL;
+	if (ts.tv_sec != last_sec) {
+		if (localtime_r(&ts.tv_sec, &tm_local) == NULL)
+			return dummy_time;
 
-   milliseconds = (tv.tv_sec * 1000LL) + (tv.tv_usec / 1000);
+		hhmmss[0] = (char)('0' + (tm_local.tm_hour / 10));
+		hhmmss[1] = (char)('0' + (tm_local.tm_hour % 10));
+		hhmmss[2] = ':';
+		hhmmss[3] = (char)('0' + (tm_local.tm_min / 10));
+		hhmmss[4] = (char)('0' + (tm_local.tm_min % 10));
+		hhmmss[5] = ':';
+		hhmmss[6] = (char)('0' + (tm_local.tm_sec / 10));
+		hhmmss[7] = (char)('0' + (tm_local.tm_sec % 10));
 
-   strftime(timestamp_buf, 30, "%H:%M:%S", tm);
-   snprintf(buffer, len, "%s%lld", timestamp_buf, milliseconds);
+		end = numbuf + sizeof(numbuf);
+		start = u64_to_dec_rev(end, (unsigned long long)ts.tv_sec);
 
-   return buffer;
+		sec_len = (size_t)(end - start);
+		memcpy(sec_str, start, sec_len);
+		last_sec = ts.tv_sec;
+	}
+
+	msec = (unsigned int)(ts.tv_nsec / 1000000U);
+	required_len = 8 + sec_len + 3 + 1;
+
+	if ((size_t)len < required_len)
+		return dummy_time;
+
+	memcpy(buffer, hhmmss, 8);
+	memcpy(buffer + 8, sec_str, sec_len);
+
+	buffer[8 + sec_len]     = (char)('0' + (msec / 100));
+	buffer[8 + sec_len + 1] = (char)('0' + ((msec / 10) % 10));
+	buffer[8 + sec_len + 2] = (char)('0' + (msec % 10));
+	buffer[8 + sec_len + 3] = '\0';
+
+	return buffer;
 }
+
 /* This function initialize IPACM Logging
  * 	- DLT Logging enablement
  * 	- File backed Logging enablement
@@ -231,6 +323,28 @@ int log_init() {
 		printf("Logging already initiated, return\n");
 		return 0;
 	}
+
+	if(config->ipacm_log_timestamp_enable == 1 || config->ipacm_log_timestamp_enable == 0)
+	{
+		ipacm_global_log_timestamp_enable = config->ipacm_log_timestamp_enable;
+	}
+
+	if(config->ipacm_log_level >= IPACM_LOG_DISABLED && config->ipacm_log_level < IPACM_LOG_LVL_MAX)
+	{
+		ipacm_global_log_level = config->ipacm_log_level;
+	}
+	else
+	{
+		printf("Logging level invalid\n");
+	}
+
+	if(config->ipacm_syslog_level >= IPACM_SYSLOG_DISABLED && config->ipacm_syslog_level < IPACM_SYSLOG_LVL_MAX)
+	{
+		ipacm_global_syslog_level = config->ipacm_syslog_level;
+	}
+	else{
+		printf("Syslog Enable Set value is invalid\n");
+ 	}
 
 	if(access(dump_file, F_OK) == 0)
 	{
@@ -300,7 +414,7 @@ int log_init() {
 	/* Now log init is complete */
 	log_init_done = 1;
 
-	IPACMDBG_H("\nFound offset: %ld, mmap_addr[%p], write_addr[%p], sizeof(metadata)[%d]. \n",
+	IPACM_LOG(IPACM_LOG_DEBUG, "\nFound offset: %ld, mmap_addr[%p], write_addr[%p], sizeof(metadata)[%d]. \n",
 			metadata.write_addr, mmap_addr, write_addr, sizeof(ipacm_log_file_metadata_t));
 
 	return 0;
@@ -322,9 +436,9 @@ void log_deinit()
 #endif
 }
 
-void ipacm_log_dump(char* ipacm_log_data)
+void ipacm_send_log_to_file(char* ipacm_log_data)
 {
-        int input_len = 0;
+    int input_len = 0;
 	if(!log_init_done)
 	{
 		return;
@@ -337,7 +451,7 @@ void ipacm_log_dump(char* ipacm_log_data)
 	{
 		write_addr = mmap_addr + (sizeof(ipacm_log_file_metadata_t) + 1);
 	}
-	snprintf((char*)write_addr, input_len, "%s", ipacm_log_data);
+	memcpy(write_addr, ipacm_log_data, input_len);
 	write_addr = (char*)write_addr + (input_len - 1); //start of line
 	FILE_UNLOCK();
 }

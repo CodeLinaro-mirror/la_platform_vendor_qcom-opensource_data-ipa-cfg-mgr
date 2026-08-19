@@ -368,6 +368,7 @@ bool IPACM_Filtering::AddFilteringRuleAfter(struct ipa_ioc_add_flt_rule_after co
 {
 #ifdef FEATURE_IPA_V3
 	int retval = 0;
+	bool rule_failed = false;
 
 	IPACMDBG("Printing filter add attributes\n");
 	IPACMDBG("ip type: %d\n", ruleTable->ip);
@@ -377,16 +378,17 @@ bool IPACM_Filtering::AddFilteringRuleAfter(struct ipa_ioc_add_flt_rule_after co
 
 	retval = ioctl(fd, IPA_IOC_ADD_FLT_RULE_AFTER, ruleTable);
 
-	for (int cnt = 0; cnt<ruleTable->num_rules; cnt++)
+	for (int cnt = 0; cnt < ruleTable->num_rules; cnt++)
 	{
-		if(ruleTable->rules[cnt].status != 0)
+		if (ruleTable->rules[cnt].status != 0)
 		{
 			IPACMERR("Adding Filter rule:%d failed with status:%d\n",
 							 cnt, ruleTable->rules[cnt].status);
+			rule_failed = true;
 		}
 	}
 
-	if (retval != 0)
+	if (retval != 0 || rule_failed)
 	{
 		IPACMERR("Failed adding Filtering rule %p\n", ruleTable);
 		return false;

@@ -95,22 +95,18 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index, bool ppp_iface)
 		(virtual_iface = IPACM_Iface::ipacmcfg->iface_table[iface_index].virtual_iface))
 	{
 		is_ppp_iface = ppp_iface;
-		for (int i = 0; i < MAX_NUM_PPPOE_MPDN; i++)
+
+		IPACM_Iface::ipacmcfg->get_phy_name_from_proc(dev_name, phy_dev_name);
+		if(phy_dev_name != NULL)
 		{
-			if((IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].status == 1 ||
-				IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].status == 2) &&
-				!(strncmp(IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].pppoe_dev_name,
-					dev_name,
-					sizeof(dev_name))))
-			{
-				strlcpy(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
-					IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].phy_dev_name,
-					sizeof(IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].phy_dev_name));
-				 IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].iface_index = iface_index ;
-				memcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
-					sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name));
-				break;
-			}
+			IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name, phy_dev_name);
+			strlcpy(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
+				phy_dev_name, ETH_PHY_IFACE_LEN);
+		}
+		else
+		{
+			IPACMERR("Failed to get associated phy_name for wan dev name %s\n", dev_name);
+			return ;
 		}
 	}
 #endif

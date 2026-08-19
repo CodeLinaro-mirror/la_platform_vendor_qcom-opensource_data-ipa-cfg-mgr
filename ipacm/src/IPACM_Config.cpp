@@ -768,6 +768,14 @@ reread:
 		exit(0);
 	}
 
+	/* query route again if pppoe enabled and ipacm restart */
+	if(is_ipacm_restart && eth_wan_pppoe_enable)
+	{
+		IPACMDBG_H("Requerying routes for pppoe-wan since iface_table reset\n");
+		ipa_nl_send_getroute(IPA_IP_v4);
+		ipa_nl_send_getroute(IPA_IP_v6);
+	}
+
 	/* Construct IPACM GRE info */
 	ipacm_gre_enable = cfg->gre_conf.gre_enable;
 	ipacm_gre_autolearn = cfg->gre_conf.gre_autolearn;

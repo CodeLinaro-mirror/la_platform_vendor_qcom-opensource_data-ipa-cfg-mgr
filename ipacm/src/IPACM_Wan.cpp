@@ -229,6 +229,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	num_ipv6_dest_flt_rule = 0;
 	memset(ipv6_dest_flt_rule_hdl, 0, MAX_DEFAULT_v6_ROUTE_RULES*sizeof(uint32_t));
 	memset(dft_wan_fl_hdl, 0, IPA_NUM_DEFAULT_WAN_FILTER_RULES*sizeof(uint32_t));
+	nonhash_guard_flt_rule_hdl = 0;
 	memset(ipv6_prefix, 0, sizeof(ipv6_prefix));
 	memset(m_ipv6_addr, 0, sizeof(m_ipv6_addr));
 	memset(wan_v6_addr_gw, 0, sizeof(wan_v6_addr_gw));
@@ -6474,6 +6475,53 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 				}
 			}
 		}
+
+		if (dft_wan_fl_hdl[1] != 0 && nonhash_guard_flt_rule_hdl == 0)
+		{
+			/* Non-hash guard rule: IPA HW appears to also evaluate the non-hash
+			 * filter table even when the hash table already matched, so a v6
+			 * WAN pipe with no non-hash rules present can fall through to a
+			 * slower path. This rule matches dst_port==0xFFFF (never hit by
+			 * real traffic) and exists purely to occupy that non-hash slot,
+			 * right below the default-route hash rule. */
+			struct ipa_ioc_add_flt_rule_after *m_pNonHashGuardTableAfter;
+			int guard_len = sizeof(struct ipa_ioc_add_flt_rule_after) + 1 * sizeof(struct ipa_flt_rule_add);
+			m_pNonHashGuardTableAfter = (struct ipa_ioc_add_flt_rule_after *)calloc(1, guard_len);
+			if (m_pNonHashGuardTableAfter != NULL)
+			{
+				m_pNonHashGuardTableAfter->commit = 1;
+				m_pNonHashGuardTableAfter->ep = rx_prop->rx[0].src_pipe;
+				m_pNonHashGuardTableAfter->ip = IPA_IP_v6;
+				m_pNonHashGuardTableAfter->num_rules = (uint8_t)1;
+				m_pNonHashGuardTableAfter->add_after_hdl = dft_wan_fl_hdl[1]; /* right after default-route hash rule */
+
+				memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+				flt_rule_entry.at_rear = false;
+				flt_rule_entry.flt_rule_hdl = -1;
+				flt_rule_entry.status = -1;
+				flt_rule_entry.rule.retain_hdr = 1;
+				flt_rule_entry.rule.eq_attrib_type = 0;
+				flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+				flt_rule_entry.rule.hashable = false; /* non-hash guard rule */
+				memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[0].attrib, sizeof(struct ipa_rule_attrib));
+				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_DST_PORT;
+				flt_rule_entry.rule.attrib.dst_port = 0xFFFF;
+
+				memcpy(&(m_pNonHashGuardTableAfter->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+				if (false == m_filtering.AddFilteringRuleAfter(m_pNonHashGuardTableAfter))
+				{
+					IPACMERR("failed to add non-hash guard rule\n");
+				}
+				else
+				{
+					nonhash_guard_flt_rule_hdl = m_pNonHashGuardTableAfter->rules[0].flt_rule_hdl;
+					IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+					IPACMDBG_H("non-hash guard rule hdl=0x%x, status=0x%x\n",
+						m_pNonHashGuardTableAfter->rules[0].flt_rule_hdl, m_pNonHashGuardTableAfter->rules[0].status);
+				}
+				free(m_pNonHashGuardTableAfter);
+			}
+		}
 	}
 fail:
 	if (m_pFilteringTableafter != NULL)
@@ -7996,6 +8044,17 @@ int IPACM_Wan::del_dft_firewall_rules(ipa_ip_type iptype, bool wan_up_vlan)
 			IPACMDBG_H("deleted flt rule pppoe_route_rule_hdl_v6=0x%x \n",pppoe_route_rule_hdl_v6);
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+
+		if (nonhash_guard_flt_rule_hdl != 0)
+		{
+			if (m_filtering.DeleteFilteringHdls(&nonhash_guard_flt_rule_hdl, IPA_IP_v6, 1) == false)
+			{
+				IPACMERR("Error deleting non-hash guard filtering rule.\n");
+				return IPACM_FAILURE;
+			}
+			nonhash_guard_flt_rule_hdl = 0;
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, 1);
+		}
 
 		if (m_filtering.DeleteFilteringHdls(&dft_wan_fl_hdl[2], IPA_IP_v6, 1) == false)
 		{

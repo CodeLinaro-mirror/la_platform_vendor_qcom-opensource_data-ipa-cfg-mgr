@@ -574,6 +574,7 @@ private:
 	uint32_t firewall_hdl_v4[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t firewall_hdl_v6[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t dft_wan_fl_hdl[IPA_NUM_DEFAULT_WAN_FILTER_RULES];
+	uint32_t nonhash_guard_flt_rule_hdl; /* non-hash guard rule tied to dft_wan_fl_hdl[1]'s lifecycle */
 #ifdef FEATURE_IPV6_NAT
 	uint32_t ipv6_ula_prefix_hdl;
 #endif

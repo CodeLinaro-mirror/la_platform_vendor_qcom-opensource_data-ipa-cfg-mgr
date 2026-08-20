@@ -627,62 +627,34 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				}
 #endif
 				//LTE case delete routing rule of client with associated vlan_id
-				for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+				if(data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX)
 				{
-					IPACM_LOG(IPACM_LOG_DEBUG, "i = %d, v6_mux_up.mux_d = %d, data.mux_id = %d\n", i, v6_mux_up[i].mux_id, data->mux_id);
-					if(v6_mux_up[i].mux_id == data->mux_id)
+					for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 					{
-						for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+						IPACM_LOG(IPACM_LOG_DEBUG, "i = %d, v6_mux_up.mux_d = %d, data.mux_id = %d\n", i, v6_mux_up[i].mux_id, data->mux_id);
+						if(v6_mux_up[i].mux_id == data->mux_id)
 						{
-							if(v6_mux_up[i].associated_VIDs[j] != 0)
+							for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
 							{
-								IPACM_LOG(IPACM_LOG_DEBUG, "j = %d, vid = %d\n", j, v6_mux_up[i].associated_VIDs[j]);
-								if(IPACM_Iface::ipacmcfg->is_dummy_VID(v6_mux_up[i].associated_VIDs[j]))
+								if(v6_mux_up[i].associated_VIDs[j] != 0)
 								{
-									/* reset vlan client ipv6 rt-rules */
-									handle_wlan_client_reset_rt(IPA_IP_v6);
-									IPACM_LOG(IPACM_LOG_INFO, "successfully deleted v6 rt: vid %d for mux id %d, dev %s, i = %d, j = %d, VID_cnt = %d \n",
-										v6_mux_up[i].associated_VIDs[j], v6_mux_up[i].mux_id, dev_name, i, j, v6_mux_up[i].VID_cnt);
+									IPACM_LOG(IPACM_LOG_DEBUG, "j = %d, vid = %d\n", j, v6_mux_up[i].associated_VIDs[j]);
+									if(IPACM_Iface::ipacmcfg->is_dummy_VID(v6_mux_up[i].associated_VIDs[j]))
+									{
+										/* reset vlan client ipv6 rt-rules */
+										handle_wlan_client_reset_rt(IPA_IP_v6);
+										IPACM_LOG(IPACM_LOG_INFO, "successfully deleted v6 rt: vid %d for mux id %d, dev %s, i = %d, j = %d, VID_cnt = %d \n",
+											v6_mux_up[i].associated_VIDs[j], v6_mux_up[i].mux_id, dev_name, i, j, v6_mux_up[i].VID_cnt);
+									}
 								}
 							}
+							IPACM_LOG(IPACM_LOG_DEBUG, "Deleted ipv6 address from neigh cache \n");
+							neigh_cache.clear();
 						}
 					}
 				}
 
 				handle_vlan_pdn_down(data);
-				if(((data->iptype == IPA_IP_v6 || data->iptype == IPA_IP_MAX)))
-				{
-					it = neigh_cache.begin();
-					while (it != neigh_cache.end())
-					{
-						if ((it->ipv6_addr[0] == data->ipv6_prefix[0]) && (it->ipv6_addr[1] == data->ipv6_prefix[1]))
-						{
-							/* In both LTE and WLAN down receiving vlan id 0 but as
-							prefix is different clearing neigh cache entry for prefix*/
-							if(data->VlanID == 0)
-							{
-								it = neigh_cache.erase(it);
-							}
-							else if(data->VlanID != 0)
-							{
-								vlan_id = 0;
-								if(IPACM_Iface::ipacmcfg->get_vlan_id(it->iface_name, &vlan_id))
-								{
-									IPACM_LOG(IPACM_LOG_ERR, "failed to get iface vlan ID\n");
-									it++;
-									continue;
-								}
-
-								if(data->VlanID == vlan_id)
-								{
-									it = neigh_cache.erase(it);
-								}
-							}
-						}
-						else
-							it++;
-					}
-				}
 			}
 		}
 		break;

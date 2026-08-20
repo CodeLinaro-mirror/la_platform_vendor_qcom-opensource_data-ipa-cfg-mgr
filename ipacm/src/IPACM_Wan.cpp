@@ -8164,8 +8164,12 @@ int IPACM_Wan::handle_down_evt()
 		ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 = false;
 
 		wan_v6_is_default_gw = true;
-		if (sta_ipv4_pdn_index == -1)
+		if (((sta_ipv4_pdn_index == -1) || ((sta_ipv4_pdn_index >= 0) &&
+		(!ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan))) && (num_offloaded_pdns > 0))
+		{
 			num_offloaded_pdns--;
+			IPACM_LOG(IPACM_LOG_INFO, "Now no of offloaded PDN is %d\n", num_offloaded_pdns);
+		}
 
 		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 		if(vlandown_data == NULL)
@@ -8198,9 +8202,12 @@ int IPACM_Wan::handle_down_evt()
 
 		ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan = false;
 		wan_v4_is_default_gw = true;
-		if (sta_ipv6_pdn_index == -1)
+		if (((sta_ipv6_pdn_index == -1) || ((sta_ipv6_pdn_index >= 0) &&
+		(!ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6))) && (num_offloaded_pdns > 0))
+		{
 			num_offloaded_pdns--;
-
+			IPACM_LOG(IPACM_LOG_INFO, "Now no of offloaded PDN is %d\n", num_offloaded_pdns);
+		}
 		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 		if(vlandown_data == NULL)
 		{

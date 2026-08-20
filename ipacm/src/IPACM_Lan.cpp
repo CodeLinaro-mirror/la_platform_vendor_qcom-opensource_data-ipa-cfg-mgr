@@ -16725,6 +16725,17 @@ int IPACM_Lan::modify_private_subnet(bool eogre_enabled)
 			mtu_rule_cnt++;
 
 		}
+		/* for single PDN case, MTU rule support for ECM WAN including PPPoE and DHCP */
+		if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable &&
+			IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) &&
+			IPACM_Wan::isECMWanUP(ipa_if_num))
+		{
+			/* first subnet is reserved for default PDN */
+			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v4);
+			IPACMDBG_H("defaut PDN mtu = %d\n", mtu[0]);
+			mtu_rule_cnt++;
+			IPACMDBG_H("ECM_WAN total (%d) MTU rules are needed - Vlan Clients\n", mtu_rule_cnt);
+		}
 
 		//In the future, can use GetWanPDNinfo for all usecases
 		if (IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
@@ -17087,6 +17098,17 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 		mtu_rule_cnt++;
 	}
 
+	/* for single PDN case, MTU rule support for ECM WAN including PPPoE and DHCP */
+	if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable &&
+		IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) &&
+		IPACM_Wan::isECMWanUP_V6(ipa_if_num) )
+	{
+		/* first subnet is reserved for default PDN */
+		mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6);
+		IPACMDBG_H("defaut PDN mtu = %d\n", mtu[0]);
+		mtu_rule_cnt++;
+		IPACMDBG_H("ECM_WAN total (%d) MTU rules are needed - Vlan Client\n", mtu_rule_cnt);
+	}
 	/* for MPDN case, need to query VLAN and mtus */
 	if(IPACM_Iface::ipacmcfg->ipacm_mpdn_enable)
 	{

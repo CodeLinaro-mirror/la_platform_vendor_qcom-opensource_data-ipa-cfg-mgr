@@ -745,7 +745,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 					IPACM_EvtDispatcher::registr(IPA_UPDATE_SOCKSv5_v6_CONN, w);
 #endif
 #ifdef IPA_MTU_EVENT_MAX
-					if(is_sta_mode == Q6_WAN)
+					if(is_sta_mode == Q6_WAN || is_sta_mode == ECM_WAN)
 					{
 						IPACM_EvtDispatcher::registr(IPA_MTU_SET, w);
 					}

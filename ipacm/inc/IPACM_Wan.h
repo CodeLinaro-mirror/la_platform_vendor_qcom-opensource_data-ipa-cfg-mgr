@@ -391,6 +391,41 @@ public:
 #endif
 	}
 
+	static bool isECMWanUP(int ipa_if_num_tether)
+	{
+		if (!isWanUP(ipa_if_num_tether))
+			return false;
+		for (int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		{
+			if (ipv4_to_iface[i].ipv4_addr && ipv4_to_iface[i].pIface != NULL &&
+				ipv4_to_iface[i].pIface->m_is_sta_mode == ECM_WAN)
+			{
+				IPACMDBG_H("ECM WAN is up on iface %s\n", ipv4_to_iface[i].pIface->dev_name);
+				return true;
+			}
+		}
+		IPACMDBG_H("No ECM WAN is up\n");
+		return false;
+	}
+
+	static bool isECMWanUP_V6(int ipa_if_num_tether)
+	{
+		if (!isWanUP_V6(ipa_if_num_tether))
+			return false;
+		for (int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+		{
+			if ((ipv6_to_iface[i].ipv6_prefix[0] || ipv6_to_iface[i].ipv6_prefix[1]) &&
+				ipv6_to_iface[i].pIface != NULL &&
+				ipv6_to_iface[i].pIface->m_is_sta_mode == ECM_WAN)
+			{
+				IPACMDBG_H("ECM WAN V6 is up on iface %s\n", ipv6_to_iface[i].pIface->dev_name);
+				return true;
+			}
+		}
+		IPACMDBG_H("No ECM WAN V6 is up\n");
+		return false;
+	}
+
 	static bool isWan_active_with_prefix(uint32_t *v6_addr)
 	{
 		if(v6_addr == NULL)

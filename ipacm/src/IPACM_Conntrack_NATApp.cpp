@@ -3362,7 +3362,7 @@ void NatBase::FlushTempEntries(const IpAddress& clientIp, bool isAdd, bool isDum
 	IPACM_LOG(IPACM_LOG_DEBUG, "return\n");
 }
 
-void NatBase::FlushAndCacheVlanTempEntries_v6(uint32_t* ipv6_addr, bool isAdd, bool isDummy, bool isStaClientIp)
+void NatBase::FlushAndCacheVlanTempEntries_v6(uint32_t* ipv6_addr, bool isAdd, bool isDummy, bool isStaClientIp, bool *is_entry_present)
 {
 	const IpAddress& clientIp = Ipv6IpAddress(ipv6_addr, false);
 	clientIp.DebugDump("Flush temp entries for");
@@ -3401,7 +3401,7 @@ void NatBase::FlushAndCacheVlanTempEntries_v6(uint32_t* ipv6_addr, bool isAdd, b
 				IPACM_LOG(IPACM_LOG_DEBUG, "setting to dummy\n");
 				curr.m_isDummy = true;
 			}
-
+			*is_entry_present = true;
 			int ret = AddEntry(curr);
 			if (ret)
 			{

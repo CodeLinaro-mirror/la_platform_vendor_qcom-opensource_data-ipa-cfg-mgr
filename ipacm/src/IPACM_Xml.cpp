@@ -295,6 +295,8 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 						else if(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].ip_vsn == IP_V6)
 						{
 							str_size = strlen(content);
+							if (str_size >= MAX_XML_STR_LEN)
+								str_size = MAX_XML_STR_LEN - 1;
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
 							inet_pton(AF_INET6, content_buf, &ip6_addr);
@@ -384,6 +386,8 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 						else if(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].ip_vsn == IP_V6)
 						{
 							str_size = strlen(content);
+							if (str_size >= MAX_XML_STR_LEN)
+								str_size = MAX_XML_STR_LEN - 1;
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
 							inet_pton(AF_INET6, content_buf, &ip6_addr);

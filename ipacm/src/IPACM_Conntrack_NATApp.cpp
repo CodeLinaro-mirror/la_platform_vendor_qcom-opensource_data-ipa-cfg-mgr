@@ -2804,7 +2804,7 @@ int NatProxyBase::AddEntry(NatEntryBase& entry)
 	}
 
 	uint32_t entry_handle = 0, additional_handle = 0;
-	int uc_act_handle;
+	int uc_act_handle = -1;
 	int ret = DoAddEntry(entry, entry_handle, additional_handle, uc_act_handle);
 	if (!ret)
 	{

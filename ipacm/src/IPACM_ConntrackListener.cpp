@@ -5381,7 +5381,7 @@ bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
 		ret = ip.IsSameSubnet(wan_ipaddr_v6);
 	}
 
-	if(pConfig->delegate_prefix_valid == true)
+	if(pConfig != NULL && pConfig->delegate_prefix_valid == true)
 	{
 		int len =  pConfig->ipv6_delegate_prefix_len;
 		const Ipv6IpAddress& ipv6 = static_cast<const Ipv6IpAddress&>(ip);

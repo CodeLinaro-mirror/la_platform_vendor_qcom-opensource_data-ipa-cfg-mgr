@@ -8633,6 +8633,13 @@ int IPACM_Lan::handle_pdn_dscp_eth_client_route_rule(uint8_t *mac_addr,
 	}
 	else if(trigger == 1)
 	{
+		eth_index = get_eth_client_index(mac_addr, vlan_id);
+		if (eth_index == IPACM_INVALID_INDEX)
+		{
+			IPACMDBG_H("eth client not found/attached for trigger==1\n");
+			return IPACM_FAILURE;
+		}
+
 		if(iptype == IPA_IP_v4)
 		{
 			size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);

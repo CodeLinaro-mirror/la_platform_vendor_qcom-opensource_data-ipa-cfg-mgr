@@ -6476,7 +6476,8 @@ int IPACM_Wan::config_dft_firewall_rules(ipa_ip_type iptype)
 			}
 		}
 
-		if (dft_wan_fl_hdl[1] != 0 && nonhash_guard_flt_rule_hdl == 0)
+		if (dft_wan_fl_hdl[1] != 0 && nonhash_guard_flt_rule_hdl == 0 &&
+			!(sta_vlan_id > 0 && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true))
 		{
 			/* Non-hash guard rule: IPA HW appears to also evaluate the non-hash
 			 * filter table even when the hash table already matched, so a v6

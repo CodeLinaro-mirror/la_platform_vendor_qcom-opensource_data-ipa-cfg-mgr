@@ -314,8 +314,8 @@ int log_init() {
 	 * IPACM name cant be used instead using IPA
 	 */
 #ifdef USE_DLT
-	DLT_REGISTER_APP("IPA ", " Qualcomm IPACM ctx ");
-	DLT_REGISTER_CONTEXT(ctx, " GNRL", " General context level in IPACM");
+	DLT_REGISTER_APP("QIPA", "Qualcomm IPACM ctx");
+	DLT_REGISTER_CONTEXT(ctx, "GNRL", "General context level in IPACM");
 #endif
 	memset(&metadata, '\0', sizeof(ipacm_log_file_metadata_t));
 	if(log_init_done)

@@ -156,6 +156,84 @@ static void getAttr(struct rtattr *attrib[], int max, struct rtattr *rta, int le
 }
 #endif
 
+/* ---------------------------------------------------------------------------
+ * Per-MAC IPv4 tracking table for RTM_NEWNEIGH NUD_STALE/NUD_PROBE filtering.
+ *
+ * The kernel may re-emit RTM_NEWNEIGH with NUD_STALE (4) or NUD_PROBE (16)
+ * for an ARP entry that is aging out, and the event may carry an IP address
+ * that is no longer correct for that client.  If IPACM acted on such an event
+ * it could install offload rules for the wrong IP.
+ *
+ * To prevent this, we maintain a table that records the first IPv4 address
+ * successfully processed for each MAC address.  Any subsequent RTM_NEWNEIGH
+ * event with NUD_STALE or NUD_PROBE that presents a *different* IPv4 address
+ * for an already-known MAC is silently dropped.
+ * ---------------------------------------------------------------------------
+ */
+#define IPA_NEIGH_V4_TRACK_MAX 200
+
+typedef struct {
+	uint8_t  mac[IPA_MAC_ADDR_SIZE]; /* hardware (MAC) address             */
+	uint32_t ipv4_addr;              /* tracked IPv4 address (host byte order) */
+	bool     in_use;                 /* true when this slot is occupied     */
+} ipa_neigh_v4_track_entry_t;
+
+/* Zero-initialised by the C++ runtime; in_use starts false for all slots. */
+static ipa_neigh_v4_track_entry_t neigh_v4_track_table[IPA_NEIGH_V4_TRACK_MAX];
+
+/* Return the table index for 'mac', or -1 if not present. */
+static int ipa_neigh_v4_track_find(const uint8_t *mac)
+{
+	for (int i = 0; i < IPA_NEIGH_V4_TRACK_MAX; i++)
+	{
+		if (neigh_v4_track_table[i].in_use &&
+		    memcmp(neigh_v4_track_table[i].mac, mac, IPA_MAC_ADDR_SIZE) == 0)
+			return i;
+	}
+	return -1;
+}
+
+/* Insert a new entry or refresh the IPv4 address for an existing MAC entry. */
+static void ipa_neigh_v4_track_update(const uint8_t *mac, uint32_t ipv4_addr)
+{
+	int idx = ipa_neigh_v4_track_find(mac);
+	if (idx >= 0)
+	{
+		neigh_v4_track_table[idx].ipv4_addr = ipv4_addr;
+		return;
+	}
+
+	/* Find a free slot and populate it. */
+	for (int i = 0; i < IPA_NEIGH_V4_TRACK_MAX; i++)
+	{
+		if (!neigh_v4_track_table[i].in_use)
+		{
+			memcpy(neigh_v4_track_table[i].mac, mac, IPA_MAC_ADDR_SIZE);
+			neigh_v4_track_table[i].ipv4_addr = ipv4_addr;
+			neigh_v4_track_table[i].in_use    = true;
+			return;
+		}
+	}
+
+	IPACMERR("neigh_v4_track_table is full; cannot track MAC "
+	         "%02x:%02x:%02x:%02x:%02x:%02x\n",
+	         mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
+/* Remove the tracking entry for 'mac' so a future RTM_NEWNEIGH for the same
+ * MAC is treated as a fresh first-seen event.  Called on RTM_DELNEIGH to
+ * ensure stale entries do not linger after a client disconnects. */
+static void ipa_neigh_v4_track_remove(const uint8_t *mac)
+{
+	int idx = ipa_neigh_v4_track_find(mac);
+	if (idx < 0)
+		return;
+
+	memset(&neigh_v4_track_table[idx], 0, sizeof(neigh_v4_track_table[idx]));
+	IPACMDBG_H("neigh_v4_track: removed entry for MAC "
+	           "%02x:%02x:%02x:%02x:%02x:%02x\n",
+	           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
 
 
 /* Opens a netlink socket*/
@@ -1839,6 +1917,56 @@ static int ipa_nl_decode_nlmsg
 			data_all->if_index = msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
 			strlcpy(data_all->iface_name, dev_name, sizeof(data_all->iface_name));
 
+			/* -----------------------------------------------------------------
+			 * NUD_STALE (4) / NUD_PROBE (16) duplicate-IP guard for IPv4.
+			 *
+			 * When the kernel re-advertises an aging ARP entry it uses these
+			 * NUD states and may carry an IP address that is no longer valid
+			 * for the client.  We detect this by comparing the incoming IPv4
+			 * address against the one we have already recorded for that MAC.
+			 * If they differ the event is stale and is silently dropped to
+			 * prevent incorrect offload rule installation.
+			 *
+			 * For any IPv4 event that passes this check (including the very
+			 * first event for a MAC) we record the MAC -> IPv4 mapping so
+			 * subsequent checks have a reference point.
+			 * ----------------------------------------------------------------- */
+			if (data_all->iptype == IPA_IP_v4)
+			{
+				const uint8_t  *mac       = (const uint8_t *)
+				                            msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data;
+				const uint16_t  ndm_state = msg_ptr->nl_neigh_info.metainfo.ndm_state;
+
+				if (ndm_state == NUD_STALE || ndm_state == NUD_PROBE)
+				{
+					int track_idx = ipa_neigh_v4_track_find(mac);
+
+					if (track_idx >= 0 &&
+					    neigh_v4_track_table[track_idx].ipv4_addr != data_all->ipv4_addr)
+					{
+						/* A different IPv4 was previously recorded for this MAC.
+						 * The incoming event is stale; discard it. */
+						IPACMDBG_H("RTM_NEWNEIGH ndm_state=%u: MAC "
+						           "%02x:%02x:%02x:%02x:%02x:%02x already "
+						           "tracked with IPv4 0x%08x, ignoring new "
+						           "IPv4 0x%08x on %s\n",
+						           ndm_state,
+						           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+						           neigh_v4_track_table[track_idx].ipv4_addr,
+						           data_all->ipv4_addr, dev_name);
+						free(data_all);
+						data_all = NULL;
+						break;
+					}
+				}
+
+				/* Record (or refresh) the MAC -> IPv4 mapping.
+				 * This covers the first-seen event for a MAC (any NUD state)
+				 * and updates the entry when the IP legitimately changes via
+				 * a non-STALE/PROBE event. */
+				ipa_neigh_v4_track_update(mac, data_all->ipv4_addr);
+			}
+
 			IPACMDBG_H("for IF %s, got ndm_family %d, ndm_state %d\n", dev_name, msg_ptr->nl_neigh_info.metainfo.ndm_family,
 				msg_ptr->nl_neigh_info.metainfo.ndm_state);
 
@@ -1938,6 +2066,12 @@ static int ipa_nl_decode_nlmsg
 				memcpy(data_all->mac_addr,
 							 msg_ptr->nl_neigh_info.attr_info.lladdr_hwaddr.sa_data,
 							 sizeof(data_all->mac_addr));
+
+			/* Remove the MAC -> IPv4 tracking entry so a future RTM_NEWNEIGH
+			 * for this client is treated as a fresh first-seen event. */
+			if (data_all->iptype == IPA_IP_v4)
+				ipa_neigh_v4_track_remove(data_all->mac_addr);
+
 		    evt_data.event = IPA_DEL_NEIGH_EVENT;
 				data_all->if_index = msg_ptr->nl_neigh_info.metainfo.ndm_ifindex;
 

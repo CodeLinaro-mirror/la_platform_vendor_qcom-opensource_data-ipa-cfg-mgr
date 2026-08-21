@@ -167,10 +167,11 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_HANDLE_SOCKSv5_DOWN),                  /* NULL */
 	__stringify(IPA_ADD_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
-	__stringify(IPA_UPDATE_SOCKSv5_CONN),                  /* NULL */
+	__stringify(IPA_UPDATE_SOCKSv5_v6_CONN),               /* NULL */
 #endif
 	__stringify(IPA_MAC_ADD_DEL_FLT_EVENT),                /* ipacm_event_data_mac */
 	__stringify(IPA_IP_COLLISION_UPDATE_EVENT),          /* ipacm_ip_collision_pdn_info */
+	__stringify(IPA_RGIP_PASS_UPDATE_EVENT),               /* ipacm_event_rgip_pass_info */
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	__stringify(IPA_PKT_THRESHOLD_UPDATE_EVENT),           /* ipa_set_pkt_threshold */
 #endif
@@ -184,6 +185,11 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WAN_HANDLE_EoGRE_UP),                  /* Handle eogre enable event for WAN. */
 	__stringify(IPA_WAN_HANDLE_EoGRE_DOWN),                /* Handle eogre disable event for WAN. */
 #endif
+	__stringify(IPA_DSCP_PCP_CONFIG_CHANGE_EVENT),         /* NULL */
+#ifdef FEATURE_PMIPV6
+	__stringify(IPA_HANDLE_GRE_UP),                      /* Handle gre enable event. */
+	__stringify(IPA_HANDLE_GRE_DOWN),                    /* Handle gre disable event. */
+#endif
 #ifdef FEATURE_IPoGRE
 	__stringify(IPA_HANDLE_IPOGRE_UP),                      /* Handle ipogre enable event. */
 	__stringify(IPA_HANDLE_IPOGRE_DOWN),                    /* Handle ipogre disable event. */
@@ -191,11 +197,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WAN_HANDLE_IPOGRE_DOWN),
 	__stringify(IPA_HANDLE_RGIP_UP),                /* Handle ipogre disable event. */
 	__stringify(IPA_HANDLE_RGIP_DEL),                /* Handle ipogre disable event. */
-#endif
-	__stringify(IPA_DSCP_PCP_CONFIG_CHANGE_EVENT),         /* NULL */
-#ifdef FEATURE_PMIPV6
-	__stringify(IPA_HANDLE_GRE_UP),                      /* Handle gre enable event. */
-	__stringify(IPA_HANDLE_GRE_DOWN),                    /* Handle gre disable event. */
+	__stringify(IPA_HANDLE_IPOGRE_ADDR_ADD),        /* address added to GRE tunnel iface */
 #endif
 	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* Handle macsec map add event */
 	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* Handle macsec map delete event */
@@ -224,6 +226,13 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_MAPE_DEL_FMR_RULE),                    /* ipacm_event_data_addr */
 	__stringify(IPACM_EVENT_MAX)
 };
+
+/* getEventName() indexes this table with the event id directly, so an entry
+ * missing from the table silently mislabels every event id after it. This only
+ * catches a count mismatch, not a reordering, so entries must be kept in the
+ * same order and under the same feature guards as enum ipa_cm_event_id. */
+static_assert(sizeof(ipacm_event_name) / sizeof(ipacm_event_name[0]) == IPACM_EVENT_MAX + 1,
+	"ipacm_event_name[] is out of sync with enum ipa_cm_event_id");
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	IPACM_Config::ipa_lan_client_idx IPACM_Config::active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS_V2];
 	IPACM_Config::ipa_lan_client_idx IPACM_Config::inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS_V2];
@@ -1668,10 +1677,11 @@ int IPACM_Config::DelExtProp(ipa_ip_type ip_type)
 
 const char* IPACM_Config::getEventName(ipa_cm_event_id event_id)
 {
-	if(event_id >= sizeof(ipacm_event_name)/sizeof(ipacm_event_name[0]))
+	if((size_t)event_id >= sizeof(ipacm_event_name)/sizeof(ipacm_event_name[0]))
 	{
 		IPACMERR("Event name array is not consistent with event array!\n");
-		return NULL;
+		/* callers pass the result straight to %s, so never hand back NULL */
+		return "IPA_UNKNOWN_EVENT";
 	}
 
 	return ipacm_event_name[event_id];

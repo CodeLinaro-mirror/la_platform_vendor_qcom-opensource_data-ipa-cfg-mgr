@@ -83,6 +83,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "IPACM_Filtering.h"
 #include "IPACM_Config.h"
 #include "IPACM_Conntrack_NATApp.h"
+#include "IPACM_ConntrackClient.h"
 
 #define IPA_WAN_DEFAULT_FILTER_RULE_HANDLES  1
 #define IPA_NUM_ODU_ROUTE_RULES 2

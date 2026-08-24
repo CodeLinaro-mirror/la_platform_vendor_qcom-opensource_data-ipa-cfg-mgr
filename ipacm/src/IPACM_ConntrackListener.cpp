@@ -78,9 +78,12 @@ IPACM_ConntrackListener::IPACM_ConntrackListener() :
 	 isStaMode = false;
 	 memset(nat_clients, 0, sizeof(nat_clients));
 	 memset(nat_clients_v6, 0, sizeof(nat_clients_v6));
+	 isStaMode = false;
 #ifdef FEATURE_VLAN_MPDN
 	 memset(vlan_pdns, 0, sizeof(vlan_pdns));
+	 memset(v6_vlan_pdns, 0, sizeof(v6_vlan_pdns));
 	 num_vlan_pdns = 0;
+	 num_v6_vlan_pdns = 0;
 #endif
 	 memset(nonnat_iface_ipv4_addr, 0, sizeof(nonnat_iface_ipv4_addr));
 	 memset(sta_clnt_ipv4_addr, 0, sizeof(sta_clnt_ipv4_addr));
@@ -197,14 +200,14 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable) {
 			Ipv6NatEntry entry;
 
-			IPACM_LOG(IPACM_LOG_DEBUG, "nat enabled\n");
+			IPACM_LOG(IPACM_LOG_DEBUG, "IPv6NAT is Enabled\n");
 			CreateIpv6NatEntryFromCtEventData(evt_data, entry);
 			ProcessCTMessage_v6(evt_data, entry);
 		} else
 #endif
 			if (IsIpv6CTEnabled()) {
 				Ipv6ctEntry entry;
-
+				IPACM_LOG(IPACM_LOG_DEBUG, "IPv6CT is Enabled\n");
 				CreateIpv6ctEntryFromCtEventData(evt_data, entry);
 				ProcessCTMessage_v6(evt_data, entry);
 		}
@@ -1123,8 +1126,8 @@ bool IPACM_ConntrackListener::IsVlanIPv6(const Ipv6IpAddress& ip, uint16_t *Vlan
 		{
 			if(nat_clients_v6[i].is_vlan_client)
 			{
-				IPACM_LOG(IPACM_LOG_INFO,"ipv6 address belong to vlan iface with id %d\n",
-					nat_clients_v6[i].vlan_id)
+				IPACM_LOG(IPACM_LOG_INFO, "ipv6 address belong to vlan iface with id %d\n",
+					nat_clients_v6[i].vlan_id);
 				*VlanId = nat_clients_v6[i].vlan_id;
 				return true;
 			}
@@ -1314,7 +1317,7 @@ void IPACM_ConntrackListener::HandleVlanUpV6(void *in_param)
 			}
 		}
 
-		/* Create NAT thread if not already created */
+		/* Create NAT thread if not already created. */
 		if(!isNatThreadStart)
 		{
 			IPACM_LOG(IPACM_LOG_DEBUG, "creating nat threads\n");
@@ -1354,84 +1357,65 @@ void IPACM_ConntrackListener::HandleVlanUp(void *in_param)
 		IPACM_LOG(IPACM_LOG_ERR, "ipv4 address is invalid, iptype %d\n", vlanup_data->iptype);
 		return;
 	}
-#ifdef FEATURE_DUAL_BACKHAUL
-	if(IPACM_Wan::second_backhaul_active && vlanup_data->mux_id == 0)
+
+	IPACM_LOG(IPACM_LOG_DEBUG, "ipv4 address for new PDN 0x%X\n", vlanup_data->ipv4_addr);
+	if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id,
+		vlanup_data->mux_id ? false : true,
+		(vlanup_data->ip_pass_enable && !vlanup_data->ip_pass_skip_nat)))
 	{
-		IPACM_LOG(IPACM_LOG_DEBUG, "calling add pdn for second backhaul\n");
-		if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id,
-				true,false,false))
-		{
-			IPACM_LOG(IPACM_LOG_ERR, "failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
-		}
-		else
-		{
-			IPACM_LOG(IPACM_LOG_DEBUG, "PDN table added successfully for STA\n");
-		}
+		IPACM_LOG(IPACM_LOG_ERR, "failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
 	}
 	else
 	{
-#endif
-		if(nat_inst->AddPdn(vlanup_data->ipv4_addr, vlanup_data->mux_id, false,
-			(vlanup_data->ip_pass_enable && !vlanup_data->ip_pass_skip_nat),
-			vlanup_data->is_xlat))
+		/* Check if pdn is allocated as well as saved in vlan pdn cache*/
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			IPACM_LOG(IPACM_LOG_ERR, "failed adding pdn, num_vlan_pdns %d\n", num_vlan_pdns);
-		}
-		else
-		{
-			/* Check if pdn is allocated as well as saved in vlan pdn cache*/
-			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
 			{
-				if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
+				for(int j = 0; j < vlan_pdns[i].VID_cnt; j ++)
 				{
-					for(int j = 0; j < vlan_pdns[i].VID_cnt; j ++)
+					if (vlanup_data->VlanID == vlan_pdns[i].associated_VIDs[j])
 					{
-						if (vlanup_data->VlanID == vlan_pdns[i].associated_VIDs[j])
-						{
-							IPACM_LOG(IPACM_LOG_DEBUG,"found existing PDN entry in %d,\
-							with vlan %d\n", i, vlanup_data->VlanID);
-							return;
-						}
+						IPACM_LOG(IPACM_LOG_DEBUG, "found existing PDN entry in %d,\
+						with vlan %d\n", i, vlanup_data->VlanID);
+						return;
 					}
-					IPACM_LOG(IPACM_LOG_DEBUG, "found existing PDN entry in %d, but got \
-						new VLAN id. Adding vlan %d to the entry\n",
-						i, vlanup_data->VlanID);
-					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] =
-									vlanup_data->VlanID;
-					vlan_pdns[i].VID_cnt++;
-					return;
 				}
-			}
-
-			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
-			{
-				if(vlan_pdns[i].public_ip == 0)
-				{
-					IPACM_LOG(IPACM_LOG_DEBUG,"found empty PDN entry in %d num_vlan_pdns %d\n",
-							i, num_vlan_pdns);
-					vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
-					vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] =
-									vlanup_data->VlanID;
-					vlan_pdns[i].ip_pass_enable = vlanup_data->ip_pass_enable;
-					vlan_pdns[i].ip_pass_dummy_ip =
-						vlanup_data->ip_pass_dummy_ip;
-					vlan_pdns[i].ip_pass_skip_nat =
-						vlanup_data->ip_pass_skip_nat;
-					vlan_pdns[i].VID_cnt++;
-					num_vlan_pdns++;
-					break;
-				}
-			}
-			if(!isNatThreadStart)
-			{
-				IPACM_LOG(IPACM_LOG_DEBUG,"creating nat threads\n");
-				CreateNatThreads();
+				IPACM_LOG(IPACM_LOG_DEBUG, "found existing PDN entry in %d, but got \
+					new VLAN id. Adding vlan %d to the entry\n",
+					i, vlanup_data->VlanID);
+				vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] =
+								vlanup_data->VlanID;
+				vlan_pdns[i].VID_cnt++;
+				return;
 			}
 		}
-#ifdef FEATURE_DUAL_BACKHAUL
-	}
-#endif
 
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if(vlan_pdns[i].public_ip == 0)
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "found empty PDN entry in %d num_vlan_pdns %d\n",
+						i, num_vlan_pdns);
+				vlan_pdns[i].public_ip = vlanup_data->ipv4_addr;
+				vlan_pdns[i].associated_VIDs[vlan_pdns[i].VID_cnt] =
+								vlanup_data->VlanID;
+				vlan_pdns[i].ip_pass_enable = vlanup_data->ip_pass_enable;
+				vlan_pdns[i].ip_pass_dummy_ip =
+					vlanup_data->ip_pass_dummy_ip;
+				vlan_pdns[i].ip_pass_skip_nat =
+					vlanup_data->ip_pass_skip_nat;
+				vlan_pdns[i].VID_cnt++;
+				num_vlan_pdns++;
+				break;
+			}
+		}
+		if(!isNatThreadStart)
+		{
+			IPACM_LOG(IPACM_LOG_DEBUG, "creating nat threads\n");
+			CreateNatThreads();
+		}
+	}
 }
 #endif
 
@@ -1495,8 +1479,10 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 	   	 mux_id = wanup_data->mux_id;
 	   }
 #ifdef FEATURE_VLAN_MPDN
-		 nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, isStaMode,
-		 	(ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn), is_xlat);
+	   if(wanup_data->is_sta)
+		nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, true);
+	   else
+		nat_inst->AddPdn(wanup_data->ipv4_addr, mux_id, false, (ip_pass_enable_default_pdn && !ip_pass_skip_nat_default_pdn));
 #else
 		 nat_inst->AddTable(wanup_data->ipv4_addr, mux_id, isStaMode, is_xlat);
 #endif
@@ -1637,8 +1623,9 @@ error:
 void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlanup_data = (ipacm_event_vlan_pdn *)in_param;
-	IPACM_LOG(IPACM_LOG_INFO,"Recevied below information during VLAN DOWN up,\n");
-	IPACM_LOG(IPACM_LOG_INFO,"IPType: %d, vlan_id:%d, mux id %d\n",
+	bool remove_pdn = false;
+	IPACM_LOG(IPACM_LOG_INFO, "Recevied below information during VLAN DOWN up,\n");
+	IPACM_LOG(IPACM_LOG_DEBUG, "IPType: %d, vlan_id:%d, mux id %d\n",
 		vlanup_data->iptype,
 		vlanup_data->VlanID,
 		vlanup_data->mux_id);
@@ -1651,7 +1638,37 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 	if((vlanup_data->iptype == IPA_IP_v4) ||
 		(vlanup_data->iptype == IPA_IP_MAX))
 	{
-		/* VLAN PDN down is triggered only on LINK_DOWN, we can safely remove the PDN */
+		if(vlanup_data->VlanID > 0)
+		{
+			/* If handle vlan down with last vlan for pdn then remove pdn */
+			for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+			{
+				if(vlan_pdns[i].public_ip == vlanup_data->ipv4_addr)
+				{
+					for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+					{
+						if(vlan_pdns[i].associated_VIDs[j] == vlanup_data->VlanID)
+						{
+							vlan_pdns[i].associated_VIDs[j] = 0;
+							vlan_pdns[i].VID_cnt--;
+							if(vlan_pdns[i].VID_cnt == 0)
+							{
+								remove_pdn = true;
+								break;
+							}
+							else
+							{
+								IPACM_LOG(IPACM_LOG_DEBUG, "VLAN PDN is up, return\n");
+								return;
+							}
+						}
+					}
+					if(remove_pdn == true)
+						break;
+				}
+			}
+		}
+
 		IPACM_LOG(IPACM_LOG_DEBUG, "removing PDN ipv4 address 0x%X\n", vlanup_data->ipv4_addr);
 		nat_inst->RemovePdn(vlanup_data->ipv4_addr);
 
@@ -1661,11 +1678,11 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 			{
 				IPACM_LOG(IPACM_LOG_INFO, "removing pdn entry in %d\n", i);
 				vlan_pdns[i].public_ip = 0;
-				memset(vlan_pdns[i].associated_VIDs, 0, IPA_MAX_NUM_HW_PDNS * sizeof(vlan_pdns[i].associated_VIDs[0]));
+				memset(vlan_pdns[i].associated_VIDs, 0, IPA_MAX_NUM_SW_PDNS * sizeof(vlan_pdns[i].associated_VIDs[0]));
+				vlan_pdns[i].VID_cnt = 0;
 				vlan_pdns[i].ip_pass_dummy_ip = 0;
 				vlan_pdns[i].ip_pass_enable = 0;
 				vlan_pdns[i].ip_pass_skip_nat = 0;
-				vlan_pdns[i].VID_cnt = 0;
 				num_vlan_pdns--;
 				break;
 			}
@@ -1676,6 +1693,7 @@ void IPACM_ConntrackListener::HandleVlanDown(void *in_param)
 void IPACM_ConntrackListener::HandleVlanDownV6(void *in_param)
 {
 	ipacm_event_vlan_pdn *vlandown_data = (ipacm_event_vlan_pdn *)in_param;
+	bool delete_table = false;
 	IPACM_LOG(IPACM_LOG_DEBUG, "Received below information during VLAN PDN down,\n");
 	IPACM_LOG(IPACM_LOG_DEBUG, "IPType: %d, vlan_id:%d, mux id %d\n",
 		vlandown_data->iptype,
@@ -1696,6 +1714,37 @@ void IPACM_ConntrackListener::HandleVlanDownV6(void *in_param)
 		return;
 	}
 
+	if(vlandown_data->VlanID > 0)
+	{
+		/* If handle vlan down is with last vlan for pdn then remove table */
+		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+		{
+			if((v6_vlan_pdns[i].ipv6_prefix[0] == vlandown_data->ipv6_prefix[0]) &&
+				(v6_vlan_pdns[i].ipv6_prefix[1] == vlandown_data->ipv6_prefix[1]))
+			{
+				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+				{
+					if(v6_vlan_pdns[i].associated_VIDs[j] == vlandown_data->VlanID)
+					{
+						v6_vlan_pdns[i].associated_VIDs[j] = 0;
+						v6_vlan_pdns[i].VID_cnt--;
+						if(v6_vlan_pdns[i].VID_cnt == 0)
+						{
+							delete_table = true;
+							break;
+						}
+						else
+						{
+							IPACM_LOG(IPACM_LOG_DEBUG, "V6 VLAN PDN is up, return\n");
+							return;
+						}
+					}
+				}
+				if(delete_table == true)
+					break;
+			}
+		}
+	}
 	/* Delete VLAN PDN cache */
 	for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 	{
@@ -2454,9 +2503,9 @@ void IPACM_ConntrackListener::ProcessSocksv5Conn(ipa_socksv5_msg *socksv5_info, 
 
 void IPACM_ConntrackListener::PostRouteAddVlanPdn(uint32_t public_ip)
 {
-	int pdn_idx, vlan_idx;
+	int pdn_idx = 0, vlan_idx = 0;
 	ipacm_cmd_q_data evt_data;
-	ipacm_event_route_vlan *vlan_data;
+	ipacm_event_route_vlan *vlan_data = NULL ;
 	ipacm_event_vlan_pdn data;
 	rmnet_mux_id_info info;
 
@@ -3721,7 +3770,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 #ifdef FEATURE_VLAN_MPDN
 	 nat_entry.isVlan = false;
 	 nat_entry.IsVlanUp = false;
-	 int i, vlan_idx = 0;
+	 int vlan_idx = 0;
+	 int i = 0;
 #endif
 
  	 memset(&rule, 0, sizeof(rule));
@@ -4098,7 +4148,7 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 	nat_entry.rule = &rule;
 #ifdef FEATURE_VLAN_MPDN
 	AddORDeleteNatEntry(&nat_entry, &SendVlanEvent);
-	if(SendVlanEvent)
+	if(VlanID > 0 && SendVlanEvent)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_route_vlan *data;
@@ -4120,9 +4170,13 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 		}
 
 		data->wan_ipv4_addr = public_ip;
-		if (IPACM_Wan::is_xlat_by_ipv4(public_ip)){
-			data->iptype = IPA_IP_MAX;
-			data->wan_ipv6_prefix[0]=IPA_DUMMY_PREFIX;
+		if(!isStaMode)
+		{
+			if (IPACM_Wan::is_xlat_by_ipv4(public_ip))
+			{
+				data->iptype = IPA_IP_MAX;
+				data->wan_ipv6_prefix[0]=IPA_DUMMY_PREFIX;
+			}
 		}
 		evt_data.evt_data = data;
 		IPACM_LOG(IPACM_LOG_INFO, "sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",

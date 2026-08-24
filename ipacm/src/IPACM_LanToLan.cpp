@@ -452,7 +452,7 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 	IPACM_LOG(IPACM_LOG_DEBUG, "Interface name: %s IP type: %d\n", data->p_iface->dev_name, data->iptype);
 #ifdef FEATURE_VLAN_MPDN
 	if(IsVlan)
-		IPACM_LOG(IPACM_LOG_INFO, "Vlan iface\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Vlan iface %s\n",data->p_iface->dev_name);
 #endif
 
 	for(it = m_iface.begin(); it != m_iface.end(); it++)
@@ -561,7 +561,8 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 			/* add header processing context for peer VLAN interfaces */
 			for(it = ++m_iface.begin(); it != m_iface.end(); it++)
 			{
-				if (!it->get_is_vlan() && !front_iface.is_svap_iface() && !front_iface.is_ap_iface_vlan_enabled() && !front_iface.is_spcl_iface())
+				if (IPACM_Iface::ipacmcfg->ipacm_emesh_enable && !it->get_is_vlan() && !front_iface.is_svap_iface() &&
+						!front_iface.is_ap_iface_vlan_enabled() && !front_iface.is_spcl_iface())
 				{
 					IPACM_LOG(IPACM_LOG_WARN,"iface %s is non VLAN iface - skipping\n", it->get_iface_pointer()->dev_name);
 					continue;
@@ -602,11 +603,10 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 			{
 #ifdef FEATURE_VLAN_MPDN
 				/* non VLAN case - currently no support for non vlan <-> vlan offload */
-				if(it->get_is_vlan() && !it->is_svap_iface() && !it->is_spcl_iface())
-				{
-					IPACM_LOG(IPACM_LOG_DEBUG, "vlan to non VLAN iface - not supported, skipping\n");
+				if(IPACM_Iface::ipacmcfg->ipacm_emesh_enable && it->get_is_vlan() &&
+						!it->is_svap_iface() && !it->is_spcl_iface())
+					IPACM_LOG(IPACM_LOG_DEBUG, "vlan to non VLAN iface - support offload now\n");
 					continue;
-				}
 #endif
 				/* add peer info only when both interfaces support inter-interface communication */
 				if(it->get_m_support_inter_iface_offload())
@@ -1557,8 +1557,8 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 			IPACM_LOG(IPACM_LOG_INFO, "Perform delayed add_hdr_proc_ctx for double tag clients \n");
 			add_hdr_proc_ctx_double_vlan(peer_l2_hdr_type, client->vlan_id, client->outer_vlan_id);
 		}
-		else if(m_is_vlan || is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() && client->vlan_id)) {
-			IPACM_LOG(IPACM_LOG_INFO,"Perform delayed add_hdr_proc_ctx for svap/spcl clients \n");
+		else if (m_is_vlan || is_svap_iface() || is_ap_iface_vlan_enabled() || (is_spcl_iface() && client->vlan_id)) {
+			IPACM_LOG(IPACM_LOG_INFO, "Perform delayed add_hdr_proc_ctx for svap/spcl clients \n");
 			add_hdr_proc_ctx_vlan(peer_l2_hdr_type, client->vlan_id, pcp_marking);
 		}
 
@@ -2902,6 +2902,7 @@ void IPACM_LanToLan_Iface::handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RE
 		IPACM_LOG(IPACM_LOG_ERR, "Invalid peer iface info\n");
 		return;
 	}
+	IPACM_LOG(IPACM_LOG_DEBUG, "This is iface %s,  m_is_vlan %d\n", this->get_iface_pointer()->dev_name, m_is_vlan);
 
 	new_peer.peer = peer_iface;
 	memcpy(new_peer.rt_tbl_name_for_rt[IPA_IP_v4], rt_tbl_name_for_rt[IPA_IP_v4], IPA_RESOURCE_NAME_MAX);
@@ -2938,6 +2939,7 @@ void IPACM_LanToLan_Iface::handle_new_iface_up(char rt_tbl_name_for_flt[][IPA_RE
 	new_peer.peer_hdr_type = peer_l2_hdr_type;
 	/* push the new peer_iface_info into the list */
 	m_peer_iface_info.push_front(new_peer);
+	IPACM_LOG(IPACM_LOG_DEBUG, "peer iface IsVlan %d and is_vlan_peer %d \n", m_is_vlan, new_peer.is_vlan_peer);
 
 	return;
 }

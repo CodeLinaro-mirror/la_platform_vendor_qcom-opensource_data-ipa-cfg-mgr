@@ -3193,9 +3193,10 @@ void IPACM_Config::pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t
 				pppoe_config->dev_name, IPA_RESOURCE_NAME_MAX);
 			pppoe_mpdn_table[indx].vlan_id = pppoe_config->vlan_id;
 			pppoe_mpdn_table[indx].status = 1;
+			IPACM_LOG(IPACM_LOG_DEBUG, "Added at pppoe pdn index %d \n",indx);
 		}
 		else
-			IPACM_LOG(IPACM_LOG_ERR, "PPPoE supports only 8 PDNs\n");
+			IPACM_LOG(IPACM_LOG_ERR, "PPPoE Add supports only 8 PDNs, now at index %d\n", indx);
 	}
 	else if(to_add == 0)
 	{
@@ -3214,9 +3215,10 @@ void IPACM_Config::pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t
 			pppoe_mpdn_table[indx].session_id = 0;
 			memset(pppoe_mpdn_table[indx].mac_addr,
 				0, sizeof(pppoe_mpdn_table[indx].mac_addr));
+			IPACM_LOG(IPACM_LOG_DEBUG, "Deleted from pppoe pdn index %d \n",indx);
 		}
 		else
-			IPACM_LOG(IPACM_LOG_ERR, "PPPoe PDN not found\n");
+			IPACM_LOG(IPACM_LOG_ERR, "PPPoe Delete PDN not found, looking at index %d\n", indx);
 	}
 	else if(to_add == 2)
 	{
@@ -3240,9 +3242,10 @@ void IPACM_Config::pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t
 				pppoe_mpdn_table[indx].mac_addr[3],
 				pppoe_mpdn_table[indx].mac_addr[4],
 				pppoe_mpdn_table[indx].mac_addr[5]);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Updated at pppoe pdn index %d \n",indx);
 		}
 		else
-			IPACM_LOG(IPACM_LOG_ERR, "PPPoe PDN not found\n");
+			IPACM_LOG(IPACM_LOG_ERR, "PPPoe Update PDN not found, looking at index %d\n", indx);
 	}
 
 	pthread_mutex_unlock(&pppoe_map_lock);

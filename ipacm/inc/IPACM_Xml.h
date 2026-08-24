@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 /*!
@@ -265,6 +265,15 @@ if (!(a)) {                                                 \
 #define IPACMVLANMODE                        "Vlan"
 #define IPACMMGMNTVLANID                     "MgmtVlanId"
 
+#ifdef FEATURE_PPPOE
+#define PPPOE_TAG                            "IPACMPPPOE"
+#define PPPOE_Enabled                        "IPACMPPPOEEnabled"
+#endif
+
+#define Eth_Vlan_Wan_TAG                     "IPACMIPOEEthVlanWan"
+#define Eth_Vlan_Wan_Enabled                 "IPOEEthVlanWanEnabled"
+#define Eth_Vlan_Wan_Iface_Name              "IPOEVlanLanWanIface"
+
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -431,6 +440,9 @@ typedef struct  _IPACM_conf_t
 	bool device_vlan_mode;
 	uint16_t mgmnt_vlan_id;
 
+	bool eth_wan_pppoe_enable;
+	bool eth_vlan_wan_enable;
+	const char* eth_lan_wan_iface_name;
 } IPACM_conf_t;
 
 typedef struct _IPACM_conf_ext_t

@@ -3304,6 +3304,11 @@ int IPACM_Lan::handle_vlan_neighbor(ipacm_event_data_all *data)
 		skip_nat_set = 0;
 		/* first construc ETH full header */
 		handle_eth_hdr_init(data->mac_addr, bridge, vlan_id, true);
+		if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 1)
+		{
+			eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr,
+				NULL, data->iface_name, vlan_id);
+		}
 	}
 	else
 	{
@@ -18236,6 +18241,7 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 	if (vlan_id) {
 		*hdr_hdl = hdr_template;
 	}
+	vlan_hdr_hdl = pHeaderProcTable->proc_ctx[0].hdr_hdl;
 
 end:
 	free(pHeaderProcTable);
@@ -18793,6 +18799,11 @@ for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
 			goto end;
 		}
 
+		if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 0)
+		{
+			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+			flt_rule_entry.rule.attrib.vlan_id = vlan_id;
+		}
 		memcpy(flt_rule_entry.rule.attrib.dst_mac_addr, mac, sizeof(flt_rule_entry.rule.attrib.dst_mac_addr));
 		memset(flt_rule_entry.rule.attrib.dst_mac_addr_mask, 0xFF, sizeof(flt_rule_entry.rule.attrib.dst_mac_addr_mask));
 
@@ -23195,6 +23206,8 @@ int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t 
 		pHeaderDescriptor->hdr[0].hdr[hdr_len - 4] = (uint8_t)(vlan_id >> 8) & 0xFF;
 
 	}
+	snprintf(pHeaderDescriptor->hdr[0].name, sizeof(pHeaderDescriptor->hdr[0].name),
+		"%s_ipv4_vlan%d", dev_name, vlan_id);
 	if(m_header.AddHeader(pHeaderDescriptor) == false ||
 			pHeaderDescriptor->hdr[0].status != 0)
 	{

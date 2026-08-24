@@ -561,12 +561,14 @@ public:
 	uint32_t ipacm_static_policy_dscp_mark_mode;
 #endif
 
-	/* Indicates whether PPPOE mode is enabled on WAN interface*/
+	/* Indicates whether PPPOE mode is enabled on WAN interface */
 	bool eth_wan_pppoe_enable;
-	/* Indicates whether Eth VLAN mode is enabled on WAN interface*/
+	/* Indicates whether Eth VLAN mode is enabled on WAN interface */
 	bool eth_vlan_wan_enable;
-	/* Indicates the interface on which Eth VLAN LAN-WAN mode is enabled*/
+	/* Indicates the interface on which Eth VLAN LAN-WAN mode is enabled */
 	const char* eth_lan_wan_iface_name;
+	/* Indicates whether Multi VLAN to Single Bridge mode is enabled */
+	bool multi_vlan_bridge_config_enable;
 
 #ifdef FEATURE_EoGRE
 	ipa_ipgre_info eogre_info;

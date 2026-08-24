@@ -767,6 +767,9 @@ reread:
 	eth_lan_wan_iface_name = cfg->eth_lan_wan_iface_name;
 	IPACM_LOG(IPACM_LOG_DEBUG, "eth_lan_wan_iface_name: %s\n", eth_lan_wan_iface_name);
 
+	multi_vlan_bridge_config_enable = cfg->multi_vlan_bridge_config_enable;
+	IPACM_LOG(IPACM_LOG_DEBUG, "multi_vlan_bridge_config_enable: %d\n", multi_vlan_bridge_config_enable);
+
 	if (ipacm_mpdn_enable == TRUE && ipacm_l2tp_enable != IPACM_L2TP_DISABLE)
 	{
 		IPACM_LOG(IPACM_LOG_ERR, "Not support both VLAN_MPDN and L2TP are enable \n");
@@ -1519,13 +1522,13 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 	for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
 	{
 		IPACM_LOG(IPACM_LOG_DEBUG, "data->status: %d it_mapping->status: %d "
-							"it_mapping->bridge_if_index: %d data->master_if_index: %d"
-							"it_mapping->bridge_associated_VID: %d data->vlan_id: %d\n"
-							"it_mapping->outer_vlan_id %d\n",
-							data->status, it_mapping->status,
-							it_mapping->bridge_if_index,
-							data->master_if_index, it_mapping->bridge_associated_VID,
-							data->vlan_id, it_mapping->outer_vlan_id);
+			"it_mapping->bridge_if_index: %d data->master_if_index: %d"
+			"it_mapping->bridge_associated_VID: %d data->vlan_id: %d\n",
+			data->status, it_mapping->status,
+			it_mapping->bridge_if_index,
+			data->master_if_index, it_mapping->bridge_associated_VID,
+			data->vlan_id);
+
 		if(it_mapping->bridge_if_index == data->master_if_index)
 		{
 			IPACM_LOG(IPACM_LOG_DEBUG, "it_mapping->status:%d\n", it_mapping->status);
@@ -1564,11 +1567,10 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 				goto bail;
 
 			}
-			/* As part of apbridge only we have single bridge for different vlan ids.*/
-			if((data->status == 0) && (IPACM_Iface::ipacmcfg->device_mode != DEVMODE_APBRIDGE))
+			if(data->status == 0 && !multi_vlan_bridge_config_enable)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "The bridge %s was added before with vlan id: %d\n", data->bridge_name,
-								it_mapping->bridge_associated_VID);
+					it_mapping->bridge_associated_VID);
 				goto bail;
 			}
 		}
@@ -1582,7 +1584,6 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 
 	if(data->status == 0)
 	{
-
 		bridge_vlan_mapping_info new_mapping;
 		memset(&new_mapping, 0, sizeof(new_mapping));
 		new_mapping.bridge_associated_VID = data->vlan_id;
@@ -1620,13 +1621,13 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 		for(it_mapping = m_bridge_vlan_mapping.begin(); it_mapping != m_bridge_vlan_mapping.end(); it_mapping++)
 		{
 				if(strncmp(new_mapping.bridge_iface_name, it_mapping->bridge_iface_name,
-										sizeof(new_mapping.bridge_iface_name)) == 0 &&
-								(it_mapping->bridge_associated_VID == data->vlan_id))
+					sizeof(new_mapping.bridge_iface_name)) == 0 &&
+					(it_mapping->bridge_associated_VID == data->vlan_id))
 				{
-						IPACM_LOG(IPACM_LOG_DEBUG, "Found the bridge mapping (%s->%d)\n",
-										it_mapping->bridge_iface_name,
-										it_mapping->bridge_associated_VID);
-						goto bail;
+					IPACM_LOG(IPACM_LOG_DEBUG, "Found the bridge mapping (%s->%d)\n",
+						it_mapping->bridge_iface_name,
+						it_mapping->bridge_associated_VID);
+					goto bail;
 				}
 		}
 
@@ -1658,7 +1659,8 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 
 	}
 
-	IPACM_LOG(IPACM_LOG_DEBUG, "added partial Entry with master interface index %d, VID %d\n", data->master_if_index, data->vlan_id);
+	IPACM_LOG(IPACM_LOG_DEBUG, "added partial Entry with master interface index %d, VID %d\n",
+		data->master_if_index, data->vlan_id);
 
 bail:
 	pthread_mutex_unlock(&vlan_l2tp_lock);
@@ -1733,7 +1735,7 @@ int IPACM_Config::get_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info_new *data
 	{
 		if(strncmp(data->bridge_name, it_mapping->bridge_iface_name, sizeof(data->bridge_name)) == 0)
 		{
-			IPACM_LOG(IPACM_LOG_INFO,"Found the bridge mapping (%s->%d)\n",
+			IPACM_LOG(IPACM_LOG_DEBUG, "Found the bridge mapping (%s->%d), updating at %d\n",
 				data->bridge_name,
 				it_mapping->bridge_associated_VID,i);
 
@@ -2209,7 +2211,6 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 
 	memset(testmac, 0, IPA_MAC_ADDR_SIZE * sizeof(uint8_t));
 	memset(&mapping_info, 0, sizeof(mapping_info));
-
 	strlcpy(mapping_info.bridge_name, data_all->iface_name, IF_NAME_LEN);
 
 	for(int i = 0; i < IPA_MAX_NUM_BRIDGES; i++)

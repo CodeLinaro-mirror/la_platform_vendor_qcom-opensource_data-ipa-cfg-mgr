@@ -274,6 +274,9 @@ if (!(a)) {                                                 \
 #define Eth_Vlan_Wan_Enabled                 "IPOEEthVlanWanEnabled"
 #define Eth_Vlan_Wan_Iface_Name              "IPOEVlanLanWanIface"
 
+#define Multi_Vlan_Bridge_Config_TAG         "MultiVlanBridgeConfig"
+#define Multi_Vlan_Bridge_Config_Enable      "MultiVlanOnBridgeEnable"
+
 /*---------------------------------------------------------------------------
       IP protocol numbers - use in dss_socket() to identify protocols.
       Also contains the extension header types for IPv6.
@@ -443,6 +446,7 @@ typedef struct  _IPACM_conf_t
 	bool eth_wan_pppoe_enable;
 	bool eth_vlan_wan_enable;
 	const char* eth_lan_wan_iface_name;
+	bool multi_vlan_bridge_config_enable;
 } IPACM_conf_t;
 
 typedef struct _IPACM_conf_ext_t

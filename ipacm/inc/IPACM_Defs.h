@@ -181,7 +181,6 @@ extern "C"
 
 #define MIN_VLAN_ID 0
 #define MAX_VLAN_ID 4095
-
 /*---------------------------------------------------------------------------
 										Return values indicating error status
 ---------------------------------------------------------------------------*/
@@ -777,8 +776,10 @@ struct ipa_bridge_vlan_mapping_info_new {
 	uint32_t subnet_mask;
 	uint8_t master_if_index;
 	uint8_t status;
+	uint16_t outer_vlan_id;
 	uint16_t vlan_id[IPA_MAX_VLAN_PER_BRIDGE];
 };
+
 struct bridge_vlan_mapping_info
 {
 	char bridge_iface_name[IPA_RESOURCE_NAME_MAX];

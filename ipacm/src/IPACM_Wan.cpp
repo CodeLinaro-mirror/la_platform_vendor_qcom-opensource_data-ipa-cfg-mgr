@@ -196,6 +196,8 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	active_v6 = false;
 	header_set_v4 = false;
 	header_set_v6 = false;
+	hdr_proc_set_v4 = false;
+	hdr_proc_set_v6 = false;
 #ifdef FEATURE_PPPOE
 	v4_pppoe_ctx_hdl = 0;
 	v6_pppoe_ctx_hdl = 0;
@@ -203,6 +205,8 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	header_partial_default_wan_v4 = false;
 	header_partial_default_wan_v6 = false;
 	hdr_hdl_sta_v4 = 0;
+	hdr_hdl_sta_v6 = 0;
+	proc_hdl_sta_v4 = 0;
 	hdr_hdl_sta_v6 = 0;
 	num_ipv6_dest_flt_rule = 0;
 	memset(ipv6_dest_flt_rule_hdl, 0, MAX_DEFAULT_v6_ROUTE_RULES*sizeof(uint32_t));
@@ -4514,7 +4518,6 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 	rt_rule->ip = iptype;
 
 	rt_rule_entry = &rt_rule->rules[0];
-	rt_rule_entry->at_rear = true;
 
 	if(iptype == IPA_IP_v6)
 	{
@@ -4551,10 +4554,17 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 			strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name, sizeof(rt_rule->rt_tbl_name));
 			IPACM_LOG(IPACM_LOG_DEBUG, " WAN table created %s \n", rt_rule->rt_tbl_name);
 			if (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ){
-				rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
+				rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_pppoe_ctx_hdl;
 			} else {
 				/* use the STA-header handler */
-				rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v6;
+				if(hdr_proc_set_v6 == true)
+				{
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = proc_hdl_sta_v6;
+				}
+				else
+				{
+					rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v6;
+				}
 			}
 
 			for (int tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
@@ -4580,7 +4590,9 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 					memcpy(&rt_rule_entry->rule.attrib,
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
-					if (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable ){
+					if (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
+					{
+						rt_rule_entry->at_rear = false;
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
 						rt_rule_entry->rule.attrib.u.v6.src_addr[0] = ipv6_prefix[0];
 						rt_rule_entry->rule.attrib.u.v6.src_addr[1] = ipv6_prefix[1];
@@ -4590,7 +4602,10 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
 						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] = 0x00000000;
 						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] = 0x00000000;
-					} else {
+					}
+					else
+					{
+						rt_rule_entry->at_rear = true;
 						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0;
 						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = 0;
@@ -4649,6 +4664,7 @@ PostWanUpV6:
 				}
 				rt_rule_entry->rule.hdr_hdl = hdr.hdl;
 				rt_rule_entry->rule.dst = IPA_CLIENT_APPS_WAN_CONS;
+				rt_rule_entry->at_rear = true;
 
 				rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR;
 				rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0;
@@ -4726,7 +4742,14 @@ PostWanUpV6:
 				}
 				/* use the STA-header handler */
 				strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.name, sizeof(rt_rule->rt_tbl_name));
-				rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v4;
+				if(hdr_proc_set_v4 == true)
+				{
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = proc_hdl_sta_v4;
+				}
+				else
+				{
+					rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v4;
+				}
 
 				if(IPACM_Iface::ipacmcfg->isMCC_Mode == true)
 				{
@@ -4744,6 +4767,7 @@ PostWanUpV6:
 						&tx_prop->tx[tx_index].attrib,
 						sizeof(rt_rule_entry->rule.attrib));
 
+					rt_rule_entry->at_rear = true;
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 					rt_rule_entry->rule.attrib.u.v4.dst_addr      = 0;
 					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
@@ -5095,12 +5119,26 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			if (iptype == IPA_IP_v4)
 			{
 				strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.name, sizeof(rt_rule->rt_tbl_name));
-				rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v4;
+				if(hdr_proc_set_v4 == true)
+				{
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = proc_hdl_sta_v4;
+				}
+				else
+				{
+					rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v4;
+				}
 			}
 			else
 			{
 				strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_v6.name, sizeof(rt_rule->rt_tbl_name));
-				rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v6;
+				if(hdr_proc_set_v6 == true)
+				{
+					rt_rule_entry->rule.hdr_proc_ctx_hdl = proc_hdl_sta_v6;
+				}
+				else
+				{
+					rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v6;
+				}
 			}
 
 			if(IPACM_Iface::ipacmcfg->isMCC_Mode == true)
@@ -5117,13 +5155,23 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 						 &tx_prop->tx[tx_index].attrib,
 						 sizeof(rt_rule_entry->rule.attrib));
 
-			rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 			if (iptype == IPA_IP_v4)
 			{
 				if(!wan_route_rule_v4_hdl[tx_index])
 				{
-					rt_rule_entry->rule.attrib.u.v4.dst_addr      = 0;
-					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
+					if (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
+					{
+						rt_rule_entry->at_rear = false;
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+						rt_rule_entry->rule.attrib.u.v4.src_addr = wan_v4_addr;
+						rt_rule_entry->rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
+					}
+					else
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v4.dst_addr      = 0;
+						rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
+					}
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif
@@ -5144,14 +5192,31 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 			{
 				if(!wan_route_rule_v6_hdl[tx_index])
 				{
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0;
-					rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0;
+					if (IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable)
+					{
+						rt_rule_entry->at_rear = false;
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.src_addr[0] = ipv6_prefix[0];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[1] = ipv6_prefix[1];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[2] = 0x00000000;
+						rt_rule_entry->rule.attrib.u.v6.src_addr[3] = 0x00000000;
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] = 0x00000000;
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] = 0x00000000;
+					}
+					else
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = 0;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = 0;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = 0;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0;
+					}
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;
 #endif
@@ -5675,7 +5740,13 @@ int IPACM_Wan::handle_sta_header_add_evt()
 			{
 				hdr_hdl_sta_v4 = get_client_memptr(wan_client, index)->hdr_hdl_v4;
 				header_set_v4 = true;
-				IPACM_LOG(IPACM_LOG_INFO,"add full ipv4 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v4);
+				if(get_client_memptr(wan_client, index)->sta_hdr_proc_ctx_set)
+				{
+					proc_hdl_sta_v4 = get_client_memptr(wan_client, index)->sta_hdr_proc_hdl_v4;
+					hdr_proc_set_v4 = true;
+					IPACM_LOG(IPACM_LOG_DEBUG, "proc_hdl_sta_v4_hdl: (%x)\n", proc_hdl_sta_v4);
+				}
+				IPACM_LOG(IPACM_LOG_INFO, "add full ipv4 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v4);
 				/* store external_ap's MAC */
 				memcpy(ext_router_mac_addr, get_client_memptr(wan_client, index)->mac, sizeof(ext_router_mac_addr));
 			}
@@ -5689,7 +5760,13 @@ int IPACM_Wan::handle_sta_header_add_evt()
 			{
 				hdr_hdl_sta_v6 = get_client_memptr(wan_client, index)->hdr_hdl_v6;
 				header_set_v6 = true;
-				IPACM_LOG(IPACM_LOG_INFO,"add full ipv6 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v6);
+				if(get_client_memptr(wan_client, index)->sta_hdr_proc_ctx_set)
+				{
+					proc_hdl_sta_v6 = get_client_memptr(wan_client, index)->sta_hdr_proc_hdl_v6;
+					hdr_proc_set_v6 = true;
+					IPACM_LOG(IPACM_LOG_DEBUG, "proc_hdl_sta_v6_hdl: (%x)\n", proc_hdl_sta_v6);
+				}
+				IPACM_LOG(IPACM_LOG_INFO, "add full ipv6 header hdl: (%x)\n", get_client_memptr(wan_client, index)->hdr_hdl_v6);
 			}
 		}
 		else if(m_is_sta_mode == Q6_WAN)
@@ -8763,8 +8840,23 @@ int IPACM_Wan::handle_down_evt()
 			goto fail;
 		}
 
-		IPACM_LOG(IPACM_LOG_DEBUG, "Delete %d client header\n", num_wan_client);
+		if (get_client_memptr(wan_client, i)->sta_hdr_proc_ctx_set == true)
+		{
+			if (m_header.DeleteHeaderProcCtx(get_client_memptr(wan_client, i)->sta_hdr_proc_hdl_v4)
+				== false)
+			{
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			if (m_header.DeleteHeaderProcCtx(get_client_memptr(wan_client, i)->sta_hdr_proc_hdl_v6)
+				== false)
+			{
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+		}
 
+		IPACM_LOG(IPACM_LOG_DEBUG, "Delete %d out of %d client header\n", i,  num_wan_client);
 
 		if (get_client_memptr(wan_client, i)->ipv4_header_set == true)
 		{
@@ -10841,6 +10933,7 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 	uint32_t cnt;
 	int clnt_indx;
 	uint16_t session_id;
+	struct ipa_ioc_add_hdr_proc_ctx* pHeaderProcTable = NULL;
 
 	IPACM_LOG(IPACM_LOG_DEBUG, "Wan dev_name %s \n", dev_name);
 	clnt_indx = get_wan_client_index(mac_addr);
@@ -10924,6 +11017,17 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 								}
 								else
 								{
+									if((strncmp(dev_name, ETH_INTF, sizeof(dev_name)) == 0 ||
+										strncmp(dev_name, ETH1_INTF, sizeof(dev_name)) == 0) &&
+										IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+									{
+										IPACM_LOG(IPACM_LOG_DEBUG, "Handling non vlan iface in vlan mode\n");
+										pHeaderDescriptor->hdr[0].type = IPA_HDR_L2_ETHERNET_II;
+										sCopyHeader.hdr_len = 14;
+										sCopyHeader.hdr[12] = 0x08;
+										sCopyHeader.hdr[13] = 0x00;
+									}
+
 									memcpy(pHeaderDescriptor->hdr[0].hdr,
 												 sCopyHeader.hdr,
 												 sCopyHeader.hdr_len);
@@ -11077,6 +11181,17 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 				}
 				else
 				{
+					if((strncmp(dev_name, ETH_INTF, sizeof(dev_name)) == 0 ||
+						strncmp(dev_name, ETH1_INTF, sizeof(dev_name)) == 0) &&
+						IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+					{
+						IPACM_LOG(IPACM_LOG_DEBUG, "Handling non vlan iface in vlan mode for v6\n");
+						pHeaderDescriptor->hdr[0].type = IPA_HDR_L2_ETHERNET_II;
+						sCopyHeader.hdr_len = 14;
+						sCopyHeader.hdr[12] = 0x86;
+						sCopyHeader.hdr[13] = 0xdd;
+					}
+
 					memcpy(pHeaderDescriptor->hdr[0].hdr,
 							sCopyHeader.hdr,
 							sCopyHeader.hdr_len);
@@ -11195,17 +11310,65 @@ int IPACM_Wan::handle_wan_hdr_init(uint8_t *mac_addr, bool gw_addr)
 			}
 		}
 #ifdef FEATURE_PPPOE
-			/* Construct PPPoE ProcCtx */
-			if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true && is_ppp_iface)
+		/* Construct PPPoE ProcCtx */
+		if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true && is_ppp_iface)
+		{
+			pppoe_make_hdr_add_ctx(IPA_IP_v4, num_wan_client);
+			pppoe_make_hdr_add_ctx(IPA_IP_v6, num_wan_client);
+		}
+#endif
+
+		if((strncmp(dev_name, ETH_INTF, sizeof(dev_name)) == 0 ||
+			strncmp(dev_name, ETH1_INTF, sizeof(dev_name)) == 0) &&
+			IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
+		{
+			len = sizeof(struct ipa_ioc_add_hdr_proc_ctx) + sizeof(struct ipa_hdr_proc_ctx_add);
+			pHeaderProcTable = (ipa_ioc_add_hdr_proc_ctx*)malloc(len);
+			if(pHeaderProcTable == NULL)
 			{
-			if (pppoe_make_hdr_add_ctx(IPA_IP_v4, num_wan_client) != IPACM_SUCCESS ||
-				pppoe_make_hdr_add_ctx(IPA_IP_v6, num_wan_client) != IPACM_SUCCESS)
-			{
+				IPACM_LOG(IPACM_LOG_ERR, "Cannot allocate sta v4 header processing table.\n");
 				res = IPACM_FAILURE;
 				goto fail;
 			}
+
+			memset(pHeaderProcTable, 0, len);
+			pHeaderProcTable->commit = 1;
+			pHeaderProcTable->num_proc_ctxs = 1;
+			pHeaderProcTable->proc_ctx[0].hdr_hdl = get_client_memptr(wan_client, num_wan_client)->hdr_hdl_v4;
+			if (m_header.AddHeaderProcCtx(pHeaderProcTable) == false)
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "Adding sta hdr_proc_hdl_v4 failed with status: %d\n", pHeaderProcTable->proc_ctx[0].status);
+				free(pHeaderProcTable);
+				res = IPACM_FAILURE;
+				goto fail;
 			}
-#endif
+			else
+			{
+				get_client_memptr(wan_client, num_wan_client)->sta_hdr_proc_hdl_v4 = pHeaderProcTable->proc_ctx[0].proc_ctx_hdl;
+				IPACM_LOG(IPACM_LOG_DEBUG, "sta_hdr_proc_hdl_v4 is added successfully. (0x%x)\n",
+					get_client_memptr(wan_client, num_wan_client)->sta_hdr_proc_hdl_v4);
+			}
+
+			memset(pHeaderProcTable, 0, len);
+			pHeaderProcTable->commit = 1;
+			pHeaderProcTable->num_proc_ctxs = 1;
+			pHeaderProcTable->proc_ctx[0].hdr_hdl = get_client_memptr(wan_client, num_wan_client)->hdr_hdl_v6;
+			if (m_header.AddHeaderProcCtx(pHeaderProcTable) == false)
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "Adding sta hdr_proc_hdl_v6 failed with status: %d\n", pHeaderProcTable->proc_ctx[0].status);
+				free(pHeaderProcTable);
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			else
+			{
+				get_client_memptr(wan_client, num_wan_client)->sta_hdr_proc_hdl_v6 = pHeaderProcTable->proc_ctx[0].proc_ctx_hdl;
+				IPACM_LOG(IPACM_LOG_DEBUG, "sta_hdr_proc_hdl_v6 is added successfully. (0x%x)\n",
+					get_client_memptr(wan_client, num_wan_client)->sta_hdr_proc_hdl_v6);
+			}
+			get_client_memptr(wan_client, num_wan_client)->sta_hdr_proc_ctx_set = true;
+		}
+
 		/* initialize STA-WAN client*/
 		get_client_memptr(wan_client, num_wan_client)->route_rule_set_v4 = false;
 		get_client_memptr(wan_client, num_wan_client)->route_rule_set_v6 = 0;
@@ -11419,9 +11582,10 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				IPACM_LOG(IPACM_LOG_DEBUG, "client index(%d):ipv4 address: 0x%x\n", wan_index,
 						get_client_memptr(wan_client, wan_index)->v4_addr);
 
-				IPACM_LOG(IPACM_LOG_DEBUG, "client(%d): v4 header handle:(0x%x)\n",
+				IPACM_LOG(IPACM_LOG_DEBUG, "client(%d): v4 header handle:(0x%x) v4_proc_hdl:(0x%x)\n",
 						wan_index,
-						get_client_memptr(wan_client, wan_index)->hdr_hdl_v4);
+						get_client_memptr(wan_client, wan_index)->hdr_hdl_v4,
+						get_client_memptr(wan_client, wan_index)->sta_hdr_proc_hdl_v4);
 				strlcpy(rt_rule->rt_tbl_name,
 						IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.name,
 						sizeof(rt_rule->rt_tbl_name));
@@ -11443,20 +11607,27 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true && is_ppp_iface)
 				{
 					rt_rule_entry->rule.hdr_proc_ctx_hdl = v4_pppoe_ctx_hdl;
-					IPACM_LOG(IPACM_LOG_DEBUG, "v4 rt_rule_entry->rule.hdr_proc_ctx_hdl %x\n",rt_rule_entry->rule.hdr_proc_ctx_hdl);
-					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-					/*With Wan IP*/
-					rt_rule_entry->rule.attrib.u.v4.src_addr = wan_v4_addr;
-					rt_rule_entry->rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
+					IPACM_LOG(IPACM_LOG_DEBUG, "v4 rt_rule_entry->rule.hdr_proc_ctx_hdl %x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
 				}
 				else
 #endif
 				{
-					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-					rt_rule_entry->rule.hdr_hdl = get_client_memptr(wan_client, wan_index)->hdr_hdl_v4;
-					rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(wan_client, wan_index)->v4_addr;
-					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
+					if(get_client_memptr(wan_client, wan_index)->sta_hdr_proc_ctx_set == true)
+					{
+						rt_rule_entry->rule.hdr_proc_ctx_hdl =
+							get_client_memptr(wan_client, wan_index)->sta_hdr_proc_hdl_v4;
+					}
+					else
+					{
+						rt_rule_entry->rule.hdr_hdl = get_client_memptr(wan_client, wan_index)->hdr_hdl_v4;
+					}
+					IPACM_LOG(IPACM_LOG_DEBUG, "v4 rt_rule_entry->rule.hdr_hdl_v4 %x\n", rt_rule_entry->rule.hdr_hdl);
 				}
+				/*With Wan IP*/
+				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+				rt_rule_entry->rule.attrib.u.v4.src_addr = wan_v4_addr;
+				rt_rule_entry->rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
+
 #ifdef FEATURE_IPA_V3
 				rt_rule_entry->rule.hashable = true;
 #endif
@@ -11509,40 +11680,41 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 					if(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable == true)
 					{
 						rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_pppoe_ctx_hdl;
-						IPACM_LOG(IPACM_LOG_DEBUG, "v6 rt_rule_entry->rule.hdr_proc_ctx_hdl %x\n",rt_rule_entry->rule.hdr_proc_ctx_hdl);
-						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-						rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
-						if(active_v6)
-						{
-							rt_rule_entry->rule.attrib.u.v6.src_addr[0] = m_ipv6_addr[0];
-							rt_rule_entry->rule.attrib.u.v6.src_addr[1] = m_ipv6_addr[1];
-							rt_rule_entry->rule.attrib.u.v6.src_addr[2] = 0x00000000;
-							rt_rule_entry->rule.attrib.u.v6.src_addr[3] = 0x00000000;
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] = 0x00000000;
-							rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] = 0x00000000;
-						}
-						else
-						{
-							IPACM_LOG(IPACM_LOG_ERR, "v6 STA WAN s not up yet!!!(%d)\n", active_v6);
-							free(rt_rule);
-							return IPACM_FAILURE;
-						}
 					}
 					else
 #endif
 					{
-						rt_rule_entry->rule.hdr_hdl = get_client_memptr(wan_client, wan_index)->hdr_hdl_v6;
-						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = it->first[0];
-						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] = it->first[1];
-						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] = it->first[2];
-						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] = it->first[3];
-						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xFFFFFFFF;
-						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
-						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xFFFFFFFF;
-						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xFFFFFFFF;
+						if(get_client_memptr(wan_client, wan_index)->sta_hdr_proc_ctx_set == true)
+						{
+							rt_rule_entry->rule.hdr_proc_ctx_hdl =
+								get_client_memptr(wan_client, wan_index)->sta_hdr_proc_hdl_v6;
+							IPACM_LOG(IPACM_LOG_DEBUG, "v6 rt_rule_entry->rule.hdr_proc_ctx_hdl %x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
+						}
+						else
+						{
+							rt_rule_entry->rule.hdr_hdl = get_client_memptr(wan_client, wan_index)->hdr_hdl_v6;
+							IPACM_LOG(IPACM_LOG_DEBUG, "v6 rt_rule_entry->rule.hdr_hdl %x\n", rt_rule_entry->rule.hdr_hdl);
+						}
+					}
+
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+					rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
+					if(active_v6)
+					{
+						rt_rule_entry->rule.attrib.u.v6.src_addr[0] = m_ipv6_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[1] = m_ipv6_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[2] = 0x00000000;
+						rt_rule_entry->rule.attrib.u.v6.src_addr[3] = 0x00000000;
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] = 0x00000000;
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] = 0x00000000;
+					}
+					else
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "v6 STA WAN s not up yet!!!(%d)\n", active_v6);
+						free(rt_rule);
+						return IPACM_FAILURE;
 					}
 #ifdef FEATURE_IPA_V3
 					rt_rule_entry->rule.hashable = true;

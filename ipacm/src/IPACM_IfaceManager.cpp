@@ -30,6 +30,7 @@ Changes from Qualcomm Technologies, Inc. are provided under the following licens
 
 Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear
+
 */
 /*!
 	@file
@@ -133,6 +134,8 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 		case IPA_USB_LINK_UP_EVENT:
 			IPACM_LOG(IPACM_LOG_DEBUG, "Recieved IPA_USB_LINK_UP_EVENT event: index %d \n", evt_data->if_index);
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
+			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(ifmgr_data.iface_name));
+			IPACM_LOG(IPACM_LOG_DEBUG, "Recieved usb link up for: %s \n", ifmgr_data.iface_name);
 			/* check for failure return */
 			if (IPACM_FAILURE == ipa_interface_index) {
 				IPACM_LOG(IPACM_LOG_ERR, "IPA_USB_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);

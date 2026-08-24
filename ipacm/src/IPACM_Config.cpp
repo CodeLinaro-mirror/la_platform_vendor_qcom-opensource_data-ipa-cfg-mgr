@@ -3173,7 +3173,7 @@ fail:
 #endif
 
 #ifdef FEATURE_PPPOE
-void IPACM_Config::pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t to_add, uint8_t session_id, uint8_t *mac_addr)
+void IPACM_Config::pppoe_config_update(ipa_ioc_pppoe_info *pppoe_config, uint8_t to_add, uint16_t session_id, uint8_t *mac_addr)
 {
 	int indx;
 	int iface_table_index;
@@ -5191,13 +5191,14 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 }
 
 #ifdef FEATURE_PPPOE
-void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name)
+void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name, uint16_t vlan_id)
 {
 	FILE *fp = NULL;
-	char *tok = NULL, *ptr = NULL;
+	char *tok = NULL, *ptr = NULL, *lastVid = NULL;
 	char *params[MAX_PPPOE_PARAM_CNT] = { NULL };
 	char pppoe_row[MAX_PPPOE_PARAM_CNT] = {0}, cmd[IPA_SYS_CMD_LEN] = {0}, cmd_pppoe_row[MAX_PPPOE_ROW_LEN] = {0};
 	int i;
+	uint16_t vid;
 
 	snprintf(cmd, IPA_SYS_CMD_LEN, "cat /proc/net/pppoe > %s", IPA_PPPOE_TABLE);
 	system(cmd);
@@ -5225,7 +5226,30 @@ void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name)
 			tok = strtok_r(NULL, " ", &ptr);
 		}
 		IPACM_LOG(IPACM_LOG_DEBUG, "%s %s %s\n", params[0], params[1], params[2]);
-		update_pppoe_session_info(pppoe_dev_name, params);
+		/* Compare the pppoe dev associated vid and passed vlan_id,
+		 * If match then update session info */
+		lastVid = strrchr(params[2], '.');
+		if((lastVid != NULL) && (lastVid + 1 != NULL))
+		{
+			IPACM_LOG(IPACM_LOG_DEBUG, "Got vid after last dot: %s\n", lastVid + 1);
+			vid = atoi(lastVid + 1);
+			IPACM_LOG(IPACM_LOG_DEBUG, "Compare vid and vlan_id? vid=%d vlan_id=%d, if need to update session info!\n", vid, vlan_id);
+			if(vid == vlan_id)
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "Update session info for pppoe_dev_name %s associated vid %d, passed vid %d\n",pppoe_dev_name, vid, vlan_id);
+				update_pppoe_session_info(pppoe_dev_name, params);
+				IPACM_LOG(IPACM_LOG_ERR, "Break Here.\n");
+				break;
+			}
+			else
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "Don't Update session info for pppoe_dev_name %s associated vid %d, unmatched passed vid %d\n",pppoe_dev_name, vid, vlan_id);
+			}
+		}
+		else
+		{
+			IPACM_LOG(IPACM_LOG_ERR, "No mapped session found in /proc/net/pppoe\n");
+		}
 	}
 	fclose(fp);
 }
@@ -5252,13 +5276,12 @@ void IPACM_Config::update_pppoe_session_info(const char *pppoe_dev_name, char *p
 	session_id = strtol(params[0], &end_ptr, 16);
 	if (*end_ptr != '\0')
 	{
-        IPACM_LOG(IPACM_LOG_DEBUG, "Conversion error: %s\n", end_ptr);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Conversion error: %s\n", end_ptr);
 		return;
-    }
+	}
 	else
 	{
-		session_id = session_id >> 8;
-		IPACM_LOG(IPACM_LOG_DEBUG, "session_id: %u\n", session_id);
+		IPACM_LOG(IPACM_LOG_DEBUG, "session_id:  %x\n", session_id);
 	}
 
 	is_vlan = strstr(params[2], ".");
@@ -5393,7 +5416,7 @@ int IPACM_Config::get_phy_name_from_bridge_iface(const char *p_dev_name, char ph
 			if (last_word)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "Last word: %s\n", last_word);
-				strlcpy(phy_name, last_word, ETH_PHY_IFACE_LEN - 1);
+				strlcpy(phy_name, last_word, ETH_PHY_IFACE_LEN);
 				IPACM_LOG(IPACM_LOG_DEBUG, "Copy phy_name: %s\n", phy_name);
 				phy_name[ETH_PHY_IFACE_LEN - 1] = '\0';  // Ensure null-termination
 				IPACM_LOG(IPACM_LOG_DEBUG, "phy_name: %s\n", phy_name);

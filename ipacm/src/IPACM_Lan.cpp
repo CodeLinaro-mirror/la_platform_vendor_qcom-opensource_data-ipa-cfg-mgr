@@ -4126,6 +4126,7 @@ int IPACM_Lan::handle_wan_down(bool is_sta_mode, uint8_t mux_id, uint16_t vid)
 	int idx = 0, i = 0, j = 0;
 
 	IPACM_LOG(IPACM_LOG_DEBUG, "Received handle_wan_down is_sta_mode %d, ipa_if_cate  %d \n",is_sta_mode, ipa_if_cate);
+	IPACM_LOG(IPACM_LOG_DEBUG, "dev_name %s \n", dev_name);
 	if (rx_prop == NULL)
 	{
 		IPACM_LOG(IPACM_LOG_WARN, "Rx prop is NULL, return\n");

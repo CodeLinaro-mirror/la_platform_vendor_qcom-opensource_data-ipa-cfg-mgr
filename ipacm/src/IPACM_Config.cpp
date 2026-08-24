@@ -2233,7 +2233,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 
 			if(get_bridge_vlan_mapping(&mapping_info))
 			{
-				if(default_bridge)
+				if(default_bridge && !multi_vlan_bridge_config_enable)
 				{
 					IPACM_LOG(IPACM_LOG_DEBUG, "default bridge doesn't have vlan mapping\n");
 				}
@@ -2332,7 +2332,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 
 			if(get_bridge_vlan_mapping(&mapping_info))
 			{
-				if(default_bridge)
+				if(default_bridge && !multi_vlan_bridge_config_enable)
 				{
 					IPACM_LOG(IPACM_LOG_WARN, "default bridge doesn't have vlan mapping\n");
 				}
@@ -2374,10 +2374,10 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 					}
 					found = 0;
 			}
-			IPACM_LOG(IPACM_LOG_DEBUG,"bridge (%s) mask 0x%X, address 0x%X, VID %d\n", data_all->iface_name,
+
+			IPACM_LOG(IPACM_LOG_DEBUG, "bridge (%s) mask 0x%X, address 0x%X\n", data_all->iface_name,
 				mapping_info.subnet_mask,
-				mapping_info.bridge_ipv4,
-				mapping_info.vlan_id);
+				mapping_info.bridge_ipv4);
 
 			fd = socket(AF_INET, SOCK_DGRAM, 0);
 			if (fd < 0) {

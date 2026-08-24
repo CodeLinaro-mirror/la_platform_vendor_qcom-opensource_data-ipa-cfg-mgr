@@ -8516,14 +8516,18 @@ int IPACM_Wan::handle_down_evt()
 	}
 	else if(ip_type == IPA_IP_v6)
 	{
-		num_ipv6_sta_pdn--;
+		if(num_dft_rt_v6 > 1)
+		{
+			num_ipv6_sta_pdn--;
+		}
 		IPACM_LOG(IPACM_LOG_DEBUG, "Now the number of STA ipv6 pdn is %d.\n", num_ipv6_sta_pdn);
 	}
 	else if(ip_type == IPA_IP_MAX)
 	{
 		num_ipv4_sta_pdn--;
 		IPACM_LOG(IPACM_LOG_DEBUG, "Now the number of STA ipv4 pdn is %d.\n", num_ipv4_sta_pdn);
-		num_ipv6_sta_pdn--;
+		if (num_dft_rt_v6 > 1)
+			num_ipv6_sta_pdn--;
 		IPACM_LOG(IPACM_LOG_DEBUG, "Now the number of STA ipv6 pdn is %d.\n", num_ipv6_sta_pdn);
 	}
 
@@ -8565,7 +8569,7 @@ int IPACM_Wan::handle_down_evt()
 
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
-	else if(ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6)
+	else if(sta_ipv6_pdn_index >= 0 && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_vlan_pdn *vlandown_data;
@@ -8600,7 +8604,7 @@ int IPACM_Wan::handle_down_evt()
 
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
-	else if (ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan)
+	else if (sta_ipv4_pdn_index >= 0 && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_vlan_pdn *vlandown_data;

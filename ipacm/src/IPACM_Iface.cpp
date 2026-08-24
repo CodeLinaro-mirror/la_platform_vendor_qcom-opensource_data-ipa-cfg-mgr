@@ -78,6 +78,7 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index, bool ppp_iface)
 	iface_query = NULL;
 	tx_prop = NULL;
 	rx_prop = NULL;
+	is_ppp_iface = false;
 
 	/* Need to start the prio value with 1, As it is uint8
 	 * Can be memsetted with value 1 to reflect at all indexes.
@@ -123,8 +124,9 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index, bool ppp_iface)
 			IF_NAME_LEN);
 	}
 
-	IPACM_LOG(IPACM_LOG_DEBUG,"dev_name: %s virtual_iface: %s phy_dev_name: %s \n",
-		   dev_name, (virtual_iface) ? "true" : "false", phy_dev_name);
+	IPACM_LOG(IPACM_LOG_DEBUG, "dev_name: %s virtual_iface: %s phy_dev_name: %s is_ppp_iface: %d\n",
+		   dev_name, (virtual_iface) ? "true" : "false", phy_dev_name,
+		   is_ppp_iface);
 
 	memset(dft_v4fl_rule_hdl, 0, sizeof(dft_v4fl_rule_hdl));
 	memset(dft_v6fl_rule_hdl, 0, sizeof(dft_v6fl_rule_hdl));

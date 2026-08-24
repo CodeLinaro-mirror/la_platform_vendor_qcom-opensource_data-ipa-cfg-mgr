@@ -122,6 +122,17 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_LOG(IPACM_LOG_WARN, "WAN-EMBMS (%s) link already up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);
 			}
 			else if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF &&
+				!IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].virtual_iface &&
+				((strncmp(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, "eth", 3) == 0) ||
+				(strncmp(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, "ppp", 3) == 0) ||
+				(strstr(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, "pppoe") != NULL) ||
+				(strstr(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, "br-ethwan") != NULL) ||
+				(strstr(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, "br-wanpppoe") != NULL)))
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "Ignoring IPA_LINK_UP_EVENT for Ethernet/PPPoE WAN interface %s\n", 
+					IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name);
+			}
+			else if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF &&
 				!IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].virtual_iface)
 			{
 				IPACM_LOG(IPACM_LOG_INFO, "WAN-LTE (%s) link up, iface: %d: \n", IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name,evt_data->if_index);

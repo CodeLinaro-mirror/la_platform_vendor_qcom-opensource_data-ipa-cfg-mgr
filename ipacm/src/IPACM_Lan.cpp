@@ -17623,7 +17623,9 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 				IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].ipv6_prefix_flt_rule_hdl[j][0] = flt_rule->rules[0].flt_rule_hdl;
 			else
 				ipv6_prefix_flt_rule_hdl[j][0] = flt_rule->rules[0].flt_rule_hdl;
-			IPACM_LOG(IPACM_LOG_INFO,"IPv6 prefix filter rule HDL:0x%x\n", flt_rule->rules[0].flt_rule_hdl);
+			num_wan_prefix_rules[j]++;
+			IPACM_LOG(IPACM_LOG_DEBUG, "IPv6 prefix filter rule HDL:0x%x num_wan_prefix_rules: %d\n",
+				flt_rule->rules[0].flt_rule_hdl, num_wan_prefix_rules[j]);
 
 			if (rule_cnt > 1)
 			{
@@ -17631,7 +17633,9 @@ int IPACM_Lan::install_ipv6_prefix_flt_rule(uint32_t* prefix)
 					IPACM_Wlan::wlan_ap_dflt_rules[wlan_pipe_index].ipv6_prefix_flt_rule_hdl[j][1] = flt_rule->rules[1].flt_rule_hdl;
 				else
 					ipv6_prefix_flt_rule_hdl[j][1] = flt_rule->rules[1].flt_rule_hdl;
-				IPACM_LOG(IPACM_LOG_INFO,"IPv6 prefix MTU filter rule HDL:0x%x\n", flt_rule->rules[1].flt_rule_hdl);
+				num_wan_prefix_rules[j]++;
+				IPACM_LOG(IPACM_LOG_DEBUG, "IPv6 prefix MTU filter rule HDL:0x%x num_wan_prefix_rules: %d\n",
+					flt_rule->rules[1].flt_rule_hdl, num_wan_prefix_rules[j]);
 			}
 			free(flt_rule);
 		}
@@ -17699,6 +17703,9 @@ void IPACM_Lan::delete_ipv6_prefix_flt_rule()
 			IPACM_LOG(IPACM_LOG_ERR, "Failed to delete ipv6 prefix flt rule.\n");
 			return;
 		}
+		if (num_wan_prefix_rules[j] > 0)
+			num_wan_prefix_rules[j]--;
+		IPACM_LOG(IPACM_LOG_DEBUG, "num_wan_prefix_rules: %d\n", num_wan_prefix_rules[j]);
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, IPv6_PREFIX_DEFAULT_PDN_RULE_NUM);
 	}
 	return;

@@ -2237,6 +2237,11 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 				{
 					IPACM_LOG(IPACM_LOG_DEBUG, "default bridge doesn't have vlan mapping\n");
 				}
+				else if(default_bridge && multi_vlan_bridge_config_enable)
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "default bridge may have vlan mapping\n");
+					goto process;
+				}
 				else
 				{
 					/* mapping may arrive later and information will be updated then */
@@ -2245,32 +2250,7 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 				}
 			}
 
-
-			fd = socket(AF_INET, SOCK_DGRAM, 0);
-			if (fd < 0) {
-					IPACM_LOG(IPACM_LOG_ERR, "get interface name socket create failed\n");
-					return;
-			}
-			memset(&ifr, 0, sizeof(struct ifreq));
-			ifr.ifr_addr.sa_family = AF_INET;
-			strlcpy(ifr.ifr_name, data_all->iface_name, sizeof(ifr.ifr_name));
-			if(ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
-			{
-				IPACM_LOG(IPACM_LOG_ERR, "unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
-				vlan_bridges[i].bridge_netmask = 0;
-				vlan_bridges[i].bridge_ipv4_addr = 0;
-				for(int j = 0; j < IPA_MAX_VLAN_PER_BRIDGE; j++)
-				{
-					vlan_bridges[i].associate_VID[j] = 0;
-				}
-				close(fd);
-				return;
-			}
-			memcpy(vlan_bridges[i].bridge_mac,
-				ifr.ifr_hwaddr.sa_data,
-				sizeof(vlan_bridges[i].bridge_mac));
-			IPACM_LOG(IPACM_LOG_DEBUG, "got bridge MAC using IOCTL\n");
-			found=0;
+			found = 0;
 			for(int k = 0; k < IPA_MAX_VLAN_PER_BRIDGE; k++)
 			{
 					for(int j = 0; j < IPA_MAX_VLAN_PER_BRIDGE; j++)
@@ -2297,6 +2277,32 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 					}
 					found = 0;
 			}
+
+process:
+			fd = socket(AF_INET, SOCK_DGRAM, 0);
+			if (fd < 0) {
+					IPACM_LOG(IPACM_LOG_ERR, "get interface name socket create failed\n");
+					return;
+			}
+			memset(&ifr, 0, sizeof(struct ifreq));
+			ifr.ifr_addr.sa_family = AF_INET;
+			strlcpy(ifr.ifr_name, data_all->iface_name, sizeof(ifr.ifr_name));
+			if(ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "unable to retrieve (%s) bridge MAC\n", ifr.ifr_name);
+				vlan_bridges[i].bridge_netmask = 0;
+				vlan_bridges[i].bridge_ipv4_addr = 0;
+				for(int j = 0; j < IPA_MAX_VLAN_PER_BRIDGE; j++)
+				{
+					vlan_bridges[i].associate_VID[j] = 0;
+				}
+				close(fd);
+				return;
+			}
+			memcpy(vlan_bridges[i].bridge_mac,
+				ifr.ifr_hwaddr.sa_data,
+				sizeof(vlan_bridges[i].bridge_mac));
+			IPACM_LOG(IPACM_LOG_DEBUG, "got bridge MAC using IOCTL\n");
 
 			if(default_bridge)
 			{
@@ -2336,6 +2342,11 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 				{
 					IPACM_LOG(IPACM_LOG_WARN, "default bridge doesn't have vlan mapping\n");
 				}
+				else if(default_bridge && multi_vlan_bridge_config_enable)
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "default bridge may have vlan mapping\n");
+					goto process_new;
+				}
 				else
 				{
 					/* mapping may arrive later and information will be updated then */
@@ -2344,9 +2355,6 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 				}
 			}
 
-			vlan_bridges[i].bridge_netmask = mapping_info.subnet_mask;
-			vlan_bridges[i].bridge_ipv4_addr = mapping_info.bridge_ipv4;
-			strlcpy(vlan_bridges[i].bridge_name, data_all->iface_name, IF_NAME_LEN);
 			found = 0;
 			for(int k = 0; k < IPA_MAX_VLAN_PER_BRIDGE; k++)
 			{
@@ -2378,6 +2386,11 @@ void IPACM_Config::add_vlan_bridge(ipacm_event_data_all *data_all)
 			IPACM_LOG(IPACM_LOG_DEBUG, "bridge (%s) mask 0x%X, address 0x%X\n", data_all->iface_name,
 				mapping_info.subnet_mask,
 				mapping_info.bridge_ipv4);
+
+process_new:
+			vlan_bridges[i].bridge_netmask = mapping_info.subnet_mask;
+			vlan_bridges[i].bridge_ipv4_addr = mapping_info.bridge_ipv4;
+			strlcpy(vlan_bridges[i].bridge_name, data_all->iface_name, IF_NAME_LEN);
 
 			fd = socket(AF_INET, SOCK_DGRAM, 0);
 			if (fd < 0) {

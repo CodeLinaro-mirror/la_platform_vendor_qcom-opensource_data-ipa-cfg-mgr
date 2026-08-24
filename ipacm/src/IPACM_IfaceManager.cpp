@@ -729,15 +729,19 @@ int IPACM_IfaceManager::deregistr(IPACM_Listener *param)
 			{
 				head = head->next;
 			}
-			else if(tmp->next == NULL)
-			{
-				prev->next = NULL;
-			}
-			else
+			else if(prev != NULL)
 			{
 				prev->next = tmp->next;
 			}
-
+			else
+			{
+				/* Should never happen: non-head node with NULL prev - list is corrupted */
+				IPACM_LOG(IPACM_LOG_ERR, "deregistr: list corruption detected\n");
+				tmp = tmp->next;
+				continue;
+			}
+			/* tmp must be advanced before free(tmp1): tmp and tmp1 point to
+			 * the same node here, so freeing first would make this a UAF. */
 			tmp = tmp->next;
 			free(tmp1);
 		}

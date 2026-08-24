@@ -226,18 +226,18 @@ static inline char *u64_to_dec_rev(char *end, unsigned long long v)
  */
 char *get_time_string(char *buffer, int len)
 {
-	struct timespec ts;
-	struct tm tm_local;
+	struct timespec ts = {0};
+	struct tm tm_local = {0};
 	static __thread time_t last_sec = (time_t)-1;
-	static __thread char hhmmss[8];
-	static __thread char sec_str[21];
-	static __thread size_t sec_len;
+	static __thread char hhmmss[8] = {0};
+	static __thread char sec_str[21] = {0};
+	static __thread size_t sec_len = 0;
 	static __thread char dummy_time[] = "00:00:0000000000000000";
-	unsigned int msec;
-	char numbuf[21];
-	char *start;
-	char *end;
-	size_t required_len;
+	unsigned int msec = 0;
+	char numbuf[21] = {0};
+	char *start = NULL;
+	char *end = NULL;
+	size_t required_len = 0;
 
 	if (!buffer || len <= 0)
 		return dummy_time;

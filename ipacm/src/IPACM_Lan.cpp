@@ -14638,8 +14638,19 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 				 * private subnet rule -> 512(pdn2)->513(2)->514(1)->512(pdn1)->513(1)->514(1)->515->516...
 				 */
 				if (prev == 0)
-					/* add the XLAT rule after the dynamic subnet/MTU rules */
-					pFilteringTable->add_after_hdl = private_fl_rule_hdl[num_wan_subnet_rules - 1];
+				{
+					/* Prefer anchoring after an already-installed eth/VLAN uplink default
+					 * rule so modem/XLAT UL rules never get evaluated ahead of it; fall
+					 * back to the subnet/MTU chain tail if no eth uplink rule exists yet. */
+					pFilteringTable->add_after_hdl = 0;
+					for (i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
+					{
+						if (vlan_sta_info[i].v4_flt_hdl != 0)
+							pFilteringTable->add_after_hdl = vlan_sta_info[i].v4_flt_hdl;
+					}
+					if (!pFilteringTable->add_after_hdl)
+						pFilteringTable->add_after_hdl = private_fl_rule_hdl[num_wan_subnet_rules - 1];
+				}
 				else
 					pFilteringTable->add_after_hdl = xlat_ctx.ul_rule_id_hdl_map[prev - 1].flt_hdl;
 
@@ -14706,8 +14717,19 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 	if (pFilteringTable->num_rules != 0)
 	{
 		if (prev == 0)
-			/* add the XLAT rule after the dynamic subnet/MTU rules */
-			pFilteringTable->add_after_hdl = private_fl_rule_hdl[num_wan_subnet_rules - 1];
+		{
+			/* Prefer anchoring after an already-installed eth/VLAN uplink default
+			 * rule so modem/XLAT UL rules never get evaluated ahead of it; fall
+			 * back to the subnet/MTU chain tail if no eth uplink rule exists yet. */
+			pFilteringTable->add_after_hdl = 0;
+			for (i = 0; i < IPA_MAX_NUM_OFFLOAD_VLANS; i++)
+			{
+				if (vlan_sta_info[i].v4_flt_hdl != 0)
+					pFilteringTable->add_after_hdl = vlan_sta_info[i].v4_flt_hdl;
+			}
+			if (!pFilteringTable->add_after_hdl)
+				pFilteringTable->add_after_hdl = private_fl_rule_hdl[num_wan_subnet_rules - 1];
+		}
 		else
 			pFilteringTable->add_after_hdl = xlat_ctx.ul_rule_id_hdl_map[prev - 1].flt_hdl;
 

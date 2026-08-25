@@ -3339,8 +3339,6 @@ int IPACM_Wlan::handle_down_evt()
 	}
 	IPACM_LOG(IPACM_LOG_INFO, "finished deleting default RT rules\n \n");
 
-	eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_DOWN, IPA_IP_MAX, NULL, NULL, NULL);
-
 	/* free the wlan clients cache */
 	IPACM_LOG(IPACM_LOG_DEBUG, "Free wlan clients cache\n");
 
@@ -3453,6 +3451,8 @@ int IPACM_Wlan::handle_down_evt()
 	}
 
 fail:
+
+	eth_bridge_post_event(IPA_ETH_BRIDGE_IFACE_DOWN, IPA_IP_MAX, NULL, NULL, NULL);
 	/* clean wifi-client header, routing rules */
 	/* clean wifi client rule*/
 	IPACM_LOG(IPACM_LOG_DEBUG, "left %d wifi clients need to be deleted \n \n", num_wifi_client);

@@ -23680,6 +23680,7 @@ int IPACM_Lan::add_tcp_syn_flt_rule(ipa_ip_type iptype)
 		flt_rule_entry.flt_rule_hdl = -1;
 		flt_rule_entry.status = -1;
 		flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+		flt_rule_entry.rule.max_prio = prio[j][iptype];
 
 		memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib,
 			   sizeof(flt_rule_entry.rule.attrib));

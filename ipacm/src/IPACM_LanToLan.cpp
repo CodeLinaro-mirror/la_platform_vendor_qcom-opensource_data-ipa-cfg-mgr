@@ -1631,6 +1631,13 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 	{
 		flt_rule_hdls = it_flt->l2tp_first_pass_flt_rule_hdl[iptype].flt_rule_hdls;
 		l2tp_second_pass_flt_rule_hdl = it_flt->l2tp_second_pass_flt_rule_hdl;
+		if(it_flt->flt_rule_hdl[iptype]) {
+			IPACM_LOG(IPACM_LOG_DEBUG, "not adding rule for already found client 0x[%X][%X][%X][%X][%X][%X] vlan %d, iptype %d\n",
+				it_flt->p_client->mac_addr[0], it_flt->p_client->mac_addr[1], it_flt->p_client->mac_addr[2],
+				it_flt->p_client->mac_addr[3], it_flt->p_client->mac_addr[4], it_flt->p_client->mac_addr[5],
+				it_flt->p_client->vlan_id, iptype);
+			return;
+		}
 	}
 
 #ifdef FEATURE_L2TP

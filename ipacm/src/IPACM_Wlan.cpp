@@ -386,7 +386,11 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 						if(data->iptype == IPA_IP_v6)
 						{
 							memcpy(ipv6_prefix, IPACM_Wan::backhaul_ipv6_prefix, sizeof(ipv6_prefix));
+#ifdef FEATURE_VLAN_MPDN
+							modify_ipv6_prefix_flt_rule();
+#else
 							install_ipv6_prefix_flt_rule(IPACM_Wan::backhaul_ipv6_prefix);
+#endif
 #ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
@@ -761,7 +765,11 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		if(ip_type == IPA_IP_v6 || ip_type == IPA_IP_MAX)
 		{
 			memcpy(ipv6_prefix, data_wan->ipv6_prefix, sizeof(ipv6_prefix));
+#ifdef FEATURE_VLAN_MPDN
+			modify_ipv6_prefix_flt_rule();
+#else
 			install_ipv6_prefix_flt_rule(data_wan->ipv6_prefix);
+#endif
 #ifdef FEATURE_IPv6CT_DISABLED
 #ifdef FEATURE_IPACM_UL_FIREWALL
 			IPACM_Wan::read_firewall_filter_rules_ul();
@@ -3240,7 +3248,7 @@ int IPACM_Wlan::handle_down_evt()
 		if (IPACM_Wan::isWanUP_V6(ipa_if_num) && rx_prop != NULL)
 		{
 			IPACM_LOG(IPACM_LOG_DEBUG, "LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
-			handle_wan_down_v6(IPACM_Wan::backhaul_is_sta_mode, false);
+			handle_wan_down_v6(IPACM_Wan::backhaul_is_sta_mode, true);
 		}
 	}
 	IPACM_LOG(IPACM_LOG_DEBUG, "finished deleting wan filtering rules\n \n");
@@ -3477,6 +3485,25 @@ int IPACM_Wlan::handle_down_evt()
 			IPACM_LOG(IPACM_LOG_INFO, "mux %d up, delete v6 flt rules\n", v6_mux_up[i].mux_id);
 			handle_vlan_pdn_down(data_vlan);
 			free(data_vlan);
+		}
+	}
+
+	if (ip_type != IPA_IP_v4)
+	{
+		if (num_wan_prefix_rules[0] > 0)
+		{
+			IPACM_LOG(IPACM_LOG_DEBUG, "current IPACM prifix rules (%d)\n", num_wan_prefix_rules[0]);
+			if (m_filtering.DeleteFilteringHdls(ipv6_prefix_flt_rule_hdl[0], IPA_IP_v6,
+												num_wan_prefix_rules[0]) == false)
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "Error Deleting ipv6 prefix Filtering, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			for (int i = 0; i < num_wan_prefix_rules[0]; i++)
+				ipv6_prefix_flt_rule_hdl[0][i] = 0;
+			IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[0].src_pipe, IPA_IP_v6, num_wan_prefix_rules[0]);
+			num_wan_prefix_rules[0] = 0;
 		}
 	}
 

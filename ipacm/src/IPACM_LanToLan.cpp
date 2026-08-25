@@ -1277,6 +1277,7 @@ char* IPACM_LanToLan::handle_cached_client_get_iface(uint8_t *mac)
 				it->mac_addr[2], it->mac_addr[3], it->mac_addr[4], it->mac_addr[5]);
 				return it->iface_name;
 		}
+		it++;
 	}
 	return nullptr;
 }

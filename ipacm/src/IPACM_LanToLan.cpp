@@ -603,8 +603,10 @@ void IPACM_LanToLan::handle_iface_up(ipacm_event_eth_bridge *data)
 #ifdef FEATURE_VLAN_MPDN
 				/* non VLAN case - currently no support for non vlan <-> vlan offload */
 				if(it->get_is_vlan() && !it->is_svap_iface() && !it->is_spcl_iface())
-					IPACM_LOG(IPACM_LOG_DEBUG, "vlan to non VLAN iface - support offload now\n");
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "vlan to non VLAN iface - not supported, skipping\n");
 					continue;
+				}
 #endif
 				/* add peer info only when both interfaces support inter-interface communication */
 				if(it->get_m_support_inter_iface_offload())

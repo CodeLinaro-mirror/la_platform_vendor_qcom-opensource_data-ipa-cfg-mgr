@@ -805,6 +805,11 @@ private:
 	int delete_all_UL_qos_rules(ipa_ip_type iptype);
 	uint32_t get_u8_bitmap_from_tc(uint8_t traffic_class);
 
+	/* Returns true if this WAN instance owns a qos-capable egress pipe
+	   (i.e. has at least one tx property with a non-zero tc_bmap). Only such
+	   an instance may run the UL QoS delete+install on the shared qos list. */
+	bool has_ul_qos_capable_pipe(void);
+
 	/* handle new_address event */
 	int handle_addr_evt(ipacm_event_data_addr *data);
 

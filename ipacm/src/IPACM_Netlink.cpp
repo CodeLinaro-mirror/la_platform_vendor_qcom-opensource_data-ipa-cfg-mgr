@@ -1637,6 +1637,7 @@ static int ipa_nl_decode_nlmsg
 							IPACMDBG_H("IPA_HANDLE_RGIP_DEL (link down) with ip 0x%x\n", *rgip_v4);
 							rgip_evt_data.evt_data = rgip_v4;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+							IPACM_Iface::ipacmcfg->rgip_ip = 0;
 						}
 					}
 					if (IPACM_Iface::ipacmcfg->ipogre_enabled &&
@@ -1805,6 +1806,7 @@ static int ipa_nl_decode_nlmsg
 							IPACMDBG_H("IPA_HANDLE_RGIP_DEL (link down lower) with ip 0x%x\n", *rgip_v4);
 							rgip_evt_data.evt_data = rgip_v4;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+							IPACM_Iface::ipacmcfg->rgip_ip = 0;
 						}
 					}
 #endif
@@ -1879,6 +1881,7 @@ static int ipa_nl_decode_nlmsg
 							IPACMDBG_H("IPA_HANDLE_RGIP_DEL (iface delete) with ip 0x%x\n", *rgip_v4);
 							rgip_evt_data.evt_data = rgip_v4;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
+							IPACM_Iface::ipacmcfg->rgip_ip = 0;
 						}
 					}
 				}
@@ -2126,8 +2129,8 @@ static int ipa_nl_decode_nlmsg
 									memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
 									rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
 									rgip_evt_data.evt_data = rgip_v4;
-									IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
 									IPACM_Iface::ipacmcfg->rgip_ip = raw_host_addr;
+									IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
 								}
 							}
 						}
@@ -2245,6 +2248,7 @@ static int ipa_nl_decode_nlmsg
 							IPACMDBG_H("IPA_HANDLE_RGIP_DEL (addr del) with ip 0x%x\n", *rgip_v4_del);
 							rgip_evt_del_data.evt_data = rgip_v4_del;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_del_data);
+							IPACM_Iface::ipacmcfg->rgip_ip = 0;
 						}
 					}
 #endif

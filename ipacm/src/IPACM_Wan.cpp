@@ -9232,6 +9232,9 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 	struct ipa_flt_rule_add flt_rule_entry;
 	struct ipa_ioc_generate_flt_eq flt_eq;
 	int res = IPACM_SUCCESS;
+#ifdef FEATURE_IPoGRE
+	const bool ipogre_on = IPACM_Iface::ipacmcfg->ipogre_enabled;
+#endif
 
 	IPACMDBG_H("ip-type: %d\n", iptype);
 
@@ -9350,7 +9353,7 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 #ifdef FEATURE_IPoGRE
 		/* IPoGRE DL: send TCP control packets to kernel so iptables FORWARD
 		 * rules on the gre/gre6-gre0 interface (e.g. MSS clamping) fire. */
-		if (IPACM_Iface::ipacmcfg->ipogre_enabled)
+		if (ipogre_on)
 			flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
 		else
 #endif
@@ -9410,7 +9413,7 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 #ifdef FEATURE_IPoGRE
 		/* IPoGRE DL: send TCP control packets to kernel so iptables FORWARD
 		 * rules on the gre/gre6-gre0 interface (e.g. MSS clamping) fire. */
-		if (IPACM_Iface::ipacmcfg->ipogre_enabled)
+		if (ipogre_on)
 			flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
 		else
 #endif
@@ -9585,7 +9588,7 @@ int IPACM_Wan::add_dft_filtering_rule(struct ipa_flt_rule_add *rules, int rule_o
 #ifdef FEATURE_IPoGRE
 		/* IPoGRE DL: send TCP control packets to kernel so iptables FORWARD
 		 * rules on the gre/gre6-gre0 interface (e.g. MSS clamping) fire. */
-		if (IPACM_Iface::ipacmcfg->ipogre_enabled)
+		if (ipogre_on)
 			flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
 		else
 #endif
@@ -18301,7 +18304,7 @@ void IPACM_Wan::gre_up()
 	IPACMDBG_H("Into gre_up\n");
 	IPACM_Iface::ipacmcfg->pmip_details.pmipv6_up_wan=true;
 
-	ipa_ip_type iptype = IPACM_Iface::ipacmcfg->ipgre_info.iptype;
+	ipa_ip_type iptype = ipgre_info.iptype;
 
 	bool        gre_enable = true;
 
@@ -18697,6 +18700,9 @@ int IPACM_Wan::ipgre_make_hdr_for_add_ctx(
 	char     addr_buf[128];
 	uint8_t  hdr_data_buf[128];
 	uint32_t hdr_data_len;
+	const bool ipogre_on       = IPACM_Iface::ipacmcfg->ipogre_enabled;
+	const bool encap_on        = IPACM_Iface::ipacmcfg->encap_enable;
+	const uint8_t encap_lim    = (uint8_t)IPACM_Iface::ipacmcfg->encap_limit;
 
 	if ( iptype == IPA_IP_v4 )
 	{
@@ -18721,15 +18727,15 @@ int IPACM_Wan::ipgre_make_hdr_for_add_ctx(
 	else
 	{
 		v6_ipgre_hdr_t* hdr = (v6_ipgre_hdr_t*) hdr_data_buf;
-		if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+		if(ipogre_on)
 		{
-			if(IPACM_Iface::ipacmcfg->encap_enable)
+			if(encap_on)
 			{
 				memcpy(hdr_data_buf, v6_ipogre_header_op, sizeof(v6_ipogre_header_op));
 				hdr_data_len = sizeof(v6_ipogre_header_op);
 				hdr->words[IPV6_GRE_PROT_IDX_OP] = htonl(GRE_PROTOCOL_TYPE_v6);
 				/* Patch the encap limit value into the Destination Options header */
-				hdr_data_buf[44] = (uint8_t)IPACM_Iface::ipacmcfg->encap_limit;
+				hdr_data_buf[44] = encap_lim;
 			}
 			else
 			{
@@ -18803,16 +18809,16 @@ int IPACM_Wan::ipgre_make_hdr_for_add_ctx(
 	if(iptype == IPA_IP_v4)
 	{
 					v4_ipgre_hdr_t* hdr2 = (v4_ipgre_hdr_t*) hdr_data_buf;
-					if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+					if(ipogre_on)
 						hdr2->words[IPV4_GRE_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v6);
 					else
 						hdr2->words[IPV4_GRE_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v6_WITH_KEY);   //V4  tunnel carrying v6 payload
 	}
 	else{
 					v6_ipgre_hdr_t* hdr2 = (v6_ipgre_hdr_t*) hdr_data_buf;
-					if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+					if(ipogre_on)
 					{
-						if(IPACM_Iface::ipacmcfg->encap_enable)
+						if(encap_on)
 							hdr2->words[IPV6_GRE_PROT_IDX_OP] = htonl(GRE_PROTOCOL_TYPE_v4);
 						else
 							hdr2->words[IPV6_GRE_PROT_IDX] = htonl(GRE_PROTOCOL_TYPE_v4);
@@ -18865,7 +18871,7 @@ int IPACM_Wan::ipgre_make_hdr_add_ctx(
 	uint32_t        hdr_2use)
 {
 	enum ipa_ip_type iptype = ipgre_info.iptype;
-
+	bool ipogre_on = IPACM_Iface::ipacmcfg->ipogre_enabled;
 	IPACMDBG_H(
 		"Attempting to create \"header add\" context "
 		"(outer ip(%d) header) for uplink gre traffic.\n",
@@ -18903,11 +18909,11 @@ int IPACM_Wan::ipgre_make_hdr_add_ctx(
 	procCtx->proc_ctx_hdl = -1; // return value
 	procCtx->status       = -1; // Return parameter
 	procCtx->hdr_hdl      = hdr_2use;
-	if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+	if(ipogre_on)
 	{
 		procCtx->type         = IPA_HDR_PROC_IPOGRE_HEADER_ADD;
 		procCtx->ipogre_params.hdr_add_param.input_ip_version = iptype;
-		procCtx->ipogre_params.hdr_add_param.output_ip_version =IPACM_Iface::ipacmcfg->ipgre_info.iptype;
+		procCtx->ipogre_params.hdr_add_param.output_ip_version = ipgre_info.iptype;
 		procCtx->ipogre_params.hdr_add_param.Mux_Id = ext_prop->ext[0].mux_id;
 		procCtx->ipogre_params.hdr_add_param.non_ipogre = 0;
 	}
@@ -18916,7 +18922,7 @@ int IPACM_Wan::ipgre_make_hdr_add_ctx(
 		procCtx->type         = IPA_HDR_PROC_GRE_HEADER_ADD;
 		procCtx->gre_params.hdr_add_param.eth_hdr_retained = 0;
 		procCtx->gre_params.hdr_add_param.input_ip_version = iptype;
-		procCtx->gre_params.hdr_add_param.output_ip_version =IPACM_Iface::ipacmcfg->ipgre_info.iptype;
+		procCtx->gre_params.hdr_add_param.output_ip_version =ipgre_info.iptype;
 		procCtx->gre_params.hdr_add_param.second_pass = 1;
 	}
 

@@ -15242,6 +15242,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 	ipa_ipgre_info ipgre_info;
 	bool compatible_gre;
+	const bool ipogre_on = IPACM_Iface::ipacmcfg->ipogre_enabled;
 	if(isPmipv6)
 	{
 		ipgre_info= IPACM_Iface::ipacmcfg->ipgre_info;
@@ -15250,7 +15251,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	else if(is_ipogre)
 	{
 		ipgre_info= IPACM_Iface::ipacmcfg->ipgre_info;
-		compatible_gre=( IPACM_Iface::ipacmcfg->ipogre_enabled && iptype == ipgre_info.iptype );
+		compatible_gre=( ipogre_on && iptype == ipgre_info.iptype );
 	}
 	else
 	{
@@ -15429,7 +15430,7 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			/* When IPoGRE is enabled with v6 iptype, v4 rules are for outside-tunnel traffic.
 			 * These must use IPA_PASS_TO_ROUTING since NAT is handled in the first pass. */
 #ifdef FEATURE_IPoGRE
-			bool ipogre_v6_tunnel = (is_ipogre && IPACM_Iface::ipacmcfg->ipogre_enabled && ipgre_info.iptype == IPA_IP_v6);
+			bool ipogre_v6_tunnel = (is_ipogre && ipogre_on && ipgre_info.iptype == IPA_IP_v6);
 #else
 			bool ipogre_v6_tunnel = false;
 #endif
@@ -20002,9 +20003,14 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 		}
 
 		mtu_rule_cnt = i = 0;
+		/* Snapshot once so all three checks within this loop iteration are consistent.
+		 * The netlink thread can write ipogre_enabled concurrently; reading it multiple
+		 * times would allow the allocation size and the write count to disagree, causing
+		 * a heap overflow (rules[N] written into an N-slot allocation). */
+		const bool ipogre_on = IPACM_Iface::ipacmcfg->ipogre_enabled;
 		/* In IPoGRE, skip prefix-based rules — only the MTU rule is installed. */
-		int ipv6_prefix_cnt = IPACM_Iface::ipacmcfg->ipogre_enabled ? 0 : IPACM_Iface::ipacmcfg->num_ipv6_prefixes;
-		int no_offload_prefix_cnt = IPACM_Iface::ipacmcfg->ipogre_enabled ? 0 : IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix;
+		int ipv6_prefix_cnt = ipogre_on ? 0 : IPACM_Iface::ipacmcfg->num_ipv6_prefixes;
+		int no_offload_prefix_cnt = ipogre_on ? 0 : IPACM_Iface::ipacmcfg->num_no_offload_ipv6_prefix;
 		mtu_rule_idx = ipv6_prefix_cnt + no_offload_prefix_cnt;
 		IPACMDBG_H("Install rules at idx %d\n", idx);
 
@@ -20125,7 +20131,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 
 			mtu_rule_cnt++;
 		}
-		else if (IPACM_Iface::ipacmcfg->ipogre_enabled)
+		else if (ipogre_on)
 		{
 
 			mtu[0] = IPACM_Wan::queryMTU(ipa_if_num, IPA_IP_v6);
@@ -20322,7 +20328,7 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule(bool eogre_enabled)
 		memcpy(&(pFilteringTable->rules[mtu_rule_idx++]), &flt_rule, sizeof(struct ipa_flt_rule_add));
 		IPACMDBG_H("Succesfully constructed GRE v6 MTU rule\n");
 	}
-		if (IPACM_Iface::ipacmcfg->ipogre_enabled) {
+		if (ipogre_on) {
 			memcpy(
 				&flt_rule.rule.attrib,
 				&rx_prop->rx[idx].attrib,

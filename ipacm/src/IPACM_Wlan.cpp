@@ -9790,11 +9790,12 @@ int IPACM_Wlan::install_uplink_filter_rule_per_client
 	}
 
 #ifdef FEATURE_IPoGRE
+	const bool ipogre_on = IPACM_Iface::ipacmcfg->ipogre_enabled;
 	ipa_ipgre_info ipgre_info = IPACM_Iface::ipacmcfg->ipgre_info;
-	bool compatible_gre = (IPACM_Iface::ipacmcfg->ipogre_enabled && iptype == ipgre_info.iptype);
-	bool ipogre_v6_tunnel = (IPACM_Iface::ipacmcfg->ipogre_enabled && ipgre_info.iptype == IPA_IP_v6);
+	bool compatible_gre = (ipogre_on && iptype == ipgre_info.iptype);
+	bool ipogre_v6_tunnel = (ipogre_on && ipgre_info.iptype == IPA_IP_v6);
 	IPACMDBG_H("IPoGRE: ipogre_enabled=%d, iptype=%d, xml_iptype=%d, compatible_gre=%d, ipogre_v6_tunnel=%d\n",
-		IPACM_Iface::ipacmcfg->ipogre_enabled, iptype, ipgre_info.iptype, compatible_gre, ipogre_v6_tunnel);
+		ipogre_on, iptype, ipgre_info.iptype, compatible_gre, ipogre_v6_tunnel);
 #else
 	bool compatible_gre = false;
 	bool ipogre_v6_tunnel = false;

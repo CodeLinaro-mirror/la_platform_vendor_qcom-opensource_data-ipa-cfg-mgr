@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Technologies, Inc. are provided under the following license:
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
- * SPDX-License-Identifier: BSD-3-Clause-Clear.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
  /*!
 	@file
@@ -63,7 +63,6 @@
 #include <stdlib.h>
 #include <execinfo.h>
 #include "linux/ipa_qmi_service_v01.h"
-#include <sched.h>
 
 #include <string.h>
 #include <netlink/object.h>
@@ -122,7 +121,6 @@
 #ifdef FEATURE_IPACM_RESTART
 #define IPA_READY_QCMAP_NOTIFIER_FILE "/var/run/data/monitor/ipacmd.pid"
 #endif
-#define IPACM_SCHED_FIFO_PRIORITY  65
 
 void* netlink_start(void *param);
 #ifndef FEATURE_IPA_ANDROID
@@ -1193,34 +1191,6 @@ void *l2tp_process(void *param)
 int main(int argc, char **argv)
 {
 	int ret;
-	struct sched_param param = {0};
-	int max_priority = sched_get_priority_max(SCHED_FIFO);
-	if (max_priority == -1) {
-		IPACMERR("Failed to get max priority for SCHED_FIFO: %s\n", strerror(errno));
-		IPACMERR("Continuing with default scheduling policy\n");
-	}
-	else
-	{
-		// Use a high but not maximum priority to avoid starving critical system processes
-		param.sched_priority = (max_priority > 1) ?
-			(IPACM_SCHED_FIFO_PRIORITY < max_priority ? IPACM_SCHED_FIFO_PRIORITY : max_priority) : 1;
-		if(sched_setscheduler(getpid(), SCHED_FIFO, &param) == -1)
-		{
-			if(errno == EPERM)
-			{
-				IPACMERR("Insufficient privileges to set SCHED_FIFO (requires CAP_SYS_NICE or root)\n");
-			}
-			else
-			{
-				IPACMERR("Failed to set SCHED_FIFO scheduler: %s\n", strerror(errno));
-			}
-			IPACMERR("Continuing with default scheduling policy\n");
-		}
-		else
-		{
-			IPACMDBG_H("Set SCHED_FIFO with priority %d\n", param.sched_priority);
-		}
-	}
 
 #ifdef FEATURE_IPACM_RESTART
 	FILE *fp = NULL;

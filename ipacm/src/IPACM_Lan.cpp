@@ -1304,6 +1304,45 @@ void IPACM_Lan::event_callback(ipa_cm_event_id event, void *param)
 				}
 
 			}
+			else if(IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name) && is_vlan_event(data->iface_name))
+			{
+				if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vlan_id))
+				{
+					if(!IPACM_Iface::ipacmcfg->is_added_vlan_iface(data->iface_name))
+					{
+						IPACM_LOG(IPACM_LOG_DEBUG, "ignoring neighbor of not added IF %s \n", data->iface_name);
+						return;
+					}
+					IPACM_LOG(IPACM_LOG_ERR, "failed getting vlan ID of iface %s \n", data->iface_name);
+					return;
+				}
+
+				/* get bridge from vlan id */
+				if(IPACM_Iface::ipacmcfg->get_bridge_vlan_mapping_from_vid(&bridge, vlan_id) == IPACM_SUCCESS)
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "got vlan mapping\n");
+				}
+				else
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "bridge is NULL with vlan (%s) vid (%d), ignoring!\n", data->iface_name, vlan_id);
+					IPACM_LOG(IPACM_LOG_ERR, "failed getting vlan mapping\n");
+					return;
+				}
+
+				if(handle_eth_hdr_init(data->mac_addr, &bridge, vlan_id, true) == IPACM_FAILURE)
+				{
+					IPACM_LOG(IPACM_LOG_ERR, "Failed to create header and No event IPA_ETH_BRIDGE_CLIENT_ADD posted.\n");
+					return;
+				}
+				IPACM_LOG(IPACM_LOG_DEBUG, "construct ETH header and route rules \n");
+				if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 1 &&
+					IPACM_Iface::ipacmcfg->mac_addr_in_blacklist(data->mac_addr) == false)
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "Posting IPA_ETH_BRIDGE_CLIENT_ADD for Static IP MAC:0x%x iface_name: %s\n",data->mac_addr,data->iface_name);
+					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, IPA_IP_MAX, data->mac_addr,
+						NULL, data->iface_name, vlan_id);
+				}
+			}
 		}
 		break;
 

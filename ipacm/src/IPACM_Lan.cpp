@@ -4786,6 +4786,12 @@ int IPACM_Lan::add_vlan_private_subnet(ipacm_bridge *bridge)
 		bridge->bridge_netmask,
 		bridge->bridge_ipv4_addr);
 
+	if ((bridge->bridge_netmask == 0) || (bridge->bridge_ipv4_addr == 0)) {
+		IPACM_LOG(IPACM_LOG_DEBUG, "Received invalid bridge netmask or address. ipa_num_private_subnet=%d\n",
+			IPACM_Iface::ipacmcfg->ipa_num_private_subnet);
+		return IPACM_SUCCESS;
+	}
+
 	for(i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_private_subnet; i++)
 	{
 		if((IPACM_Iface::ipacmcfg->private_subnet_table[i].subnet_mask &

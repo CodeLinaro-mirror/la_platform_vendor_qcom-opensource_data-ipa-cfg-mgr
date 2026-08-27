@@ -1246,6 +1246,10 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			config_wan_firewall_rule(IPA_IP_v6);
 			install_wan_filtering_rule(false);
 		}
+		if(IPACM_Iface::ipacmcfg->is_ipacm_restart)
+		{
+			ipa_nl_send_getroute(IPA_IP_v6, dev_name);
+		}
 		num_dft_rt_v6++;
 	}
 	else
@@ -1519,6 +1523,11 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 		}
 
 		IPACM_LOG(IPACM_LOG_INFO, "Received wan ipv4-addr:0x%x\n",wan_v4_addr);
+		if((m_is_sta_mode != Q6_WAN) && IPACM_Iface::ipacmcfg->is_ipacm_restart)
+		{
+			ipa_nl_query_newneigh(AF_INET, dev_name);
+			ipa_nl_send_getroute(IPA_IP_v4, dev_name);
+		}
 	}
 
 	IPACM_LOG(IPACM_LOG_DEBUG, "number of v4 num_ipv4_sta_pdn %d\n", num_ipv4_sta_pdn);

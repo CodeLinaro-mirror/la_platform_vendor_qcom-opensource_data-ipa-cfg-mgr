@@ -240,6 +240,7 @@ IPACM_Config::IPACM_Config()
 	ipacm_qos_enable = false;
 	eth_wan_pppoe_enable = false;
 	eth_vlan_wan_enable = false;
+	is_ipacm_restart = false;
 
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));

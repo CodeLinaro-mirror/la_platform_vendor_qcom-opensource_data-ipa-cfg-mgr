@@ -124,6 +124,7 @@ struct MapRule {
 	bool draft03;
 	bool br_static_route_pending;
 	bool br_v4_static_route_pending;
+	bool provisional_br_set;
 };
 
 class IPACM_Wan;

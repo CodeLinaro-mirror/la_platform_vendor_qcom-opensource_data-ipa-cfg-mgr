@@ -2551,6 +2551,8 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			ipacm_event_data_addr *data = (ipacm_event_data_addr *)param;
 			ipa_interface_index = iface_ipa_index_query(data->if_index);
 			MapeFMR* fmr_rule;
+			uint8_t old_prov_br_mac[IPA_MAC_ADDR_SIZE];
+			bool do_plain_reinstall = false;
 
 			if (IPACM_Iface::ipacmcfg->mape_enable && !IPACM_Wan::mape_rules_initialized) {
 				IPACMDBG_H(" MAPE enabled reading from mape rules file \n");
@@ -2774,9 +2776,145 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						(data->ipv6_addr[2] == IPACM_Wan::mape_rules.br_ipaddr[2]) &&
 						(data->ipv6_addr[3] == IPACM_Wan::mape_rules.br_ipaddr[3]))
 					{
+						/* If P3 recorded a provisional BR from the default GW and this
+						 * specific host route has a different gateway, tear down the
+						 * provisional BR's routing rules and proc ctxs before updating
+						 * br_ll_ipaddr — avoids dangling hardware references. */
+						memcpy(old_prov_br_mac, IPACM_Wan::mape_rules.mac,
+						       IPA_MAC_ADDR_SIZE);
+						if (IPACM_Wan::mape_rules.provisional_br_set &&
+						    (data->ipv6_addr_gw[0] != IPACM_Wan::mape_rules.br_ll_ipaddr[0] ||
+						     data->ipv6_addr_gw[1] != IPACM_Wan::mape_rules.br_ll_ipaddr[1] ||
+						     data->ipv6_addr_gw[2] != IPACM_Wan::mape_rules.br_ll_ipaddr[2] ||
+						     data->ipv6_addr_gw[3] != IPACM_Wan::mape_rules.br_ll_ipaddr[3])) {
+							int old_br_clnt = get_wan_client_index(IPACM_Wan::mape_rules.mac);
+							ipa_wan_client *old_br = NULL;
+							if (old_br_clnt >= 0 && old_br_clnt < num_wan_client) {
+								old_br =
+									get_client_memptr(wan_client, old_br_clnt);
+								if (old_br && old_br->is_v6_gateway) {
+									IPACMDBG_H("MAP-E: provisional BR GW changed "
+									           "%08x:%08x:%08x:%08x -> %08x:%08x:%08x:%08x, "
+									           "tearing down old proc ctxs for client %d\n",
+									    IPACM_Wan::mape_rules.br_ll_ipaddr[0],
+									    IPACM_Wan::mape_rules.br_ll_ipaddr[1],
+									    IPACM_Wan::mape_rules.br_ll_ipaddr[2],
+									    IPACM_Wan::mape_rules.br_ll_ipaddr[3],
+									    data->ipv6_addr_gw[0], data->ipv6_addr_gw[1],
+									    data->ipv6_addr_gw[2], data->ipv6_addr_gw[3],
+									    old_br_clnt);
+									/* delete_wan_rtrules covers all rule variants:
+									 * v6 — rt_rule_hdl_v6 (LAN TBL UL) + rt_rule_hdl_v6_wan
+									 *       (WAN TBL DL exception pipe) per registered IPv6 addr,
+									 *       mape_wan_rt_rule_hdl_v6, rt_hdl_v6_dst_list prefix
+									 *       routes.
+									 * v4 — wan_rt_hdl mirrors, mape_wan_rt_rule_hdl_v4,
+									 *       rt_hdl_v4_list static routes.
+									 * old_br->is_v6_gateway is still true here so the shared
+									 * MAP-E handles are included in the deletion. */
+									delete_wan_rtrules(old_br_clnt, IPA_IP_v6);
+									delete_wan_rtrules(old_br_clnt, IPA_IP_v4);
+									/* Delete proc ctxs (reference headers) before headers. */
+									mape_del_hdr_proc_ctx(IPA_IP_MAX);
+									/* ... teardown ... */
+									old_br->sta_hdr_proc_hdl_v4 = 0;
+									old_br->sta_hdr_proc_hdl_v6 = 0;
+									old_br->sta_hdr_proc_ctx_set = false;
+									/* Delete MAP-E header templates (v4 and v6). */
+									if (old_br->ipv4_header_set) {
+										m_header.DeleteHeaderHdl(old_br->hdr_hdl_v4);
+										old_br->hdr_hdl_v4 = 0;
+										old_br->ipv4_header_set = false;
+									}
+									if (old_br->ipv6_header_set) {
+										m_header.DeleteHeaderHdl(old_br->hdr_hdl_v6);
+										old_br->hdr_hdl_v6 = 0;
+										old_br->ipv6_header_set = false;
+									}
+									/* Clear is_v6_gateway only after delete_wan_rtrules so the
+									 * MAP-E shared handle path is correctly taken above. */
+									old_br->is_v6_gateway = false;
+									do_plain_reinstall = true;
+									/* Zero the MAC only after confirmed teardown */
+									memset(IPACM_Wan::mape_rules.mac, 0,
+									       sizeof(IPACM_Wan::mape_rules.mac));
+									IPACM_Wan::mape_rules.provisional_br_set = false;
+								}
+								else if (!old_br->is_v6_gateway) {
+									/* Inconsistent state: br_ll_ipaddr set but client not marked as gateway */
+									IPACMDBG_H("MAP-E: WARNING: br_ll_ipaddr set but client %d not is_v6_gateway, "
+									           "resetting br_ll_ipaddr\n", old_br_clnt);
+									memset(IPACM_Wan::mape_rules.br_ll_ipaddr, 0,
+									       sizeof(IPACM_Wan::mape_rules.br_ll_ipaddr));
+									IPACM_Wan::mape_rules.provisional_br_set = false;
+								}
+							}
+							/* NOW do the compaction (stale_clnt removal) block */
+							if (do_plain_reinstall) {
+								/* Remove the stale client slot so that when the
+								 * NDP re-query response arrives the neighbor is
+								 * registered as a fresh (plain) client — no
+								 * special-casing needed in handle_wan_hdr_init. */
+								int stale_clnt =
+									get_wan_client_index(old_prov_br_mac);
+								if (stale_clnt >= 0 &&
+								    stale_clnt < num_wan_client) {
+									int last = num_wan_client - 1;
+									if (stale_clnt != last) {
+										memcpy(
+											get_client_memptr(wan_client,
+												stale_clnt),
+											get_client_memptr(wan_client,
+												last),
+											wan_client_len);
+										rt_hdl_v6_list[stale_clnt] =
+											std::move(rt_hdl_v6_list[last]);
+										rt_hdl_v6_dst_list[stale_clnt] =
+											std::move(rt_hdl_v6_dst_list[last]);
+										rt_hdl_v4_list[stale_clnt] =
+											std::move(rt_hdl_v4_list[last]);
+									}
+									/* Always clear the last slot */
+									rt_hdl_v6_list[last].clear();
+									rt_hdl_v6_dst_list[last].clear();
+									rt_hdl_v4_list[last].clear();
+									num_wan_client--;
+									/* old_br_clnt == stale_clnt; invalidate
+									 * so it is not accidentally used now that
+									 * the slot has been compacted away. */
+									old_br_clnt = IPACM_INVALID_INDEX;
+									old_br = NULL;
+								}
+								/* Re-query neighbors on the MAP-E WAN interface.
+								 * When the kernel NDP response arrives the event
+								 * handler calls handle_wan_hdr_init to register
+								 * the neighbor as a plain client, then
+								 * handle_wan_client_route_rule to install plain
+								 * routing rules. mape_rules.mac is zeroed above
+								 * so is_mape_br=false in handle_wan_hdr_init. */
+								if (IPACM_Iface::ipacmcfg->mape_wan_iface_table_index <
+								    IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces) {
+									int wan_if_index = 0;
+									const char *phy_dev =
+										IPACM_Iface::ipacmcfg->iface_table[
+											IPACM_Iface::ipacmcfg->
+												mape_wan_iface_table_index
+										].phy_dev_name;
+									IPACM_Iface::ipa_get_if_index(
+										(char *)phy_dev, &wan_if_index);
+									IPACMDBG_H("MAP-E: P3 cleanup: re-querying "
+									           "neighs on %s (if_idx %d) "
+									           "for plain reinstall\n",
+									           phy_dev, wan_if_index);
+									ipa_nl_query_newneigh(AF_INET6, wan_if_index);
+								}
+							}
+						}
 						/* Always save the BR link-local gateway address */
 						memcpy(IPACM_Wan::mape_rules.br_ll_ipaddr, data->ipv6_addr_gw,
 							sizeof(IPACM_Wan::mape_rules.br_ll_ipaddr));
+						/* Clear provisional flag — the BR is now definitively known. */
+						IPACM_Wan::mape_rules.provisional_br_set = false;
 						IPACMDBG_H("Stored BR link-local: 0x%08x:%08x:%08x:%08x\n",
 							IPACM_Wan::mape_rules.br_ll_ipaddr[0],
 							IPACM_Wan::mape_rules.br_ll_ipaddr[1],
@@ -3298,6 +3436,7 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						IPACM_Wan::mape_wan_rt_rule_hdl_v4 = 0;
 					}
 					memset(IPACM_Wan::mape_rules.br_ll_ipaddr, 0, sizeof(IPACM_Wan::mape_rules.br_ll_ipaddr));
+					IPACM_Wan::mape_rules.provisional_br_set = false;
 					IPACM_Wan::mape_rules.br_static_route_pending = false;
 					static_route_flag = false;
 					IPACMDBG_H("MAP-E BR static v6 route deleted, reset static_route_flag\n");
@@ -3597,6 +3736,32 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 						gw_addr = true;
 						is_mape_br = true;
 						IPACMDBG_H("MAP-E: BR neighbor identified by MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+						    data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+						    data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
+					} else if (gw_addr &&
+					           memcmp(IPACM_Wan::mape_rules.mac, invalid_mac,
+					                  IPA_MAC_ADDR_SIZE) == 0 &&
+					           /* Only record if no provisional BR has been set yet */
+					           !IPACM_Wan::mape_rules.provisional_br_set &&
+					           IPACM_Iface::ipacmcfg->mape_wan_iface_table_index <
+					               IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces &&
+					           strcmp(dev_name, IPACM_Iface::ipacmcfg->iface_table[
+					               IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0) {
+						/* P3: No specific BR static route seen yet. The only IPv6 default
+						 * GW on the MAP-E physical WAN must be the BR — record it as a
+						 * provisional BR. Cleaned up in Path 2 if a specific host route to
+						 * br_ipaddr later arrives with a different gateway. */
+						is_mape_br = true;
+						memcpy(IPACM_Wan::mape_rules.mac, data->mac_addr,
+						       sizeof(IPACM_Wan::mape_rules.mac));
+						memcpy(IPACM_Wan::mape_rules.br_ll_ipaddr, data->ipv6_addr,
+						       sizeof(IPACM_Wan::mape_rules.br_ll_ipaddr));
+						/* Also add a dedicated flag: */
+						IPACM_Wan::mape_rules.provisional_br_set = true;
+						IPACMDBG_H("MAP-E: P3 provisional BR from default GW "
+						           "%08x:%08x:%08x:%08x MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+						    data->ipv6_addr[0], data->ipv6_addr[1],
+						    data->ipv6_addr[2], data->ipv6_addr[3],
 						    data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
 						    data->mac_addr[3], data->mac_addr[4], data->mac_addr[5]);
 					}

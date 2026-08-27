@@ -9926,19 +9926,24 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype, bool wan_up_vlan)
 
 			if (iptype == IPA_IP_v4 || (is_mape_v4_interface && tx_prop->tx[tx_index].ip == IPA_IP_v4))
 			{
-				if(sta_ipv4_pdn_index >= 0 && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan == false)
+				/* Delete if:
+				 *  - sta_ipv4_pdn_index < 0: no IPv4 PDN registered on this iface
+				 *    (e.g. eth0 on MAP-E — the PDN lives on map-mape, not eth0), OR
+				 *  - sta_ipv4_pdn_index >= 0 && wan_up_vlan == false: PDN tracked,
+				 *    no VLAN still up — safe to remove the catch-all.
+				 * Skip only when a VLAN PDN is still active on this iface. */
+				if (sta_ipv4_pdn_index < 0 ||
+				    ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan == false)
 				{
 		    		IPACMDBG_H("Tx:%d, ip-type: %d match ip-type: %d, RT-rule deleted\n", tx_index, tx_prop->tx[tx_index].ip,iptype);
 
-					if (m_routing.DeleteRoutingHdl(wan_route_rule_v4_hdl[tx_index], IPA_IP_v4) == false)
+					if (wan_route_rule_v4_hdl[tx_index] != 0 &&
+					    m_routing.DeleteRoutingHdl(wan_route_rule_v4_hdl[tx_index], IPA_IP_v4) == false)
 					{
 						IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed with tx_index %d!\n", IPA_IP_v4, wan_route_rule_v4_hdl[tx_index], tx_index);
 						return IPACM_FAILURE;
 					}
-					else
-					{
-						wan_route_rule_v4_hdl[tx_index] = 0;
-					}
+					wan_route_rule_v4_hdl[tx_index] = 0;
 				}
 				else
 				{
@@ -9947,19 +9952,24 @@ int IPACM_Wan::handle_route_del_evt(ipa_ip_type iptype, bool wan_up_vlan)
 			}
 			else
 			{
-				if(sta_ipv6_pdn_index >= 0 && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 == false)
+				/* Delete if:
+				 *  - sta_ipv6_pdn_index < 0: no IPv6 PDN registered on this iface
+				 *    (e.g. eth0 on MAP-E — the PDN lives on map-mape, not eth0), OR
+				 *  - sta_ipv6_pdn_index >= 0 && wan_up_vlan_v6 == false: PDN tracked,
+				 *    no VLAN still up — safe to remove the catch-all.
+				 * Skip only when a VLAN PDN is still active on this iface. */
+				if (sta_ipv6_pdn_index < 0 ||
+				    ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 == false)
 				{
 		    		IPACMDBG_H("Tx:%d, ip-type: %d match ip-type: %d, RT-rule deleted\n", tx_index, tx_prop->tx[tx_index].ip,iptype);
 
-					if (m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl[tx_index], IPA_IP_v6) == false)
+					if (wan_route_rule_v6_hdl[tx_index] != 0 &&
+					    m_routing.DeleteRoutingHdl(wan_route_rule_v6_hdl[tx_index], IPA_IP_v6) == false)
 					{
 						IPACMDBG_H("IP-family:%d, Routing rule(hdl:0x%x) deletion failed with tx_index %d!\n", IPA_IP_v6, wan_route_rule_v6_hdl[tx_index], tx_index);
 						return IPACM_FAILURE;
 					}
-					else
-					{
-						wan_route_rule_v6_hdl[tx_index] = 0;
-					}
+					wan_route_rule_v6_hdl[tx_index] = 0;
 				}
 				else
 				{
@@ -14354,6 +14364,64 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 		rt_rule->num_rules = (uint8_t)NUM;
 		rt_rule->ip = iptype;
 
+		/* Helper: (re)install a WANRTBLv4 rule at rear using the STA/GW header.
+		 *   use_src == true  -> SRC=addr/32 uplink-steer rule.
+		 *   use_src == false -> DST=addr catch-all (addr == 0 => 0/0 terminal net).
+		 * On a successful add, *out_hdl receives the new handle (0 on a silent
+		 * per-rule status failure, so a stale handle is never stored/double-freed).
+		 * Returns IPACM_FAILURE when no usable header handle exists or the ioctl
+		 * hard-fails; the caller retains ownership of rt_rule (no free here).
+		 * Consolidates the GW-SRC install, its catch-all reinstall, and the MAP-E
+		 * catch-all reinstall, which were three near-identical copies. */
+		auto install_v4_rear_rule = [&](bool use_src, uint32_t addr, uint32_t *out_hdl) -> int
+		{
+			uint32_t use_proc = (hdr_proc_set_v4 || proc_hdl_sta_v4) ? proc_hdl_sta_v4 : 0;
+			uint32_t use_hdr  = use_proc ? 0 : hdr_hdl_sta_v4;
+			/* A rule with neither a proc-ctx nor a header handle would egress
+			 * without an L2/encap header — refuse rather than install it. */
+			if (use_proc == 0 && use_hdr == 0)
+			{
+				IPACMERR("No valid v4 STA/GW header handle (tx:%d); skip rear rule\n", tx_index);
+				return IPACM_FAILURE;
+			}
+			rt_rule_entry->at_rear = 1;
+			rt_rule_entry->rule.hdr_proc_ctx_hdl = use_proc;
+			rt_rule_entry->rule.hdr_hdl = use_hdr;
+			rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
+			memcpy(&rt_rule_entry->rule.attrib,
+				&tx_prop->tx[tx_index].attrib,
+				sizeof(rt_rule_entry->rule.attrib));
+			if (use_src)
+			{
+				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+				rt_rule_entry->rule.attrib.u.v4.src_addr = addr;
+				rt_rule_entry->rule.attrib.u.v4.src_addr_mask = 0xFFFFFFFF;
+			}
+			else
+			{
+				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+				rt_rule_entry->rule.attrib.u.v4.dst_addr = addr;
+				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = addr ? 0xFFFFFFFF : 0;
+			}
+			rt_rule_entry->rt_rule_hdl = 0;
+			if (false == m_routing.AddRoutingRule(rt_rule))
+			{
+				IPACMERR("Rear v4 rule add failed (tx:%d use_src:%d)\n", tx_index, use_src);
+				return IPACM_FAILURE;
+			}
+			if (rt_rule->rules[0].status != 0)
+			{
+				IPACMERR("Rear v4 rule status=%d (tx:%d use_src:%d); handle stays 0\n",
+						rt_rule->rules[0].status, tx_index, use_src);
+				if (out_hdl) *out_hdl = 0;
+			}
+			else if (out_hdl)
+			{
+				*out_hdl = rt_rule->rules[0].rt_rule_hdl;
+			}
+			return IPACM_SUCCESS;
+		};
+
 		for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 		{
 			is_mape_v4_interface = (IPACM_Iface::ipacmcfg->mape_enable &&
@@ -14409,8 +14477,19 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				 * never installed. */
 				bool is_mape_gw_or_br_client = is_mape_v4_interface &&
 					memcmp(mac_addr, IPACM_Wan::mape_rules.mac, sizeof(IPACM_Wan::mape_rules.mac)) == 0;
+				/* Plain-ETH GW client still owes its paired SRC rule (e.g. the SRC
+				 * add soft-failed on a prior entry, leaving hdl_v4_src == 0 while the
+				 * DST handle is set).  Fall through so the SRC block below can retry;
+				 * the DST re-add is skipped via gw_src_retry_only. */
+				bool gw_src_retry_only =
+					!is_mape_v4_interface &&
+					!(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && is_ppp_iface) &&
+					get_client_memptr(wan_client, wan_index)->is_v4_gateway &&
+					header_set_v4 && wan_v4_addr != 0 &&
+					get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4 != 0 &&
+					get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4_src == 0;
 				if (get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4 != 0 &&
-						!is_mape_gw_or_br_client) {
+						!is_mape_gw_or_br_client && !gw_src_retry_only) {
 					IPACMDBG_H("Wan Route rule installed already for ipv4 \n");
 					continue;
 				}
@@ -14541,6 +14620,15 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				}
 				else
 				{
+					/* Skip dst-addr rule if v4_addr still unset (0.0.0.0); avoids a bogus
+					 * dst=0.0.0.0/32 rule. Reinstalled from handle_addr_evt once valid. */
+					if (get_client_memptr(wan_client, wan_index)->v4_addr == 0)
+					{
+						IPACMDBG_H("client index(%d): invalid v4_addr 0.0.0.0, "
+								"skipping per-client dst-addr route rule install for tx:%d\n",
+								wan_index, tx_index);
+						continue;
+					}
 					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
 					rt_rule_entry->rule.attrib.u.v4.dst_addr = get_client_memptr(wan_client, wan_index)->v4_addr;
 					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xFFFFFFFF;
@@ -14550,6 +14638,11 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 #ifdef FEATURE_IPA_V3
 				rt_rule_entry->rule.hashable = true;
 #endif
+				/* Skip the per-client DST (re)install when we only fell through to
+				 * retry the paired GW SRC rule — the DST rule and its handle are
+				 * already valid; re-adding would duplicate it and leak the handle. */
+				if (!gw_src_retry_only)
+				{
 				if (false == m_routing.AddRoutingRule(rt_rule))
 				{
 					IPACMERR("Routing rule addition failed!\n");
@@ -14572,6 +14665,68 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 				}
 				IPACMDBG_H("tx:%d, rt rule hdl=%x ip-type: %d\n", tx_index,
 						get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4, iptype);
+				} /* end of !gw_src_retry_only */
+
+				/* For the default-GW client on a plain ETH WAN, install a
+				 * SRC=wan_v4_addr rule above the DST=0/0 catch-all so post-NAT UL
+				 * traffic is steered to the GW header and a non-default ETH PDN can
+				 * be distinguished by source address (Gerrit #13152). Only the GW
+				 * client needs it. Order [dst-addr] -> [GW src-addr] -> [catch-all]
+				 * kept via the same catch-all delete/reinstall the MAP-E path uses. */
+				if (!is_mape_v4_interface &&
+				    !(IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && is_ppp_iface) &&
+				    get_client_memptr(wan_client, wan_index)->is_v4_gateway &&
+				    header_set_v4 && wan_v4_addr != 0 &&
+				    get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4_src == 0)
+				{
+					/* Delete the catch-all first so the GW SRC rule lands ahead of it. */
+					if (wan_route_rule_v4_hdl[tx_index] != 0)
+					{
+						if (m_routing.DeleteRoutingHdl(wan_route_rule_v4_hdl[tx_index], IPA_IP_v4) == false)
+						{
+							IPACMERR("Error deleting catch-all before GW SRC install\n");
+							free(rt_rule);
+							return IPACM_FAILURE;
+						}
+						wan_route_rule_v4_hdl[tx_index] = 0;
+					}
+
+					/* Install GW SRC=wan_v4_addr at rear, then ALWAYS reinstall the
+					 * DST=0/0 catch-all at rear so it stays the terminal net — even if
+					 * the SRC add failed above, so WANRTBLv4 is never left without a
+					 * catch-all (routing-hole / traffic-drop guard).  Final order:
+					 * [neighbor dst-addr] -> [GW src-addr] -> [catch-all]. */
+					uint32_t src_hdl = 0;
+					int src_ret = install_v4_rear_rule(true, wan_v4_addr, &src_hdl);
+					if (src_ret == IPACM_SUCCESS)
+					{
+						get_client_memptr(wan_client, wan_index)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4_src = src_hdl;
+						IPACMDBG_H("Installed GW SRC uplink rule tx:%d hdl=%x src=0x%x\n",
+							tx_index, src_hdl, wan_v4_addr);
+					}
+
+					/* Reinstall the catch-all unconditionally (only if not already up). */
+					if (wan_route_rule_v4_hdl[tx_index] == 0)
+					{
+						if (install_v4_rear_rule(false, 0, &wan_route_rule_v4_hdl[tx_index]) == IPACM_SUCCESS)
+						{
+							IPACMDBG_H("Reinstalled catch-all at rear hdl=%x\n",
+								wan_route_rule_v4_hdl[tx_index]);
+						}
+						else
+						{
+							IPACMERR("Failed to reinstall catch-all after GW SRC install\n");
+						}
+					}
+
+					/* Surface a hard SRC-add failure only after the catch-all is
+					 * restored, so the caller's abort does not leave a routing hole. */
+					if (src_ret == IPACM_FAILURE)
+					{
+						free(rt_rule);
+						return IPACM_FAILURE;
+					}
+				}
 
 				/* MAP-E GW rule was installed at rear after deleting the catch-all above.
 				 * Reinstall catch-all at rear so final order is:
@@ -14583,42 +14738,19 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 						       sizeof(IPACM_Wan::mape_rules.mac)) == 0)
 						&& wan_route_rule_v4_hdl[tx_index] == 0 && header_set_v4)
 				{
-					rt_rule_entry->at_rear = 1;
-					rt_rule_entry->rule.hdr_proc_ctx_hdl = 0;
-					rt_rule_entry->rule.hdr_hdl = 0;
-					if (hdr_proc_set_v4 || proc_hdl_sta_v4)
-						rt_rule_entry->rule.hdr_proc_ctx_hdl = proc_hdl_sta_v4;
+					/* out_hdl left 0 on silent status failure so the stale MAP-E
+					 * handle from the previous AddRoutingRule call is not aliased
+					 * against mape_wan_rt_rule_hdl_v4. */
+					if (install_v4_rear_rule(false, 0, &wan_route_rule_v4_hdl[tx_index]) == IPACM_SUCCESS)
+					{
+						IPACMDBG_H("Reinstalled catch-all rule at rear, hdl=%x\n",
+								wan_route_rule_v4_hdl[tx_index]);
+					}
 					else
-						rt_rule_entry->rule.hdr_hdl = hdr_hdl_sta_v4;
-					rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
-					memcpy(&rt_rule_entry->rule.attrib,
-							&tx_prop->tx[tx_index].attrib,
-							sizeof(rt_rule_entry->rule.attrib));
-					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
-					rt_rule_entry->rule.attrib.u.v4.dst_addr = 0;
-					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0;
-					/* rt_rule_hdl is output-only for ADD.  Zero it so that if the
-					 * ioctl succeeds but per-rule status is non-zero (silent failure),
-					 * the stale MAP-E handle from the previous AddRoutingRule call is
-					 * not stored in wan_route_rule_v4_hdl and aliased against
-					 * mape_wan_rt_rule_hdl_v4. */
-					rt_rule_entry->rt_rule_hdl = 0;
-					if (false == m_routing.AddRoutingRule(rt_rule))
 					{
 						IPACMERR("Failed to reinstall catch-all routing rule\n");
 						free(rt_rule);
 						return IPACM_FAILURE;
-					}
-					if (rt_rule->rules[0].status != 0)
-					{
-						IPACMERR("MAP-E catch-all reinstall status=%d; wan_route_rule_v4_hdl stays 0\n",
-								rt_rule->rules[0].status);
-					}
-					else
-					{
-						wan_route_rule_v4_hdl[tx_index] = rt_rule->rules[0].rt_rule_hdl;
-						IPACMDBG_H("Reinstalled catch-all rule at rear, hdl=%x\n",
-								wan_route_rule_v4_hdl[tx_index]);
 					}
 				}
 				} else {

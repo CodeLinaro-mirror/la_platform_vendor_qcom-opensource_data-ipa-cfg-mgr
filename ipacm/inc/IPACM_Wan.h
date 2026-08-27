@@ -74,6 +74,7 @@ extern int bool_dual_backhaul;
 typedef struct _wan_client_rt_hdl
 {
 	uint32_t wan_rt_rule_hdl_v4;
+	uint32_t wan_rt_rule_hdl_v4_src;   /* GW SRC uplink rule (plain ETH v4) */
 }wan_client_rt_hdl;
 
 typedef struct _ipa_wan_client
@@ -988,6 +989,7 @@ private:
 	{
 		uint32_t tx_index;
 		uint32_t rt_hdl;
+		uint32_t src_hdl;
 		int num_v6 = 0;
 
 		if(iptype == IPA_IP_v4)
@@ -1035,6 +1037,19 @@ private:
 					    rt_hdl != 0 &&
 					    rt_hdl == IPACM_Wan::mape_wan_rt_rule_hdl_v4)
 						IPACM_Wan::mape_wan_rt_rule_hdl_v4 = 0;
+				}
+
+				/* Tear down the paired GW SRC rule (guard makes it a no-op for MAP-E/PPPoE). */
+				{
+					src_hdl = get_client_memptr(wan_client, clt_indx)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4_src;
+					if (src_hdl != 0)
+					{
+						if (m_routing.DeleteRoutingHdl(src_hdl, IPA_IP_v4) == false)
+						{
+							return IPACM_FAILURE;
+						}
+						get_client_memptr(wan_client, clt_indx)->wan_rt_hdl[tx_index].wan_rt_rule_hdl_v4_src = 0;
+					}
 				}
 			}
 		     } /* end of for loop */

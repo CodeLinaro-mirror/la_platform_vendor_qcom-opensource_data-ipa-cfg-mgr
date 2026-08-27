@@ -3743,6 +3743,15 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 					                  IPA_MAC_ADDR_SIZE) == 0 &&
 					           /* Only record if no provisional BR has been set yet */
 					           !IPACM_Wan::mape_rules.provisional_br_set &&
+					           /* If br_ll_ipaddr is already set from a Path 2 route event,
+					            * only fire for the NDP whose address matches — prevents the
+					            * old default-route GW from recapturing the provisional BR
+					            * slot after a Path 2 teardown+neighbour re-query. */
+					           (IPACM_Wan::mape_rules.br_ll_ipaddr[0] == 0 ||
+					            (data->ipv6_addr[0] == IPACM_Wan::mape_rules.br_ll_ipaddr[0] &&
+					             data->ipv6_addr[1] == IPACM_Wan::mape_rules.br_ll_ipaddr[1] &&
+					             data->ipv6_addr[2] == IPACM_Wan::mape_rules.br_ll_ipaddr[2] &&
+					             data->ipv6_addr[3] == IPACM_Wan::mape_rules.br_ll_ipaddr[3])) &&
 					           IPACM_Iface::ipacmcfg->mape_wan_iface_table_index <
 					               IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces &&
 					           strcmp(dev_name, IPACM_Iface::ipacmcfg->iface_table[

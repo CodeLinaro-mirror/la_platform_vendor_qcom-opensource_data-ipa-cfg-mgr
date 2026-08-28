@@ -21310,6 +21310,11 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 			IPACMERR("no rx props\n");
 			return IPACM_FAILURE;
 		}
+
+		entry_idx = 0;
+		prev = 0;
+		curr = 0;
+		idx_q6 = 0;
 		flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[idx].src_pipe);
 		flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
 		flt_index.rule_id_ex_valid = 1;

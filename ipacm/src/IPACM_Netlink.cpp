@@ -59,6 +59,7 @@
 #include "IPACM_Config.h"
 #include "IPACM_Iface.h"
 #include "IPACM_Log.h"
+#include "IPACM_Bridge.h"
 #include "IPACM_Iface.h"
 #include <linux/l2tp.h>
 #include <sys/socket.h>
@@ -499,6 +500,10 @@ static int ipa_nl_decode_rtm_link
 					} else if (strcmp(intf_type, "macsec") == 0) {
 						link_info->link_type = IPA_LINK_TYPE_MACSEC;
 						IPACM_LOG(IPACM_LOG_DEBUG, "Recived NEW_LINK for macsec type interface with interface index %d\n",
+									link_info->metainfo.ifi_index);
+					} else if (strcmp(intf_type, "bridge") == 0) {
+						link_info->link_type = IPA_LINK_TYPE_BRIDGE;
+						IPACM_LOG(IPACM_LOG_DEBUG, "Recived NEW_LINK for bridge type interface with interface index %d\n",
 									link_info->metainfo.ifi_index);
 					}
 				}
@@ -967,6 +972,11 @@ static int ipa_nl_decode_nlmsg
 								msg_ptr->nl_link_info.mtu) {
 							IPACM_Iface::ipacmcfg->add_l2tp_mtu_info(msg_ptr->nl_link_info.mtu, msg_ptr->nl_link_info.name);
 						}
+						if((msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_BRIDGE) &&
+							(IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_flags))
+						{
+							IPACM_Bridge::register_bridge(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
+						}
 						if ((IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_change) ||
 								(!memcmp(dev_name,"rmnet_data", 10) &&
 								 (msg_ptr->nl_link_info.metainfo.ifi_type == ARPHRD_RAWIP))) {
@@ -1017,6 +1027,7 @@ static int ipa_nl_decode_nlmsg
 								evt_data.event = IPA_LINK_DOWN_EVENT;
 								IPACM_LOG(IPACM_LOG_DEBUG, "Posting IPA_LINK_DOWN_EVENT with if index: %d\n",
 										data_fid->if_index);
+								IPACM_Bridge::handle_link_down(data_fid->iface_name, data_fid->if_index);
 							}
 							evt_data.evt_data = data_fid;
 							IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1106,6 +1117,7 @@ static int ipa_nl_decode_nlmsg
 								evt_data.event = IPA_LINK_DOWN_EVENT;
 								evt_data.evt_data = data_fid;
 								IPACM_LOG(IPACM_LOG_DEBUG, "Posting usb IPA_LINK_DOWN_EVENT with if index: %d\n", data_fid->if_index);
+								IPACM_Bridge::handle_link_down(data_fid->iface_name, data_fid->if_index);
 								IPACM_EvtDispatcher::PostEvt(&evt_data);
 							}
 						}
@@ -1205,6 +1217,7 @@ static int ipa_nl_decode_nlmsg
 					IPACM_LOG(IPACM_LOG_DEBUG, "posting IPA_LINK_DOWN_EVENT with if idnex:%d\n",
 							data_fid->if_index);
 					evt_data.evt_data = data_fid;
+					IPACM_Bridge::handle_link_down(data_fid->iface_name, data_fid->if_index);
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 					/* finish command queue */
 				}
@@ -1290,6 +1303,8 @@ static int ipa_nl_decode_nlmsg
 								data_addr->if_index,
 								data_addr->ipv4_addr);
 						evt_data.evt_data = data_addr;
+						IPACM_Bridge::handle_addr_add(data_addr->iface_name, data_addr->if_index,
+						                              data_addr->ipv4_addr, data_addr->ipv4_addr_mask);
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 					}
 					else
@@ -1335,6 +1350,8 @@ static int ipa_nl_decode_nlmsg
 								data_addr->if_index,
 								data_addr->ipv4_addr);
 						evt_data.evt_data = data_addr;
+						IPACM_Bridge::handle_addr_del(data_addr->iface_name, data_addr->if_index,
+						                              data_addr->ipv4_addr);
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 					}
 					else

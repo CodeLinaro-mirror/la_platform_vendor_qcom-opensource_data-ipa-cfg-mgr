@@ -120,9 +120,11 @@ do { \
 		char __ipacm_log_buffer_send[IPACM_LOG_MAX_BUF_LEN]; \
 		char __ipacm_log_core_buf[IPACM_LOG_MAX_CORE_BUF_LEN]; \
 		char __ipacm_log_timestamp_buf[IPACM_LOG_TIMESTAMP_BUF_LEN]; \
-		get_time_string(__ipacm_log_timestamp_buf, IPACM_LOG_TIMESTAMP_BUF_LEN); \
-		snprintf(__ipacm_log_core_buf, IPACM_LOG_MAX_CORE_BUF_LEN, "%s:%d %s() " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN, "%s %s", __ipacm_log_timestamp_buf, __ipacm_log_core_buf); \
+		if (g_ipacm_logs_enabled || dynamic_logs_enable) {\
+			get_time_string(__ipacm_log_timestamp_buf, IPACM_LOG_TIMESTAMP_BUF_LEN); \
+			snprintf(__ipacm_log_core_buf, IPACM_LOG_MAX_CORE_BUF_LEN, "%s:%d %s() " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+			snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN, "%s %s", __ipacm_log_timestamp_buf, __ipacm_log_core_buf); \
+		} \
 		if (!boot_log_full && (g_ipacm_logs_enabled || dynamic_logs_enable)) ipacm_send_log_to_boot_file(__ipacm_log_buffer_send); \
 		if (incoming_log_level <= ipacm_global_log_level) \
 		{\

@@ -1432,12 +1432,12 @@ void* ipa_driver_msg_notifier(void *param)
 
 			evt_data.event    = IPA_HANDLE_EoGRE_DOWN;
 			evt_data.evt_data = 0;
-			IPACMDBG_H("srinu Posting IPA_HANDLE_EoGRE_DOWN \n");
+			IPACMDBG_H("Posting IPA_HANDLE_EoGRE_DOWN \n");
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 			evt_data.event    = IPA_HANDLE_EoGRE_UP;
 			evt_data.evt_data = 0;
-			IPACMDBG_H("srinu Posting IPA_HANDLE_EoGRE_UP \n");
+			IPACMDBG_H("Posting IPA_HANDLE_EoGRE_UP \n");
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
 
 			continue;

@@ -95,22 +95,18 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index, bool ppp_iface)
 		(virtual_iface = IPACM_Iface::ipacmcfg->iface_table[iface_index].virtual_iface))
 	{
 		is_ppp_iface = ppp_iface;
-		for (int i = 0; i < MAX_NUM_PPPOE_MPDN; i++)
+
+		IPACM_Iface::ipacmcfg->get_phy_name_from_proc(dev_name, phy_dev_name);
+		if(phy_dev_name != NULL)
 		{
-			if((IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].status == 1 ||
-				IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].status == 2) &&
-				!(strncmp(IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].pppoe_dev_name,
-					dev_name,
-					sizeof(dev_name))))
-			{
-				strlcpy(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
-					IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].phy_dev_name,
-					sizeof(IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].phy_dev_name));
-				 IPACM_Iface::ipacmcfg->pppoe_mpdn_table[i].iface_index = iface_index ;
-				memcpy(phy_dev_name, IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
-					sizeof(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name));
-				break;
-			}
+			IPACMDBG_H("wan dev name %s associated phy_name %s \n", dev_name, phy_dev_name);
+			strlcpy(IPACM_Iface::ipacmcfg->iface_table[iface_index].phy_dev_name,
+				phy_dev_name, ETH_PHY_IFACE_LEN);
+		}
+		else
+		{
+			IPACMERR("Failed to get associated phy_name for wan dev name %s\n", dev_name);
+			return ;
 		}
 	}
 #endif
@@ -166,6 +162,13 @@ int IPACM_Iface::handle_software_routing_enable(void)
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 		idx = 2;
 		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+	}
+
+	if (ipa_if_cate == WAN_IF && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && strstr(dev_name, "pppoe") != NULL
+			&& rx_prop->num_rx_props > 2)
+	{
+		idx = 2;
+		IPACMDBG_H("PPPoE is enabled, install rules on extra Rx pipe at idx %d \n", idx);
 	}
 
 	m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
@@ -308,6 +311,13 @@ int IPACM_Iface::handle_software_routing_disable(void)
 	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
 		idx = 2;
 		IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx1 pipe at idx %d \n", idx);
+	}
+
+	if (ipa_if_cate == WAN_IF && IPACM_Iface::ipacmcfg->eth_wan_pppoe_enable && strstr(dev_name, "pppoe") != NULL
+			&& rx_prop->num_rx_props > 2)
+	{
+		idx = 2;
+		IPACMDBG_H("PPPoE is enabled, delete rules on extra Rx pipe at idx %d \n", idx);
 	}
 
 	if (softwarerouting_act == false)

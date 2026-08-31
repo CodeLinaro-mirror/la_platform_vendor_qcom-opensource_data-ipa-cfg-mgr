@@ -70,6 +70,20 @@ extern "C"
 #define STR_RNDIS0_IFACE "rndis0"
 #define STR_ECM_IFACE "ecm"
 #define STR_ECM0_IFACE "ecm0"
+
+/* IPv6 multicast MAC prefix: 33:33:xx:xx:xx:xx */
+#define IPV6_MCAST_MAC_BYTE0  0x33
+#define IPV6_MCAST_MAC_BYTE1  0x33
+/* IPv4 multicast MAC prefix: 01:00:5e:xx:xx:xx */
+#define IPV4_MCAST_MAC_BYTE0  0x01
+#define IPV4_MCAST_MAC_BYTE1  0x00
+#define IPV4_MCAST_MAC_BYTE2  0x5e
+
+#define IS_IPV6_MCAST_MAC(mac) \
+	((mac)[0] == IPV6_MCAST_MAC_BYTE0 && (mac)[1] == IPV6_MCAST_MAC_BYTE1)
+#define IS_IPV4_MCAST_MAC(mac) \
+	((mac)[0] == IPV4_MCAST_MAC_BYTE0 && (mac)[1] == IPV4_MCAST_MAC_BYTE1 && \
+	 (mac)[2] == IPV4_MCAST_MAC_BYTE2)
 #define ETH_PHY_IFACE_LEN 5
 
 #define IF_NAME_LEN 16
@@ -232,6 +246,7 @@ extern "C"
 
 #define IPV6_SIZE 16
 
+#define INVALID_PCP_MARK 8
 /*
  * The following macros allow callers to print the raw bytes making up
  * an address.  No assumptions are made about endianess.

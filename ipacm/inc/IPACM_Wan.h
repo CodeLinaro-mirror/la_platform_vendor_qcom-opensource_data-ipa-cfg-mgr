@@ -229,8 +229,6 @@ public:
 	static int GetV6PrefixByVid(int vid, uint32_t *v6_prefix);
 	static int GetV6MTUByPrefix(uint16_t *mtu, uint32_t *v6_prefix);
 	static IPACM_firewall_conf_t* get_curr_pdn_firewall_config(IPACM_firewall_t &firewall_configs, const char* dev_name);
-	static int get_wan_v4_index(ipacm_wan_iface_type sta_mode);
-	static int get_wan_v6_index(ipacm_wan_iface_type sta_mode);
 #endif
 	static bool isWanUP(int ipa_if_num_tether)
 	{
@@ -515,7 +513,10 @@ public:
 #ifdef FEATURE_VLAN_MPDN
 	static ipacm_ipv4_wan_iface ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
 	static ipacm_ipv6_wan_iface ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
-	static uint8_t num_offloaded_pdns;
+	/* Number of distinct PDNs with an offloaded v4 and/or v6 leg, derived from
+	 * wan_up_vlan/wan_up_vlan_v6 on the live PDN tables. Computed on demand
+	 * rather than cached, so it can never drift from that state. */
+	static uint8_t compute_num_offloaded_pdns();
 	static int GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype);
 	static int GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype);
 	static int GetWanPDNinfo(uint16_t *mtu, uint32_t *ipv4_addr, ipa_ip_type iptype);
@@ -573,6 +574,7 @@ private:
 	uint32_t firewall_hdl_v4[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t firewall_hdl_v6[IPACM_MAX_FIREWALL_ENTRIES];
 	uint32_t dft_wan_fl_hdl[IPA_NUM_DEFAULT_WAN_FILTER_RULES];
+	uint32_t nonhash_guard_flt_rule_hdl; /* non-hash guard rule tied to dft_wan_fl_hdl[1]'s lifecycle */
 #ifdef FEATURE_IPV6_NAT
 	uint32_t ipv6_ula_prefix_hdl;
 #endif
@@ -859,6 +861,8 @@ private:
 
 #ifdef FEATURE_VLAN_MPDN
 	void get_vlan_association_info(ipacm_vlan_association_info* vlan_info);
+	void get_vlan_pdn_associated_info(ipacm_vlan_association_info* vlan_info, ipacm_wan_iface_type sta_mode,
+		int ip_type, bool* v4_found, bool* v6_found);
 	void post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vlan_idx, uint16_t vlan_id, bool vlan_up);
 	int handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data);
 	int handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool xlat_cfg = false);

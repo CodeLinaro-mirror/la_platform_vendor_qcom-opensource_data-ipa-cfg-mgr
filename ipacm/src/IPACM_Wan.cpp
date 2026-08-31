@@ -1672,22 +1672,21 @@ int IPACM_Wan::handle_addr_del_evt(ipacm_event_data_addr *data)
 					ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan = false;
 					wan_v4_is_default_gw = true;
 
-					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
-					if(vlandown_data == NULL)
-					{
-						IPACMERR("Unable to allocate memory\n");
-						res = IPACM_FAILURE;
-						goto fail;
-					}
-					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
-
-					vlandown_data->iptype = IPA_IP_v4;
-
 					/* Wan is down. post vlan pdn down evt for every associated vlans. */
 					vid_cnt_v4 = ipv4_to_iface[sta_ipv4_pdn_index].VID_cnt;
 					IPACMDBG_H("V4 Wan Down received for %s has associated vid count %d. \n", dev_name, vid_cnt_v4);
 					for(j = 0; j < vid_cnt_v4; j++)
 					{
+						vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+						if(vlandown_data == NULL)
+						{
+							IPACMERR("Unable to allocate memory\n");
+							res = IPACM_FAILURE;
+							goto fail;
+						}
+
+						memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+						vlandown_data->iptype = IPA_IP_v4;
 						vlandown_data->VlanID = ipv4_to_iface[sta_ipv4_pdn_index].associated_VIDs[j];
 						vlandown_data->ipv4_addr = wan_v4_addr;
 						ipv4_to_iface[sta_ipv4_pdn_index].VID_cnt--;

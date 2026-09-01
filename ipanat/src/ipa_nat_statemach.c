@@ -1447,7 +1447,7 @@ static int _smAddRuleHybrid(
 	};
 
 	uint32_t orig2new_map, new2orig_map;
-	uint32_t* key;
+	uint32_t key;
 	int ret;
 
 	IPADBG("In\n");
@@ -1487,7 +1487,7 @@ static int _smAddRuleHybrid(
 		}
 		else
 		{
-			key = rule_hdl;
+			key = *rule_hdl;
 
 			/* if ret is -1 means we are failing to add the
 			 * entry to the maps while table switching but the
@@ -1504,8 +1504,8 @@ static int _smAddRuleHybrid(
 				 * will make sure we get unique key value to avoid
 				 * multiple iterations*/
 
-				key = key + 2 * (nati_obj_ptr->tot_slots_in_sram);
-				ret = ipa_nat_map_add(orig2new_map, *key, *rule_hdl);
+				key = key + 2*(nati_obj_ptr->tot_slots_in_sram);
+				ret = ipa_nat_map_add(orig2new_map, key, *rule_hdl);
 			}
 
 			if(ret == 0)
@@ -1515,13 +1515,13 @@ static int _smAddRuleHybrid(
 				 * in this map as this will signify the empty entry
 				 * index in the table.*/
 
-				ret = ipa_nat_map_add(new2orig_map, *rule_hdl, *key);
+				ret = ipa_nat_map_add(new2orig_map, *rule_hdl, key);
 			}
 
 			/* Assigning back the new key to the rule hdl to
 			 * return to ipacm.*/
 
-			rule_hdl = key;
+			*rule_hdl = key;
 		}
 	}
 	else

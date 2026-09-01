@@ -1633,7 +1633,7 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 
 	 IPACMDBG("creating nat threads\n");
 	 CreateNatThreads();
-	 IPACMDBG("sri Flushing ipv4 conntrack entries\n");
+	 IPACMDBG("Flushing ipv4 conntrack entries\n");
 	 query_conntracks(AF_INET, wan_ipaddr, 0);
 	 IPACMDBG_H("return\n");
 }
@@ -1681,8 +1681,8 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 	CreateNatThreads();
 #endif
 	WanUp_v6 = true;
-	IPACMDBG("sri Flushing ipv6 conntrack entries\n");
-	query_conntracks(AF_INET, 0, const_cast<uint32_t*>(evt_data->ipv6_addr));
+	IPACMDBG("Flushing ipv6 conntrack entries\n");
+	query_conntracks(AF_INET6, 0, const_cast<uint32_t*>(evt_data->ipv6_addr));
 	IPACMDBG_H("return\n");
 }
 
@@ -2501,7 +2501,7 @@ int v4_conntrack_callback(enum nf_conntrack_msg_type type, struct nf_conntrack *
 		orig_src_ip,repl_src_ip,private_ip,
 		(private_ip != orig_src_ip || private_ip!=repl_src_ip));
 
-	IPACMDBG("sri ori_dst : %x, repl_dst : %x \n", orig_dst_ip, repl_dst_ip);
+	IPACMDBG("ori_dst : %x, repl_dst : %x \n", orig_dst_ip, repl_dst_ip);
 
 	if((private_ip == orig_src_ip) || (private_ip == repl_src_ip) || (private_ip == orig_dst_ip) || (private_ip == repl_dst_ip))
 	{
@@ -2593,16 +2593,21 @@ int v6_conntracks_callback(enum nf_conntrack_msg_type type,struct nf_conntrack *
 		repl_params.src[0], repl_params.src[1], repl_params.src[2], repl_params.src[3]);
 	IPACMDBG("\n dst_v6_addr: 0x%08x%08x%08x%08x\n",
 		repl_params.dst[0], repl_params.dst[1], repl_params.dst[2], repl_params.dst[3]);
-	IPACMDBG(" \n %d    %d  %d   %d \n", !memcmp(orig_params.src, ip, sizeof(orig_params.src)),
-		!memcmp(repl_params.dst, ip, sizeof(repl_params.dst)),
-		!memcmp(orig_params.dst, ip, sizeof(orig_params.dst)),
-		!memcmp(repl_params.src, ip, sizeof(repl_params.src)));
+	/* Same slot order and length as the match below. */
+	IPACMDBG(" \n %d    %d  %d   %d \n", !memcmp(orig_params.src, ip, sizeof(orig_params.src)/2),
+		!memcmp(orig_params.dst, ip, sizeof(orig_params.dst)/2),
+		!memcmp(repl_params.src, ip, sizeof(repl_params.src)/2),
+		!memcmp(repl_params.dst, ip, sizeof(repl_params.dst)/2));
 
 
-	if(((!memcmp(orig_params.src, ip, sizeof(orig_params.src)/2)) &&
-	(!memcmp(repl_params.dst, ip, sizeof(repl_params.dst)/2))) ||
-	((!memcmp(orig_params.dst, ip, sizeof(orig_params.dst)/2)) &&
-	(!memcmp(repl_params.src, ip, sizeof(repl_params.src)/2))))
+	/* OR over all four slots, as in v4_conntrack_callback: the reply tuple
+	 * stops mirroring the original once IPv6 NAT translates, so AND-pairing
+	 * dropped translated flows. /2 matches the /64, catching a client's
+	 * other addresses in the delegated prefix. */
+	if((!memcmp(orig_params.src, ip, sizeof(orig_params.src)/2)) ||
+	(!memcmp(orig_params.dst, ip, sizeof(orig_params.dst)/2)) ||
+	(!memcmp(repl_params.src, ip, sizeof(repl_params.src)/2)) ||
+	(!memcmp(repl_params.dst, ip, sizeof(repl_params.dst)/2)))
 	{
 		nfct_snprintf(buf, sizeof(buf), ct, type, NFCT_O_PLAIN, NFCT_OF_TIME);
 		IPACMDBG("%s\n", buf);

@@ -13320,23 +13320,14 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 			flt_rule.rule.attrib.u.v6.dst_addr_mask[1] = 0xFFFFFFFF;
 			flt_rule.rule.attrib.u.v6.dst_addr_mask[2] = 0x0;
 			flt_rule.rule.attrib.u.v6.dst_addr_mask[3] = 0x0;
-			if(!vid[i] || IPACM_Iface::ipacmcfg->is_dummy_VID(vid[i]))
+			flt_rule.rule.attrib.u.v6.dst_addr_mask[3] = 0x0;
+
+			if(vid[i] && IPACM_Iface::ipacmcfg->iface_in_vlan_mode(dev_name))
 			{
-				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-				flt_rule.rule.attrib.u.v6.src_addr[0] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[0];
-				flt_rule.rule.attrib.u.v6.src_addr[1] = IPACM_Iface::ipacmcfg->ipa_ipv6_prefixes[i].addr[1];
-				flt_rule.rule.attrib.u.v6.src_addr[2] = 0x0;
-				flt_rule.rule.attrib.u.v6.src_addr[3] = 0x0;
-				flt_rule.rule.attrib.u.v6.src_addr_mask[0] = 0xFFFFFFFF;
-				flt_rule.rule.attrib.u.v6.src_addr_mask[1] = 0xFFFFFFFF;
-				flt_rule.rule.attrib.u.v6.src_addr_mask[2] = 0x0;
-				flt_rule.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
+				flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
+				flt_rule.rule.attrib.vlan_id = vid[i];
 			}
-			else
-			{
-			flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
-			flt_rule.rule.attrib.vlan_id = vid[i];
-			}
+
 			memcpy(&(pFilteringTable->rules[i]), &flt_rule, sizeof(struct ipa_flt_rule_add));
 			IPACM_LOG(IPACM_LOG_DEBUG, " IPACM v6 prefix as: 0x[%X][%X] entry(%d)\n",
 					   flt_rule.rule.attrib.u.v6.dst_addr[0],
@@ -13359,7 +13350,8 @@ int IPACM_Lan::modify_ipv6_prefix_flt_rule()
 					flt_rule.rule.attrib.u.v6.src_addr_mask[3] = 0x0;
 					flt_rule.rule.attrib.attrib_mask &= ~IPA_FLT_DST_ADDR;
 					flt_rule.rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
-				} else
+				}
+				else
 				{
 					flt_rule.rule.attrib.attrib_mask &= ~IPA_FLT_DST_ADDR;
 					flt_rule.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;

@@ -243,7 +243,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				IPACM_Iface::ipacmcfg->DelNatIfaces(dev_name); // delete NAT-iface
 				IPACM_Wlan::total_num_wifi_clients = (IPACM_Wlan::total_num_wifi_clients) - \
                                                                      (num_wifi_client);
-				return;
+				post_del_self_evt();
 			}
 		}
 		break;
@@ -3180,7 +3180,8 @@ int IPACM_Wlan::handle_wlan_client_down_evt(uint8_t *mac_addr)
 /*handle wlan iface down event*/
 int IPACM_Wlan::handle_down_evt()
 {
-	int res = IPACM_SUCCESS, i, num_private_subnet_fl_rule;
+	int res = IPACM_SUCCESS, i, num_private_subnet_fl_rule, iface_vid = 0;
+	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS] = {0};
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	struct wan_ioctl_lan_client_info *client_info;
 #endif
@@ -3213,6 +3214,14 @@ int IPACM_Wlan::handle_down_evt()
 		{
 			IPACM_LOG(IPACM_LOG_DEBUG, "LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
 			handle_wan_down_v6(IPACM_Wan::backhaul_is_sta_mode, false);
+		}
+	}
+	else
+	{
+		if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, Ids))
+		{
+			IPACM_LOG(IPACM_LOG_ERR, "failed getting vlan ids for iface %s\n", dev_name);
+			memset(Ids, 0, sizeof(uint16_t)*IPA_MAX_NUM_OFFLOAD_VLANS);
 		}
 	}
 	IPACM_LOG(IPACM_LOG_DEBUG, "finished deleting wan filtering rules\n \n");
@@ -3361,6 +3370,14 @@ int IPACM_Wlan::handle_down_evt()
 
 	neigh_cache.clear();
 
+	for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
+	{
+		if(Ids[i]!=0 && (Ids[i] > DUMMY_VLAN_ID_BASE))
+		{
+			iface_vid = Ids[i];
+			break;
+		}
+	}
 	/* remove modem UL rules and notify */
 	if(is_any_mux_up(IPA_IP_v4))
 	{
@@ -3376,11 +3393,13 @@ int IPACM_Wlan::handle_down_evt()
 		IPACM_LOG(IPACM_LOG_DEBUG, "MUX is up for V4\n");
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			if(v4_mux_up[i].mux_id)
+			if(v4_mux_up[i].mux_id && (iface_vid > 0) &&
+			is_mux_up(v4_mux_up[i].mux_id, IPA_IP_v4, iface_vid))
 			{
 				data_vlan->mux_id = v4_mux_up[i].mux_id;
 				data_vlan->iptype = IPA_IP_v4;
-				IPACM_LOG(IPACM_LOG_DEBUG, "mux %d up, delete v4 flt rules\n", v4_mux_up[i].mux_id);
+				data_vlan->VlanID = iface_vid;
+				IPACM_LOG(IPACM_LOG_DEBUG,"mux %d up, delete v4 flt rules\n", v4_mux_up[i].mux_id);
 				handle_vlan_pdn_down(data_vlan);
 			}
 		}
@@ -3400,10 +3419,12 @@ int IPACM_Wlan::handle_down_evt()
 		IPACM_LOG(IPACM_LOG_DEBUG, "MUX is up for V6\n");
 		for(int i = 0; i < IPA_MAX_NUM_HW_PDNS; i++)
 		{
-			if(v6_mux_up[i].mux_id)
+			if(v6_mux_up[i].mux_id && (iface_vid > 0) &&
+			is_mux_up(v6_mux_up[i].mux_id, IPA_IP_v6, iface_vid))
 			{
 				data_vlan->mux_id = v6_mux_up[i].mux_id;
 				data_vlan->iptype = IPA_IP_v6;
+				data_vlan->VlanID = iface_vid;
 				IPACM_LOG(IPACM_LOG_DEBUG, "mux %d up, delete v6 flt rules\n", v6_mux_up[i].mux_id);
 				handle_vlan_pdn_down(data_vlan);
 			}
@@ -3417,7 +3438,7 @@ int IPACM_Wlan::handle_down_evt()
 		if((vlan_sta_info[i].vlan_id != 0) && (vlan_sta_info[i].v4_flt_hdl != 0))
 		{
 			IPACM_LOG(IPACM_LOG_DEBUG, "Deleting v4 filter rule for vlan_id %d during iface down\n",vlan_sta_info[i].vlan_id);
-			ipacm_event_vlan_pdn *data_vlan = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+			ipacm_event_vlan_pdn *data_vlan = (ipacm_event_vlan_pdn *)calloc(1, sizeof(ipacm_event_vlan_pdn));
 
 			if (data_vlan == NULL)
 			{
@@ -3425,7 +3446,6 @@ int IPACM_Wlan::handle_down_evt()
 				res = IPACM_FAILURE;
 				goto fail;
 			}
-
 			data_vlan->mux_id = 0;
 			data_vlan->iptype = IPA_IP_v4;
 			IPACM_LOG(IPACM_LOG_INFO, "mux %d up, delete v6 flt rules\n", v6_mux_up[i].mux_id);
@@ -3435,7 +3455,7 @@ int IPACM_Wlan::handle_down_evt()
 		if((vlan_sta_info[i].vlan_id != 0) && (vlan_sta_info[i].v6_flt_hdl != 0))
 		{
 			IPACM_LOG(IPACM_LOG_DEBUG, "Deleting v6 filter rule for vlan_id %d during iface down\n",vlan_sta_info[i].vlan_id);
-			ipacm_event_vlan_pdn *data_vlan = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+			ipacm_event_vlan_pdn *data_vlan = (ipacm_event_vlan_pdn *)calloc(1, sizeof(ipacm_event_vlan_pdn));
 
 			if (data_vlan == NULL)
 			{
@@ -3443,7 +3463,6 @@ int IPACM_Wlan::handle_down_evt()
 				res = IPACM_FAILURE;
 				goto fail;
 			}
-
 			data_vlan->mux_id = 0;
 			data_vlan->iptype = IPA_IP_v6;
 			IPACM_LOG(IPACM_LOG_INFO, "mux %d up, delete v6 flt rules\n", v6_mux_up[i].mux_id);
@@ -3569,8 +3588,6 @@ fail:
 	}
 
 	is_active = false;
-	post_del_self_evt();
-
 	return res;
 }
 

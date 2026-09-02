@@ -71,6 +71,7 @@
 #include <netlink/genl/ctrl.h>
 #include <netlink/object-api.h>
 #include <netlink/cache.h>
+#include <sched.h>
 
 #include "IPACM_CmdQueue.h"
 #include "IPACM_EvtDispatcher.h"
@@ -113,6 +114,7 @@
 #define INOTIFY_BUF_LEN     (INOTIFY_EVENT_SIZE +  NAME_MAX + 1)
 
 #define IPA_DRIVER_WLAN_EVENT_MAX_OF_ATTRIBS  3
+#define IPACM_SCHED_FIFO_PRIORITY  65
 #define IPA_DRIVER_WLAN_EVENT_SIZE  (sizeof(struct ipa_wlan_msg_ex)+ IPA_DRIVER_WLAN_EVENT_MAX_OF_ATTRIBS*sizeof(ipa_wlan_hdr_attrib_val))
 #define IPA_DRIVER_PIPE_STATS_EVENT_SIZE  (sizeof(struct ipa_get_data_stats_resp_msg_v01))
 #define IPA_DRIVER_WLAN_META_MSG    (sizeof(struct ipa_msg_meta))
@@ -1223,7 +1225,34 @@ int main(int argc, char **argv)
 	/* Initialize ret to IPACM_SUCCESS to prevent use of uninitialized variable
 	 * if no pthread_create call is made (e.g., all thread tids are already non-zero) */
 	int ret = IPACM_SUCCESS;
-
+	struct sched_param param = {0};
+	int max_priority = sched_get_priority_max(SCHED_FIFO);
+	if (max_priority == -1) {
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to get max priority for SCHED_FIFO: %s\n", strerror(errno));
+		IPACM_LOG(IPACM_LOG_ERR, "Continuing with default scheduling policy\n");
+	}
+	else
+	{
+		// Use a high but not maximum priority to avoid starving critical system processes
+		param.sched_priority = (max_priority > 1) ?
+			(IPACM_SCHED_FIFO_PRIORITY < max_priority ? IPACM_SCHED_FIFO_PRIORITY : max_priority) : 1;
+		if(sched_setscheduler(getpid(), SCHED_FIFO, &param) == -1)
+		{
+			if(errno == EPERM)
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "Insufficient privileges to set SCHED_FIFO (requires CAP_SYS_NICE or root)\n");
+			}
+			else
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "Failed to set SCHED_FIFO scheduler: %s\n", strerror(errno));
+			}
+			IPACM_LOG(IPACM_LOG_ERR, "Continuing with default scheduling policy\n");
+		}
+		else
+		{
+			IPACM_LOG(IPACM_LOG_DEBUG, "Set SCHED_FIFO with priority %d\n", param.sched_priority);
+		}
+	}
 #ifdef FEATURE_IPACM_RESTART
 	FILE *fp = NULL;
 #endif

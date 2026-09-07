@@ -518,6 +518,9 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			}
 			IPACMDBG("Received IPA_HANDLE_RGIP_UP event\n");
 			uint32_t *rgip_data = (uint32_t *)data;
+			IPACMDBG_H("UP handler [queue]: event_ip=0x%x current rgip_ip=0x%x "
+				"(zero means DEL handler cleared it after netlink addr-add)\n",
+				*rgip_data, IPACM_Iface::ipacmcfg->rgip_ip);
 			rgip_addr = *rgip_data;
 			/* Persist the RGIP address for IPPT use-case; not cleared on RGIP down. */
 			IPACM_Iface::ipacmcfg->rgip_ip_ippt = *rgip_data;
@@ -540,8 +543,12 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			uint32_t *rgip_del_data = (uint32_t *)data;
 			uint32_t del_ip = rgip_del_data ? *rgip_del_data : IPACM_Iface::ipacmcfg->rgip_ip;
 			IPACMDBG_H("IPA_HANDLE_RGIP_DEL: removing PDN for ip 0x%x\n", del_ip);
+			IPACMDBG_H("DEL handler [queue]: rgip_ip=0x%x before RemovePdn\n",
+				IPACM_Iface::ipacmcfg->rgip_ip);
 			nat_inst->RemovePdn(del_ip);
-			IPACM_Iface::ipacmcfg->rgip_ip = 0;
+			IPACMDBG_H("DEL handler [queue]: rgip_ip=0x%x after RemovePdn "
+				"(non-zero means netlink addr-add raced during RemovePdn)\n",
+				IPACM_Iface::ipacmcfg->rgip_ip);
 			rgip_addr = 0;
 			break;
 		}

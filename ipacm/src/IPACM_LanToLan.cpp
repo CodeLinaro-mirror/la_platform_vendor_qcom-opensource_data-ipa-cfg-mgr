@@ -1413,7 +1413,7 @@ void IPACM_LanToLan_Iface::add_client_rt_rule_for_new_iface()
 
 void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client_info *client)
 {
-	int i, ret, num_rt_rule = 0;
+	int i, ret = IPACM_FAILURE, num_rt_rule = 0;
 	uint32_t rt_rule_hdl[MAX_NUM_PROP];
 	ipa_hdr_l2_type peer_l2_hdr_type, mac_ref_peer_l2_hdr_type;
 	list<peer_iface_info>::iterator itr;

@@ -5316,9 +5316,14 @@ void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name, const char
 			params[i] = tok;
 			tok = strtok_r(NULL, " ", &ptr);
 		}
-		IPACMDBG_H("%s %s %s\n", params[0], params[1], params[2]);
+		IPACMDBG_H("%s %s %s\n", params[0], params[1], params[2] ? params[2] : "(null)");
 		/* Compare the pppoe dev associated vid and passed vlan_id,
 		 * If match then update session info */
+		if (params[2] == NULL)
+		{
+			IPACMDBG_H("Incomplete pppoe row, skipping\n");
+			continue;
+		}
 		lastVid = strrchr(params[2], '.');
 		if((lastVid != NULL) && (lastVid + 1 != NULL))
 		{
@@ -5460,6 +5465,7 @@ void IPACM_Config::update_pppoe_session_info(const char *pppoe_dev_name, char *p
 		IPACMERR("Memory allocation failed for pppoe_config\n");
 		return;
 	}
+	memset(pppoe_config, 0, sizeof(ipa_ioc_pppoe_info));
 
 	session_id = strtol(params[0], &end_ptr, 16);
 	if (*end_ptr != '\0')

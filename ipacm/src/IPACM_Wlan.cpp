@@ -228,7 +228,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		return;
 	}
 
-	int ipa_interface_index;
+	int ipa_interface_index = -1;
 	int if_index;
 	int wlan_index, cnt, primary_wlan_index;
 	ipacm_ext_prop* ext_prop;
@@ -3075,7 +3075,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 			client_info->client_idx = get_client_memptr(wlan_client, wlan_index)->lan_stats_idx;
 			client_info->ul_src_pipe = (enum ipa_client_type) IPA_CLIENT_MAX;
 			client_info->hdr_len = hdr_len;
-			bool is_first_on_vlan;
+			bool is_first_on_vlan = false;
 #ifdef IPA_HW_FNR_STATS
 			IPACMERR("Client counter index (%d) ul/ul = (%d/%d) dl/dl = (%d/%d)\n",
 				get_client_memptr(wlan_client, wlan_index)->index_populated,
@@ -6112,7 +6112,7 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr, uint16_t vlan_id )
 		IPACMDBG_H("client_info->ul_src_pipe :%d \n", client_info->ul_src_pipe);
 		IPACMDBG_H("client_info->hdr_len :%d \n", client_info->hdr_len);
 		IPACMDBG_H("client_info->device_type :%d \n", client_info->device_type);
-		bool is_first_on_vlan;
+		bool is_first_on_vlan = false;
 #ifdef IPA_HW_FNR_STATS
 		if (IPACM_Wan::ipacmcfg->hw_fnr_stats_support && !get_client_memptr(wlan_client, wlan_index)->index_populated) {
 #ifndef FEATURE_VLAN_MPDN

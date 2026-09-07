@@ -5383,6 +5383,12 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 
 	IPACMDBG_H("Process IPA_ROUTE_ADD_VLAN_PDN_EVENT for IPV6\n");
 
+	if (modem_ipv6_pdn_index < 0)
+	{
+		IPACMERR("modem_ipv6_pdn_index not set, skipping v6 backhaul switch\n");
+		return IPACM_FAILURE;
+	}
+
 	if((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
 		(data->wan_ipv6_prefix[1] == ipv6_prefix[1]) || v4_only_xlat)
 	{
@@ -14065,6 +14071,13 @@ int IPACM_Wan::handle_mape_wan_fmr_hdr_init(uint8_t *mac_addr, MapeFMR* fmr_rule
 		return IPACM_FAILURE;
 	}
 
+	if (tx_prop == NULL)
+	{
+		IPACMERR("tx_prop is NULL\n");
+		free(pHeaderDescriptor);
+		return IPACM_FAILURE;
+	}
+
 	memset(&sCopyHeader, 0, sizeof(sCopyHeader));
 	memcpy(sCopyHeader.name,
 		tx_prop->tx[0].hdr_name,
@@ -17192,7 +17205,7 @@ uint32_t IPACM_Wan::get_u8_bitmap_from_tc(uint8_t traffic_class)
 int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,
 						list<qos_param_info>::iterator qos_param)
 {
-	struct ipa_ioc_add_rt_rule *rt_rule;
+	struct ipa_ioc_add_rt_rule *rt_rule = NULL;
 	struct ipa_rt_rule_add *rt_rule_entry;
 	uint32_t tx_index;
 	const int NUM = 1;

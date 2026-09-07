@@ -4685,6 +4685,9 @@ int  ipa_nl_query_getlink(int af_family)
 	if (sendmsg(sk_info.sk_fd, (struct msghdr *) &req_nl_msg, 0) <= 0)
 	{
 		IPACMDBG("QCMAP:Netlink Query to Kernel failed errno:%d",errno,0,0);
+		if (sk_info.sk_fd > 0)
+			close(sk_info.sk_fd);
+		free(msg_ptr);
 		return -1;
 	}
 	while(1)
@@ -4756,5 +4759,6 @@ int  ipa_nl_query_getlink(int af_family)
 	}
 	if (sk_info.sk_fd > 0)
 		close(sk_info.sk_fd);
+	free(msg_ptr);
 	return 0;
 }

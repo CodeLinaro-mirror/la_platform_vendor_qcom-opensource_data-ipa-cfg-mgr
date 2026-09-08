@@ -97,7 +97,7 @@
 #define GRE_PROTOCOL_TYPE_v4 0x0800
 #define GRE_PROTOCOL_TYPE_v6_WITH_KEY 0x200086DD
 #define GRE_PROTOCOL_TYPE_v4_WITH_KEY 0x20000800
-
+#define ETH_IFACE_NAME "eth"
 
 
 const uint8_t IPACM_Lan::v4_eogre_header[] = {
@@ -206,7 +206,7 @@ IPACM_Lan::IPACM_Lan(char *iface_name, int iface_index, bool is_ppp_iface) : IPA
 		IPACMERR("unable to get Nat App instance \n");
 		return;
 	}
-
+	is_sta_bridge_iface = false;
 	memset(num_wan_ul_fl_rule_v4, 0, sizeof(num_wan_ul_fl_rule_v4));
 	memset(num_wan_ul_fl_rule_v6, 0, sizeof(num_wan_ul_fl_rule_v6));
 	memset(num_wan_subnet_rules, 0, sizeof(num_wan_subnet_rules));
@@ -214,7 +214,7 @@ IPACM_Lan::IPACM_Lan(char *iface_name, int iface_index, bool is_ppp_iface) : IPA
 	hdr_len = 0;
 	memset(wan_ul_fl_rule_hdl_v4, 0, sizeof(wan_ul_fl_rule_hdl_v4));
 	memset(wan_ul_fl_rule_hdl_v6, 0, sizeof(wan_ul_fl_rule_hdl_v6));
-
+	update_pib_sta_state();
 #ifdef FEATURE_IPACM_UL_FIREWALL
 	IPACMDBG_H("Mem-setting iface_ul_firewall of size %zu\n", sizeof(iface_ul_firewall));
 	memset(&iface_ul_firewall, 0, sizeof(iface_ul_firewall));
@@ -420,7 +420,7 @@ IPACM_Lan::IPACM_Lan(char *iface_name, int iface_index, bool is_ppp_iface) : IPA
 
 	if (IPACM_Iface::ipacmcfg->ipacm_emesh_enable && IPACM_Iface::ipacmcfg->ipacm_emesh_mode >= 2)
 	{
-		if (device_type == IPACM_CLIENT_DEVICE_TYPE_ETH && rx_prop && rx_prop->num_rx_props > 2)
+		if ( strstr(dev_name, ETH_IFACE_NAME) && (device_type == IPACM_CLIENT_DEVICE_TYPE_ETH && rx_prop && rx_prop->num_rx_props > 2))
 		{
 			sIface = true;
 			IPACM_Iface::ipacmcfg->SetSpclIface(dev_name);
@@ -5410,11 +5410,12 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		/* copy partial header for v4*/
 		for (cnt=0; cnt<tx_prop->num_tx_props; cnt++)
 		{
-			if (!sIface && cnt >= 2  || (sIface && !vlan_id && cnt >= 2)) {
+			bool is_spcl = sIface || is_sta_bridge_iface;
+ 			if ((!is_spcl && cnt >= 2) || (is_spcl && !vlan_id && cnt >= 2)) {
 				IPACMDBG_H("Only special interface can have more than 2 properties.. else continue cnt %d\n", cnt);
 				continue;
 			}
-			if (sIface && vlan_id && cnt < 2) {
+			if (is_spcl && vlan_id && cnt < 2) {
 				IPACMDBG_H("Vlan event for special interface ignore non-vlan properties cnt %d\n", cnt);
 				continue;
 			}
@@ -5622,11 +5623,12 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 		/* copy partial header for v6*/
 		for (cnt=0; cnt<tx_prop->num_tx_props; cnt++)
 		{
-			if (!sIface && cnt >= 2  || (sIface && !vlan_id && cnt >= 2)) {
+			bool is_spcl = sIface || is_sta_bridge_iface;
+			if ((!is_spcl && cnt >= 2) || (is_spcl && !vlan_id && cnt >= 2)) {
 				IPACMDBG_H("Only special interface can have more than 2 properties.. else continue cnt %d\n", cnt);
 				continue;
 			}
-			if (sIface && vlan_id && cnt < 2) {
+			if (is_spcl && vlan_id && cnt < 2) {
 				IPACMDBG_H("Vlan event for special interface ignore non-vlan properties cnt %d\n", cnt);
 				continue;
 			}
@@ -6427,9 +6429,10 @@ int IPACM_Lan::handle_eth_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 
 		for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 		{
-			if (IPACM_Iface::ipacmcfg->ipacm_qos_enable && tx_index >= 2)
+			if (tx_index >= 2 && (IPACM_Iface::ipacmcfg->ipacm_qos_enable || !sIface))
 			{
-				IPACMDBG_H("Qos is enabled, install client rule only on default pipe, current tx_idx %d\n",tx_index);
+				IPACMDBG_H("Skip tx_idx %d: qos_enable=%d sIface=%d, install client rule only on default pipe\n",
+					tx_index, IPACM_Iface::ipacmcfg->ipacm_qos_enable, sIface);
 				continue;
 			}
 
@@ -17880,8 +17883,10 @@ int IPACM_Lan::eth_bridge_add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_hdr_type, uin
 	}
 
 	if (ipa_if_cate == WLAN_IF &&
-		(((IPACM_Wlan *)this)->is_svap_iface() || ((IPACM_Wlan *)this)->is_vlan_iface()) ||
-		sIface && vlan_id) {
+		(((IPACM_Wlan *)this)->is_svap_iface()
+			|| ((IPACM_Wlan *)this)->is_vlan_iface()) ||
+		(sIface && vlan_id) ||
+		(vlan_id && is_sta_bridge_iface)) {
 		t2_hdr = tx_prop->tx[2].hdr_l2_type;
 	} else {
 		t2_hdr = tx_prop->tx[0].hdr_l2_type;
@@ -18210,7 +18215,8 @@ int IPACM_Lan::eth_bridge_add_flt_rule(uint8_t *mac, uint32_t rt_tbl_hdl, ipa_ip
 		IPACMERR("Failed to allocate ipa_ioc_add_flt_rule_after memory...\n");
 		return IPACM_FAILURE;
 	}
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2)) {
+	if (((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop && rx_prop->num_rx_props > 2))||
+		       is_sta_bridge_iface){
 			idx = 2;
 			IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx pipe at idx %d \n", idx);
 	} else {
@@ -23251,6 +23257,36 @@ int IPACM_Lan::handle_ext_router_del_evt(void)
 	}
 	IPACMDBG("Finished handle_ext_router_del_evt\n")
 	return IPACM_SUCCESS;
+}
+
+void IPACM_Lan::update_pib_sta_state()
+{
+	FILE *fp = NULL;
+	char MapBSSType_row[10] = { 0 }, cmd[200] = { 0 };
+
+	IPACMDBG_H("dev_name %s\n", dev_name);
+
+	snprintf(cmd, 200, "cfg80211tool_mesh %s get_MapBSSType| awk -F ':' '{print $2}' > /tmp/data_ipa/ipa_vap.txt", dev_name);
+	system(cmd);
+
+	fp = fopen("/tmp/data_ipa/ipa_vap.txt", "r");
+	if (fp == NULL) {
+		IPACMERR("can't open fdb file\n");
+		return;
+	}
+
+	if (fgets(MapBSSType_row, 10, fp) == NULL) {
+		IPACMERR("fgets failed\n");
+		goto end;
+	}
+
+	if (STA_SVAP  == atoi(MapBSSType_row)) {
+		is_sta_bridge_iface = true;
+	}
+	IPACMDBG_H("get_MapBSSType %d\n", atoi(MapBSSType_row));
+
+end:
+	fclose(fp);
 }
 
 #ifdef FEATURE_IPA_IPSEC

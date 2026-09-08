@@ -145,7 +145,7 @@ IPACM_Iface::IPACM_Iface(char *iface_name, int iface_index, bool ppp_iface)
 int IPACM_Iface::handle_software_routing_enable(void)
 {
 
-	int res = IPACM_SUCCESS, idx = 0;
+	int j,res = IPACM_SUCCESS, idx = 0;
 	struct ipa_flt_rule_add flt_rule_entry;
 	ipa_ioc_add_flt_rule *m_pFilteringTable;
 
@@ -163,48 +163,60 @@ int IPACM_Iface::handle_software_routing_enable(void)
 		return IPACM_SUCCESS;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-	}
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
+		/* Easymesh vlan/svap pipe condition need to install for in 2nd handle in array  and idx 2*/
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j != 1) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
+				continue;
+			} else {
+				idx = 2;
+				IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
+			} /* Easymesh Not Vlan pipe condition need to install for 1st handle of array and idx 0 */
+		} else if ((ipa_if_cate == WLAN_IF) && (rx_prop->num_rx_props > 2)){
+			if (j == 0) {
+				idx = 0;
+			} else {
+				IPACMDBG_H("Interface is non vlan, dont install rule with index 2\n");
+				continue;
+			}
+		} else {
+			idx = j * 2;
+			IPACMDBG_H("Install rules at idx %d\n", idx);
+		}
+		m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
+			calloc(1,
+					sizeof(struct ipa_ioc_add_flt_rule) +
+					1 * sizeof(struct ipa_flt_rule_add)
+			      );
+		if (!m_pFilteringTable)
+		{
+			IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
+			return IPACM_FAILURE;
+		}
 
-	m_pFilteringTable = (struct ipa_ioc_add_flt_rule *)
-		 calloc(1,
-						sizeof(struct ipa_ioc_add_flt_rule) +
-						1 * sizeof(struct ipa_flt_rule_add)
-						);
-	if (!m_pFilteringTable)
-	{
-		IPACMERR("Error Locate ipa_flt_rule_add memory...\n");
-		return IPACM_FAILURE;
-	}
-
-	m_pFilteringTable->commit = 1;
-	m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
-	m_pFilteringTable->global = false;
-	m_pFilteringTable->num_rules = (uint8_t)1;
+		m_pFilteringTable->commit = 1;
+		m_pFilteringTable->ep = rx_prop->rx[idx].src_pipe;
+		m_pFilteringTable->global = false;
+		m_pFilteringTable->num_rules = (uint8_t)1;
 
 
-	/* Configuring Software-Routing Filtering Rule */
-	memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
+		/* Configuring Software-Routing Filtering Rule */
+		memset(&flt_rule_entry, 0, sizeof(struct ipa_flt_rule_add));
 
-	flt_rule_entry.at_rear = false;
-	flt_rule_entry.flt_rule_hdl = -1;
-	flt_rule_entry.status = -1;
-	flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
+		flt_rule_entry.at_rear = false;
+		flt_rule_entry.flt_rule_hdl = -1;
+		flt_rule_entry.status = -1;
+		flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
 #ifdef FEATURE_IPA_V3
 	flt_rule_entry.rule.hashable = false;
 #endif
-	memcpy(&flt_rule_entry.rule.attrib,
-				 &rx_prop->rx[idx].attrib,
-				 sizeof(flt_rule_entry.rule.attrib));
+		memcpy(&flt_rule_entry.rule.attrib,
+				&rx_prop->rx[idx].attrib,
+				sizeof(flt_rule_entry.rule.attrib));
 
-	memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
+		memcpy(&(m_pFilteringTable->rules[0]), &flt_rule_entry, sizeof(struct ipa_flt_rule_add));
 
-	/* check iface is v4 or v6 or both*/
-//	if (ip_type == IPA_IP_MAX)
-//	{
-		/* handle v4 */
 		m_pFilteringTable->ip = IPA_IP_v4;
 		if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
 		{
@@ -222,7 +234,7 @@ int IPACM_Iface::handle_software_routing_enable(void)
 		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, 1);
 		IPACMDBG("soft-routing flt rule hdl0=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl);
 		/* copy filter hdls */
-		software_routing_fl_rule_hdl[0] = m_pFilteringTable->rules[0].flt_rule_hdl;
+		software_routing_fl_rule_hdl[j][0] = m_pFilteringTable->rules[0].flt_rule_hdl;
 
 
 		/* handle v6*/
@@ -243,49 +255,50 @@ int IPACM_Iface::handle_software_routing_enable(void)
 		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
 		IPACMDBG("soft-routing flt rule hdl0=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl);
 		/* copy filter hdls */
-		software_routing_fl_rule_hdl[1] = m_pFilteringTable->rules[0].flt_rule_hdl;
-		softwarerouting_act = true;
+		software_routing_fl_rule_hdl[j][1] = m_pFilteringTable->rules[0].flt_rule_hdl;
 #if 0
 	}
-	else
-	{
-		if (ip_type == IPA_IP_v4)
-		{
-			m_pFilteringTable->ip = IPA_IP_v4;
-		}
 		else
 		{
-			m_pFilteringTable->ip = IPA_IP_v6;
-		}
+			if (ip_type == IPA_IP_v4)
+			{
+				m_pFilteringTable->ip = IPA_IP_v4;
+			}
+			else
+			{
+				m_pFilteringTable->ip = IPA_IP_v6;
+			}
 
-		if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
-		{
-			IPACMERR("Error Adding Filtering rule, aborting...\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-		else if (m_pFilteringTable->rules[0].status)
-		{
-			IPACMERR("adding flt rule failed status=0x%x\n", m_pFilteringTable->rules[0].status);
-			res = IPACM_FAILURE;
-			goto fail;
-		}
+			if (false == m_filtering.AddFilteringRule(m_pFilteringTable))
+			{
+				IPACMERR("Error Adding Filtering rule, aborting...\n");
+				res = IPACM_FAILURE;
+				goto fail;
+			}
+			else if (m_pFilteringTable->rules[0].status)
+			{
+				IPACMERR("adding flt rule failed status=0x%x\n", m_pFilteringTable->rules[0].status);
+				res = IPACM_FAILURE;
+				goto fail;
+			}
 
-		IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, ip_type, 1);
-		IPACMDBG("soft-routing flt rule hdl0=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl);
-		/* copy filter hdls */
-		if (ip_type == IPA_IP_v4)
-		{
-			software_routing_fl_rule_hdl[0] = m_pFilteringTable->rules[0].flt_rule_hdl;
+			IPACM_Iface::ipacmcfg->increaseFltRuleCount(rx_prop->rx[0].src_pipe, ip_type, 1);
+			IPACMDBG("soft-routing flt rule hdl0=0x%x\n", m_pFilteringTable->rules[0].flt_rule_hdl);
+			/* copy filter hdls */
+			if (ip_type == IPA_IP_v4)
+			{
+				software_routing_fl_rule_hdl[0] = m_pFilteringTable->rules[0].flt_rule_hdl;
+			}
+			else
+			{
+				software_routing_fl_rule_hdl[1] = m_pFilteringTable->rules[0].flt_rule_hdl;
+			}
+			softwarerouting_act = true;
 		}
-		else
-		{
-			software_routing_fl_rule_hdl[1] = m_pFilteringTable->rules[0].flt_rule_hdl;
-		}
-		softwarerouting_act = true;
-	}
 #endif
 
+	}
+	softwarerouting_act = true;
 fail:
 	free(m_pFilteringTable);
 
@@ -295,7 +308,7 @@ fail:
 /* software routing disable */
 int IPACM_Iface::handle_software_routing_disable(void)
 {
-	int res = IPACM_SUCCESS, idx = 0;
+	int res = IPACM_SUCCESS, idx = 0, j;
 	ipa_ip_type ip;
 	uint32_t flt_hdl;
 
@@ -305,39 +318,55 @@ int IPACM_Iface::handle_software_routing_disable(void)
 		return IPACM_SUCCESS;
 	}
 
-	if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
-		idx = 2;
-		IPACMDBG_H("Interface is WLAN Svap or vlan, install rules on Rx1 pipe at idx %d \n", idx);
-	}
-
 	if (softwarerouting_act == false)
 	{
 		IPACMDBG("already delete software_routing rule for (%s)iface ip-family %d\n", IPACM_Iface::ipacmcfg->iface_table[ipa_if_num].iface_name, ip_type);
 		return IPACM_SUCCESS;
 	}
 
-//	if (ip_type == IPA_IP_MAX)
-//	{
+	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
+		/* mirror the same pipe-selection logic as handle_software_routing_enable */
+		if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (j != 1) {
+				IPACMDBG_H("Interface is WLAN Svap or w-vlan, skip pipe %d\n", idx);
+				continue;
+			} else {
+				idx = 2;
+				IPACMDBG_H("Interface is WLAN Svap or vlan, delete rules on Rx1 pipe at idx %d\n", idx);
+			}
+		} else if ((ipa_if_cate == WLAN_IF) && (rx_prop->num_rx_props > 2)) {
+			if (j == 0) {
+				idx = 0;
+			} else {
+				IPACMDBG_H("Interface is non vlan, skip rule with index 2\n");
+				continue;
+			}
+		} else {
+			idx = j * 2;
+			IPACMDBG_H("Delete rules at idx %d\n", idx);
+		}
+
 		/* ipv4 case */
-		if (m_filtering.DeleteFilteringHdls(&software_routing_fl_rule_hdl[0],
-																				IPA_IP_v4, 1) == false)
+		if (m_filtering.DeleteFilteringHdls(&software_routing_fl_rule_hdl[j][0],
+											IPA_IP_v4, 1) == false)
 		{
-			IPACMERR("Error Adding Filtering rule, aborting...\n");
+			IPACMERR("Error Deleting Filtering rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v4, 1);
 
 		/* ipv6 case */
-		if (m_filtering.DeleteFilteringHdls(&software_routing_fl_rule_hdl[1],
-																				IPA_IP_v6, 1) == false)
+		if (m_filtering.DeleteFilteringHdls(&software_routing_fl_rule_hdl[j][1],
+											IPA_IP_v6, 1) == false)
 		{
-			IPACMERR("Error Adding Filtering rule, aborting...\n");
+			IPACMERR("Error Deleting Filtering rule, aborting...\n");
 			res = IPACM_FAILURE;
 			goto fail;
 		}
 		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, IPA_IP_v6, 1);
-		softwarerouting_act = false;
+	}
+	softwarerouting_act = false;
 #if 0
 	}
 	else

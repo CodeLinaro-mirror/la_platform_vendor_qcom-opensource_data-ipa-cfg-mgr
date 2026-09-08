@@ -57,6 +57,7 @@ const char *ipa_l2_hdr_type[] = {
 	__stringify(L2_MAX)
 };
 
+#define ATH_IFACE_NAME "ath"
 IPACM_LanToLan* IPACM_LanToLan::p_instance;
 
 IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
@@ -93,7 +94,7 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 
 	m_is_vlan_ap = false;
 
-	if(p_iface->ipa_if_cate == WLAN_IF)
+	if((p_iface->ipa_if_cate == WLAN_IF) || (strstr(p_iface->dev_name, ATH_IFACE_NAME)))
 	{
 		IPACMDBG_H("Interface %s is WLAN interface.\n", p_iface->dev_name);
 		m_support_intra_iface_offload = true;
@@ -111,7 +112,7 @@ IPACM_LanToLan_Iface::IPACM_LanToLan_Iface(IPACM_Lan *p_iface)
 			m_ast_update = true;
 		}
 
-		set_svap_iface(((IPACM_Wlan*)p_iface)->is_svap_iface());
+		set_svap_iface(IPACM_Iface::ipacmcfg->is_svap_related(p_iface->dev_name));
 		if (is_svap_iface()) {
 			m_support_intra_iface_offload = false;
 		}
@@ -1325,6 +1326,12 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 				it1 = (*itr).mac_rt_rule_ref.find(mac);
 				if(it1 != (*itr).mac_rt_rule_ref.end() && peer_l2_hdr_type == mac_ref_peer_l2_hdr_type)
 				{
+					/* On a spcl iface the vlan and non-vlan peer entries route to different
+					   tables (e.g. eth_v4_ETH_II_to_802_1Q vs eth_v4_ETH_II_to_ETH_II).
+					   A hit in the other-type entry is NOT a duplicate — both rules are needed. */
+					if(IPACM_Iface::ipacmcfg->device_mode == DEVMODE_STABRIDGE && this->is_spcl_iface() && itr->is_vlan_peer != peer_info->is_vlan_peer)
+						continue;
+
 					if(peer_info->peer->is_spcl_iface())
 					{
 						mac_found = 1;
@@ -1712,7 +1719,7 @@ void IPACM_LanToLan_Iface::add_one_client_flt_rule(IPACM_LanToLan_Iface *peer_if
 				IPACMDBG_H("Client has hdr type %d vlan id %d, is_vlan_peer %d continue ...\n", it->peer_hdr_type, client->vlan_id, it->is_vlan_peer);
 				continue;
 			}
-			IPACMDBG_H("Found the peer iface info.\n");
+                  IPACMDBG_H("Found the peer iface info.\n");
 			if(m_is_ip_addr_assigned[IPA_IP_v4])
 			{
 				add_client_flt_rule(&(*it), client, IPA_IP_v4);
@@ -1721,8 +1728,12 @@ void IPACM_LanToLan_Iface::add_one_client_flt_rule(IPACM_LanToLan_Iface *peer_if
 			{
 				add_client_flt_rule(&(*it), client, IPA_IP_v6);
 			}
-
-			break;
+			/* For spcl_iface (e.g. eth0) there are two peer entries per peer: one for the
+			   802.1Q pipe (is_vlan_peer=true) and one for the ETH_II pipe (is_vlan_peer=false).
+			   Each entry's add_client_flt_rule selects the correct pipe via is_vlan_peer, so
+			   we must process both entries instead of stopping at the first match. */
+			if (IPACM_Iface::ipacmcfg->device_mode == DEVMODE_STABRIDGE && !this->is_spcl_iface())
+				break;
 		}
 	}
 	return;
@@ -1935,7 +1946,11 @@ void IPACM_LanToLan_Iface::del_one_client_flt_rule(IPACM_LanToLan_Iface *peer_if
 		{
 			IPACMDBG_H("Found the peer iface info.\n");
 			del_client_flt_rule(&(*it), client);
-			break;
+			/* For spcl_iface peers (e.g. eth0) there are two peer entries: one for
+			   the 802.1Q pipe and one for the ETH_II pipe. Continue iterating so
+			   both entries are cleaned up instead of stopping at the first match. */
+			if (IPACM_Iface::ipacmcfg->device_mode == DEVMODE_STABRIDGE && !this->is_spcl_iface())
+				break;
 		}
 	}
 	return;
@@ -2851,7 +2866,15 @@ void IPACM_LanToLan_Iface::handle_client_add(uint8_t *mac, bool is_l2tp_client, 
 			}
 
 			/* add client filtering rule on peer interfaces */
-			if (!it_peer_info->peer->get_m_support_ast_update())
+			/* For spcl_iface peers (e.g. eth0), this iface's m_peer_iface_info
+			   has two entries per peer (one vlan, one non-vlan). Since
+			   add_one_client_flt_rule already iterates all matching entries on
+			   the peer internally (via is_spcl_iface-aware break), calling it
+			   for both entries here would overwrite newly-installed handles
+			   without deleting the old hardware rules. Only call it on the first
+			   (vlan) entry; the non-vlan entry is handled inside the peer. */
+			if (!it_peer_info->peer->get_m_support_ast_update() &&
+				(!it_peer_info->peer->is_spcl_iface() || it_peer_info->is_vlan_peer))
 				it_peer_info->peer->add_one_client_flt_rule(this, &front_client);
 
 #ifdef FEATURE_L2TP
@@ -2932,7 +2955,11 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 				it_peer_info++)
 			{
 				IPACMDBG_H("This is %s and m_support_inter_iface_offload %d has peer: %s\n",this->get_iface_pointer()->dev_name,m_support_intra_iface_offload,it_peer_info->peer->get_iface_pointer()->dev_name);
-				it_peer_info->peer->del_one_client_flt_rule(this, &(*it_client));
+				/* Same dedup as client-add: skip the non-vlan entry for spcl_iface
+				   peers because del_one_client_flt_rule already handles both
+				   entries internally. */
+				if (!it_peer_info->peer->is_spcl_iface() || it_peer_info->is_vlan_peer)
+					it_peer_info->peer->del_one_client_flt_rule(this, &(*it_client));
 				if((it_peer_info->peer->is_svap_iface() || it_peer_info->peer->is_ap_iface_vlan_enabled() ||
 					(it_peer_info->peer->is_spcl_iface() && it_peer_info->is_vlan_peer)))
 					l2_hdr_type = it_peer_info->peer->get_iface_pointer()->rx_prop->rx[2].hdr_l2_type;

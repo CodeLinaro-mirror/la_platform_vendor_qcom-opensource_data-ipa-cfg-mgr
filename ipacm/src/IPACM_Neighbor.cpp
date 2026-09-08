@@ -934,15 +934,17 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 												neighbor_client[i].mac_addr[4],
 												neighbor_client[i].mac_addr[5],
 												num_neighbor_client);
-								IPACM_LOG(IPACM_LOG_DEBUG, "Neighbor: Iface name:%s, IfaceIndex:%d, ipv4:%x\n", neighbor_client[i].iface_name, neighbor_client[i].iface_index, data->ipv4_addr);
+								IPACM_LOG(IPACM_LOG_DEBUG, "Neighbor: Iface name:%s, IfaceIndex:%d, ipv4:%x\n",
+									 neighbor_client[i].iface_name, neighbor_client[i].iface_index, data->ipv4_addr);
+								/* check if getting real netdev name yet */
+								if(!neighbor_client[i].iface_index || (strcmp(neighbor_client[i].iface_name, IPA_NO_IFACE_NAME) == 0))
+								{
+									IPACM_LOG(IPACM_LOG_ERR, "client %d, either if_idx %d or name %s not real\n",
+											i, neighbor_client[i].iface_index, neighbor_client[i].iface_name);
+									continue;
+								}
 								data->if_index = neighbor_client[i].iface_index;
 								strlcpy(data->iface_name, neighbor_client[i].iface_name, sizeof(data->iface_name));
-								/* check if getting real netdev name yet */
-								if(!data->if_index || (strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0))
-								{
-									IPACM_LOG(IPACM_LOG_ERR, "client %d, either if_idx %d or name %s not real\n", i, data->if_index, data->iface_name);
-									return;
-								}
 								/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 								if (event == IPA_NEW_NEIGH_EVENT)
 									evt_data.event = IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT;

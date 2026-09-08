@@ -97,7 +97,6 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WLAN_CLIENT_DEL_EVENT),                /* ipacm_event_data_mac */
 	__stringify(IPA_WLAN_CLIENT_POWER_SAVE_EVENT),         /* ipacm_event_data_mac */
 	__stringify(IPA_WLAN_CLIENT_RECOVER_EVENT),            /* ipacm_event_data_mac */
-	__stringify(IPA_WLAN_BRIDGE_UPDATE_EVENT),             /* ipacm_event_data_all */
 	__stringify(IPA_NEW_NEIGH_EVENT),                      /* ipacm_event_data_all */
 	__stringify(IPA_DEL_NEIGH_EVENT),                      /* ipacm_event_data_all */
 	__stringify(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT),       /* ipacm_event_data_all */
@@ -121,6 +120,7 @@ const char *ipacm_event_name[] = {
 #endif
 	__stringify(IPA_WAN_GW_ADDR_ADD_EVENT),                /* ipacm_event_data_addr */
 	__stringify(IPA_EXTERNAL_EVENT_MAX),
+	__stringify(IPA_WLAN_BRIDGE_UPDATE_EVENT),             /* ipacm_event_data_all */
 	__stringify(IPA_HANDLE_WAN_UP),                        /* ipacm_event_iface_up  */
 	__stringify(IPA_HANDLE_WAN_DOWN),                      /* ipacm_event_iface_up  */
 	__stringify(IPA_HANDLE_WAN_UP_V6),                     /* NULL */

@@ -19000,7 +19000,8 @@ for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
 
 		flt_rule_entry.rule.max_prio = fixed_mac_prio_val[idx][iptype];
 		memcpy(&flt_rule_entry.rule.attrib, &rx_prop->rx[idx].attrib, sizeof(flt_rule_entry.rule.attrib));
-		switch (tx_prop->tx[idx].hdr_l2_type) {
+
+		switch (rx_prop->rx[idx].hdr_l2_type) {
 #ifdef IPA_HDR_L2_ETHERNET_II_AST
 		case IPA_HDR_L2_ETHERNET_II_AST:
 #endif

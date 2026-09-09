@@ -1792,6 +1792,13 @@ void IPACM_Config::add_vlan_iface(ipa_vlan_iface_info *data)
 			pthread_mutex_unlock(&vlan_l2tp_lock);
 			return;
 		}
+		/* If VLAN iface present replace with latest interface index to prevent duplicates */
+		if (it_vlan->vlan_id == data->vlan_id)
+		{
+			IPACMDBG_H("VLAN iface already present with if index: %d\n", it_vlan->vlan_interface_index);
+			m_vlan_iface.erase(it_vlan);
+			break;
+		}
 	}
 #ifdef FEATURE_L2TP
 	if ((ipacm_mpdn_enable == false) && ((ipacm_l2tp_enable == IPACM_L2TP) || (ipacm_l2tp_enable == IPACM_L2TP_E2E)))

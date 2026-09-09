@@ -902,6 +902,10 @@ process:
 
 						}
 #endif
+						/* save originals — loop body overwrites data->if_index/iface_name on each match */
+						char orig_iface_name_v4[IPA_IFACE_NAME_LEN];
+						int  orig_if_index_v4 = data->if_index;
+						strlcpy(orig_iface_name_v4, data->iface_name, sizeof(orig_iface_name_v4));
 						/* search if seen this client or not*/
 						for (i = 0; i < num_neighbor_client_temp; i++)
 						{
@@ -986,8 +990,10 @@ process:
 								/* check if getting real netdev name yet */
 								if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
 								{
-									IPACMERR("client %d name %s not real\n", i, data->iface_name);
-									return;
+									IPACMERR("client %d name %s not real, keep searching\n", i, data->iface_name);
+									data->if_index = orig_if_index_v4;
+									strlcpy(data->iface_name, orig_iface_name_v4, sizeof(data->iface_name));
+									continue;
 								}
 								/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 								if (event == IPA_NEW_NEIGH_EVENT)
@@ -1441,6 +1447,10 @@ process:
 							}
 						}
 #endif
+						/* save originals — loop body overwrites data->if_index/iface_name on each match */
+						char orig_iface_name_mpdn[IPA_IFACE_NAME_LEN];
+						int  orig_if_index_mpdn = data->if_index;
+						strlcpy(orig_iface_name_mpdn, data->iface_name, sizeof(orig_iface_name_mpdn));
 						/* search if seen this client or not*/
 						for (i = 0; i < num_neighbor_client_temp; i++)
 						{
@@ -1513,8 +1523,10 @@ process:
 								/* check if getting real netdev name yet */
 								if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
 								{
-									IPACMERR("client %d name %s not real\n", i, data->iface_name);
-									return;
+									IPACMERR("client %d name %s not real, keep searching\n", i, data->iface_name);
+									data->if_index = orig_if_index_mpdn;
+									strlcpy(data->iface_name, orig_iface_name_mpdn, sizeof(data->iface_name));
+									continue;
 								}
 								/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 								if(event == IPA_NEW_NEIGH_EVENT)
@@ -1783,6 +1795,26 @@ process:
 										{
 											IPACMDBG_H("Match if_index:%d client:%d copy name",data->if_index,i);
 											strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
+										}
+										else if(data->master_if_index != 0 &&
+												data->master_if_index == neighbor_client[i].iface_index)
+										{
+											/* Bridge-port event: physical port (if_index=14) is a member of
+											 * the bridge (master_if_index=17) that created this IFACE_NONE
+											 * entry (iface_index=17).  Resolve the entry in-place so the
+											 * cached IP can be used immediately without waiting for a
+											 * subsequent br-lan ARP event. */
+											IPACMDBG_H("Match master_if_index:%d client:%d resolving IFACE_NONE to %s\n",
+												data->master_if_index, i, data->iface_name);
+											if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
+											{
+												IPACMERR("resolved iface name is still IPA_NO_IFACE_NAME, skipping\n");
+												continue;
+											}
+											strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
+											neighbor_client[i].iface_index = data->if_index;
+											if(ipa_interface_index != IPACM_FAILURE)
+												neighbor_client[i].ipa_if_num = ipa_interface_index;
 										}
 										else{
 											IPACMDBG_H("if index mismatch continue..\n");

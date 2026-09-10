@@ -549,6 +549,30 @@ void* ipa_driver_msg_notifier(void *param)
 
 			evt_data.event = IPA_WLAN_CLIENT_ADD_EVENT_EX;
 			evt_data.evt_data = data_ex;
+			/* Construct new_neighbor msg with netdev device internally */
+			new_neigh_data = (ipacm_event_data_all*)calloc(1, sizeof(ipacm_event_data_all));
+			if(new_neigh_data == NULL)
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "Failed to allocate memory.\n");
+				free(data_ex);
+				free(event_ex);
+				return NULL;
+			}
+			strlcpy(new_neigh_data->iface_name, event_ex->name, sizeof(new_neigh_data->iface_name));
+			new_neigh_data->iptype = IPA_IP_v6;
+			for(cnt = 0; cnt < event_ex->num_of_attribs; cnt++)
+			{
+				if(event_ex->attribs[cnt].attrib_type == WLAN_HDR_ATTRIB_MAC_ADDR)
+				{
+					memcpy(new_neigh_data->mac_addr, event_ex->attribs[cnt].u.mac_addr, sizeof(new_neigh_data->mac_addr));
+					IPACM_LOG(IPACM_LOG_DEBUG, "Mac Address %02x:%02x:%02x:%02x:%02x:%02x\n",
+								 event_ex->attribs[cnt].u.mac_addr[0], event_ex->attribs[cnt].u.mac_addr[1], event_ex->attribs[cnt].u.mac_addr[2],
+								 event_ex->attribs[cnt].u.mac_addr[3], event_ex->attribs[cnt].u.mac_addr[4], event_ex->attribs[cnt].u.mac_addr[5]);
+				}
+			}
+			new_neigh_data->if_index = data_ex->if_index;
+			new_neigh_evt.evt_data = (void*)new_neigh_data;
+			new_neigh_evt.event = IPA_NEW_NEIGH_EVENT;
 			free(event_ex);
 			break;
 

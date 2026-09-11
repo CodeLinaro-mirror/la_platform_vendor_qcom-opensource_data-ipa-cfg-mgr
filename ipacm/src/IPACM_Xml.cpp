@@ -295,6 +295,8 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 						else if(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].ip_vsn == IP_V6)
 						{
 							str_size = strlen(content);
+							if (str_size >= MAX_XML_STR_LEN)
+								str_size = MAX_XML_STR_LEN - 1;
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
 							inet_pton(AF_INET6, content_buf, &ip6_addr);
@@ -384,6 +386,8 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 						else if(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].ip_vsn == IP_V6)
 						{
 							str_size = strlen(content);
+							if (str_size >= MAX_XML_STR_LEN)
+								str_size = MAX_XML_STR_LEN - 1;
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
 							inet_pton(AF_INET6, content_buf, &ip6_addr);
@@ -1229,6 +1233,18 @@ static int ipacm_cfg_xml_parse_tree
 								IPACMDBG_H("max_filesz %d \n",config->max_file_size);
 							}
 						}
+				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMDEBUG_TAG))
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						dynamic_logs_enable = atoi(content_buf);
+						IPACMDBG_H("dynamic_logs_enable: %d\n", dynamic_logs_enable);
+					}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_Enable_TAG) == 0)
 				{

@@ -102,6 +102,11 @@ void IPACM_Bridge::event_callback(ipa_cm_event_id event, void *param)
 
 								IPACMDBG_H("unsubscribe for ct evts with bridge address: 0x%08x%08x\n", bridge_ipv6_addr[0], bridge_ipv6_addr[1]);
 								bridge_iface_up = (ipacm_event_iface_up*)calloc(1, sizeof(*bridge_iface_up));
+								if (bridge_iface_up == NULL)
+								{
+									IPACMERR("calloc failed for bridge_iface_up\n");
+									break;
+								}
 								memcpy(bridge_iface_up->ipv6_addr, bridge_ipv6_addr, IPV6_SIZE);
 								IPACM_ConntrackClient::UpdateFilters_v6(bridge_iface_up);
 								free(bridge_iface_up);
@@ -137,6 +142,11 @@ void IPACM_Bridge::event_callback(ipa_cm_event_id event, void *param)
 
 								IPACMDBG_H("subscribe for ct evts with bridge address: 0x%08x%08x", bridge_ipv6_addr[0], bridge_ipv6_addr[1]);
 								bridge_iface_up = (ipacm_event_iface_up*)calloc(1, sizeof(*bridge_iface_up));
+								if (bridge_iface_up == NULL)
+								{
+									IPACMERR("calloc failed for bridge_iface_up\n");
+									break;
+								}
 								memcpy(bridge_iface_up->ipv6_addr, bridge_ipv6_addr, IPV6_SIZE);
 								IPACM_ConntrackClient::UpdateFilters_v6(bridge_iface_up, ACCEPT_CT);
 								free(bridge_iface_up);
@@ -161,6 +171,11 @@ void IPACM_Bridge::event_callback(ipa_cm_event_id event, void *param)
 
 						IPACMDBG_H("subscribe for ct evts with bridge address: 0x%08x%08x\n", bridge_ipv6_addr[0], bridge_ipv6_addr[1]);
 						bridge_iface_up = (ipacm_event_iface_up*)calloc(1, sizeof(*bridge_iface_up));
+						if (bridge_iface_up == NULL)
+						{
+							IPACMERR("calloc failed for bridge_iface_up\n");
+							break;
+						}
 						memcpy(bridge_iface_up->ipv6_addr, bridge_ipv6_addr, IPV6_SIZE);
 						IPACM_ConntrackClient::UpdateFilters_v6(bridge_iface_up, ACCEPT_CT);
 						free(bridge_iface_up);

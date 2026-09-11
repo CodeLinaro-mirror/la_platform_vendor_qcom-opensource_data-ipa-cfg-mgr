@@ -19027,11 +19027,6 @@ for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
 			goto end;
 		}
 
-		if(IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 0)
-		{
-			flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
-			flt_rule_entry.rule.attrib.vlan_id = vlan_id;
-		}
 		memcpy(flt_rule_entry.rule.attrib.dst_mac_addr, mac, sizeof(flt_rule_entry.rule.attrib.dst_mac_addr));
 		memset(flt_rule_entry.rule.attrib.dst_mac_addr_mask, 0xFF, sizeof(flt_rule_entry.rule.attrib.dst_mac_addr_mask));
 
@@ -19049,11 +19044,12 @@ for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
 				flt_rule_entry.rule.attrib.vlan_id = outer_vlan_id;
 				flt_rule_entry.rule.attrib.outer_vlan_id = vlan_id;
 			}
-			else
+			else if (IPACM_Iface::ipacmcfg->multi_vlan_bridge_config_enable == 0)
 			{
 				flt_rule_entry.rule.attrib.attrib_mask |= IPA_FLT_VLAN_ID;
 				flt_rule_entry.rule.attrib.vlan_id = vlan_id;
 			}
+
 		} else if (vlan_id) {
 			IPACM_LOG(IPACM_LOG_ERR, "vlan id is not 0 (%d) for non vlan iface %s!\n", vlan_id, dev_name);
 		}

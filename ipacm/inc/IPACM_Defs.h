@@ -29,7 +29,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 Changes from Qualcomm Technologies, Inc. are provided under the following license:
 Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 SPDX-License-Identifier: BSD-3-Clause-Clear.
-
 */
 /*!
 	@file
@@ -179,7 +178,28 @@ extern "C"
 
 #define BRIDGE_0 "bridge0"
 #define WLAN_STA_IFACE "wlan0"
+/* IPv6 multicast MAC prefix: 33:33:xx:xx:xx:xx */
+#define IPV6_MCAST_MAC_BYTE0  0x33
+#define IPV6_MCAST_MAC_BYTE1  0x33
+/* IPv4 multicast MAC prefix: 01:00:5e:xx:xx:xx */
+#define IPV4_MCAST_MAC_BYTE0  0x01
+#define IPV4_MCAST_MAC_BYTE1  0x00
+#define IPV4_MCAST_MAC_BYTE2  0x5e
 
+#define IS_IPV6_MCAST_MAC(mac) \
+	((mac)[0] == IPV6_MCAST_MAC_BYTE0 && (mac)[1] == IPV6_MCAST_MAC_BYTE1)
+#define IS_IPV4_MCAST_MAC(mac) \
+	((mac)[0] == IPV4_MCAST_MAC_BYTE0 && (mac)[1] == IPV4_MCAST_MAC_BYTE1 && \
+	 (mac)[2] == IPV4_MCAST_MAC_BYTE2)
+#ifdef FEATURE_IPA_ANDROID
+/* skip multicast addresses (ff00::/8), e.g. NDP/NS solicited-node neighbors */
+#define IS_IPV6_MCAST_ADDR(addr) 											 \
+        ( AF_INET6 == (addr).ss_family && ((unsigned char)(addr).__data[0]) == 0xFF )
+#else
+/* skip multicast addresses (ff00::/8), e.g. NDP/NS solicited-node neighbors */
+#define IS_IPV6_MCAST_ADDR(addr) 											 \
+        ( AF_INET6 == (addr).ss_family && ((unsigned char)(addr).__ss_padding[0]) == 0xFF )
+#endif
 /*===========================================================================
 										 GLOBAL DEFINITIONS AND DECLARATIONS
 ===========================================================================*/

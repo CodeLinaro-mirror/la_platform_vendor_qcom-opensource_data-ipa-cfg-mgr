@@ -592,6 +592,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_POWER_SAVE_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_CLIENT_RECOVER_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT, wl);
+				IPACM_EvtDispatcher::registr(IPA_LAN_CLIENT_ADD_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_ENABLE, wl);
 				IPACM_EvtDispatcher::registr(IPA_SW_ROUTING_DISABLE, wl);
 				IPACM_EvtDispatcher::registr(IPA_MAC_ADD_DEL_FLT_EVENT, wl);

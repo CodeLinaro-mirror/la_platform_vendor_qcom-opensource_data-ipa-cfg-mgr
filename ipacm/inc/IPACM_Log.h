@@ -123,9 +123,24 @@ void log_deinit();
 #ifdef USE_DLT
 #define IPACM_DLT_LOG(level, msg) \
 	DLT_LOG(ctx, (DltLogLevelType)(level), DLT_CSTRING(msg))
+
+static inline DltLogLevelType ipacm_to_dlt_level(uint8_t level)
+{
+	switch (level)
+	{
+	case IPACM_LOG_DISABLED: return DLT_LOG_OFF;
+	case IPACM_LOG_ERR:      return DLT_LOG_ERROR;
+	case IPACM_LOG_WARN:     return DLT_LOG_WARN;
+	case IPACM_LOG_INFO:     return DLT_LOG_INFO;
+	case IPACM_LOG_DEBUG:    return DLT_LOG_DEBUG;
+	default:                 return DLT_LOG_VERBOSE;
+	}
+}
+#define IPACM_TO_DLT_LEVEL(level) ipacm_to_dlt_level(level)
 #else
 #define IPACM_DLT_LOG(level, msg) \
 	do { } while (0)
+#define IPACM_TO_DLT_LEVEL(level) (level)
 #endif
 
 #define IPACM_LOG(incoming_log_level, fmt, ...) \
@@ -148,7 +163,7 @@ void log_deinit();
 			}\
 			printf("%s\n", __ipacm_log_buffer_send); \
 			ipacm_send_log_to_file(__ipacm_log_buffer_send); \
-			IPACM_DLT_LOG((incoming_log_level) + 2, __ipacm_log_buffer_send); \
+			IPACM_DLT_LOG(IPACM_TO_DLT_LEVEL(incoming_log_level), __ipacm_log_buffer_send); \
 		}\
 	} while (0)
 
@@ -164,7 +179,7 @@ void log_deinit();
 			snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		} \
 		ipacm_send_log_to_file(__ipacm_log_buffer_send); \
-		IPACM_DLT_LOG((IPACM_LOG_DEBUG) + 2, __ipacm_log_buffer_send); \
+		IPACM_DLT_LOG(IPACM_TO_DLT_LEVEL(IPACM_LOG_DEBUG), __ipacm_log_buffer_send); \
 	} while (0);
 
 #ifdef __cplusplus

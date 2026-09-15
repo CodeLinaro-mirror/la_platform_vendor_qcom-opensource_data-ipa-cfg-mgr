@@ -1457,7 +1457,8 @@ void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client
 	IPACM_LOG(IPACM_LOG_DEBUG, "peer_info->peer->m_is_sIface: %d\n", peer_info->peer->m_is_sIface);
 	IPACM_LOG(IPACM_LOG_DEBUG, "peer_info->is_vlan_peer: %d\n", peer_info->is_vlan_peer);
 
-	if (peer_info->peer->m_is_svap_iface || (peer_info->peer->m_is_sIface && peer_info->is_vlan_peer))
+	if (peer_info->peer->m_is_svap_iface || (peer_info->peer->m_is_sIface && peer_info->is_vlan_peer)
+				|| peer_info->peer->is_ap_iface_vlan_enabled())
 	{
 		peer_l2_hdr_type = peer_info->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
 	}

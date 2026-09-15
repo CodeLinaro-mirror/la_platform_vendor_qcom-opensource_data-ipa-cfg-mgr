@@ -1582,7 +1582,7 @@ void IPACM_Config::add_bridge_vlan_mapping(ipa_bridge_vlan_mapping_info *data)
 				goto bail;
 
 			}
-			if(data->status == 0 && !multi_vlan_bridge_config_enable)
+			if(data->status == 0 && !multi_vlan_bridge_config_enable && (IPACM_Iface::ipacmcfg->device_mode != DEVMODE_APBRIDGE))
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "The bridge %s was added before with vlan id: %d\n", data->bridge_name,
 					it_mapping->bridge_associated_VID);

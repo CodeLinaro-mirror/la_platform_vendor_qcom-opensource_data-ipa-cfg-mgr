@@ -40,8 +40,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef IPACM_LOG_H
 #define IPACM_LOG_H
 
-/* Headers stay outside the extern "C" block: some pull in C++ headers, and
- * templates cannot have C language linkage. */
+/* Headers stay outside the extern "C" block: ipa_nat_utils.h -> glib.h pulls
+ * in C++ headers, and templates cannot have C language linkage. */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -52,6 +52,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <time.h>
 #include <sys/time.h>
 #include <inttypes.h>  // for PRIu64
+#include <ipa_nat_utils.h>
 
 #ifdef USE_CLOG
 #include "clog.h"
@@ -144,6 +145,7 @@ void ipacm_send_log_to_file(char* ipacm_log_data);
 void log_ipacm_crash_info(const char* crash_str);
 int  log_init();
 void log_deinit();
+void ipacm_log_ipanat_relay(ipa_nat_log_level_t level, const char* msg);
 
 #ifdef USE_CLOG
 static inline clog_level_t ipacm_to_clog_level(uint8_t log_level)

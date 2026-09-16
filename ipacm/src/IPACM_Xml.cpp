@@ -889,6 +889,17 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_LOG(IPACM_LOG_DEBUG, "IPACMLog timestamp enable cfg val is: %u \n",config->ipacm_log_timestamp_enable);
 					}
 				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACM_IPANAT_LOG_ENABLE_TAG))
+				{
+					content = IPACM_read_content_element(xml_node);
+					config->ipacm_ipanat_log_enable = 0;
+
+					if (content != NULL)
+					{
+						config->ipacm_ipanat_log_enable = (atoi(content) != 0);
+						IPACM_LOG(IPACM_LOG_DEBUG, "IPACM ipanat log enable cfg val is: %u \n", config->ipacm_ipanat_log_enable);
+					}
+				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMFILEQUOTA_TAG))
 				{
 					IPACM_LOG(IPACM_LOG_DEBUG, "inside ipacm_logging Quota\n");

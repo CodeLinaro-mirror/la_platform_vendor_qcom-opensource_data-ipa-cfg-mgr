@@ -235,6 +235,8 @@
 				<!-- logging levels 4 = ERR, 6 = ERR+WARN, 7 = ERR+WARN+INFO, 8 = ERR+WARN+INFO+DEBUG, 0 = disabled -->
 			<IPACMSyslogLevel>7</IPACMSyslogLevel>
 				<!-- Syslog levels 4 = ERR, 6 = ERR+NOTICE, 7 = ERR+NOTICE+INFO, 8 = ERR+NOTICE+INFO+DEBUG, 0 = disabled -->
+			<IPACMIpanatLogEnable>0</IPACMIpanatLogEnable>
+				<!-- 1 = route libipanat logs through IPACM logging, 0 = disabled -->
 		</IPACMLog>
 		<IPACMSOCKSv5>
 			<IPACMSOCKSv5Enabled>0</IPACMSOCKSv5Enabled>

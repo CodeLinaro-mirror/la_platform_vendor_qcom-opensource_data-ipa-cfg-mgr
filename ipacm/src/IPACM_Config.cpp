@@ -193,6 +193,7 @@ IPACM_Config::IPACM_Config()
 	memset(&ipa_rm_tbl, 0, sizeof(ipa_rm_tbl));
 	ipa_rm_a2_check=0;
 	ipacm_odu_enable = false;
+	ipacm_ipanat_log_enable = false;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	ipacm_lan_stats_enable = false;
 	ipacm_lan_stats_enable_set = false;
@@ -587,6 +588,9 @@ int IPACM_Config::Init(void)
 		IPACM_LOG(IPACM_LOG_ERR, "Invalid timestamp enable value provided:%d, Setting default log level\n", cfg->ipacm_log_timestamp_enable);
 		ipacm_log_timestamp_enable = IPACM_DEF_LOG_TIMESTAMP_ENABLE;
 	}
+
+	ipacm_ipanat_log_enable = cfg->ipacm_ipanat_log_enable;
+	IPACM_LOG(IPACM_LOG_INFO, "ipacm ipanat log enable is %d\n", ipacm_ipanat_log_enable);
 
 	if(cfg->max_file_size_quota > 100)
 	{

@@ -59,6 +59,11 @@
 #include <sys/time.h>
 #include <sys/mman.h>
 
+extern "C"
+{
+#include <ipa_nat_drv.h>
+}
+
 char* dump_file = 0;
 void* mmap_addr = NULL;
 void* write_addr = 0;
@@ -82,6 +87,7 @@ bool ipacm_dlt_context_registered = false;
 bool ipacm_dlt_cleanup_registered = false;
 #endif
 
+static bool ipanat_relay_enabled = false;
 #define FILE_LOCK()   \
     do \
     { \
@@ -319,7 +325,7 @@ int log_init() {
 		return IPACM_FAILURE;
 	}
 
-/* CLOG implicitly register with DLT 
+/* CLOG implicitly register with DLT
  * Same DLT ID Is passed to CLOG and DLT
  */
 #ifdef USE_CLOG
@@ -392,6 +398,12 @@ int log_init() {
 	if(config->ipacm_log_timestamp_enable == 1 || config->ipacm_log_timestamp_enable == 0)
 	{
 		ipacm_global_log_timestamp_enable = config->ipacm_log_timestamp_enable;
+	}
+
+	ipanat_relay_enabled = config->ipacm_ipanat_log_enable;
+	if (ipanat_relay_enabled)
+	{
+		ipa_nat_set_log_handler(ipacm_log_ipanat_relay);
 	}
 
 	if(config->ipacm_log_level >= IPACM_LOG_DISABLED && config->ipacm_log_level < IPACM_LOG_LVL_MAX)
@@ -514,6 +526,33 @@ void log_deinit()
 		ipacm_dlt_app_registered = false;
 	}
 #endif
+	if (ipanat_relay_enabled)
+	{
+		ipa_nat_set_log_handler(NULL);
+		ipanat_relay_enabled = false;
+	}
+}
+
+static uint8_t ipanat_to_ipacm_level(ipa_nat_log_level_t level)
+{
+	switch (level)
+	{
+	case IPA_NAT_LOG_LVL_ERR:  return IPACM_LOG_ERR;
+	case IPA_NAT_LOG_LVL_WARN: return IPACM_LOG_WARN;
+	case IPA_NAT_LOG_LVL_INFO: return IPACM_LOG_INFO;
+	case IPA_NAT_LOG_LVL_DBG:
+	default:                   return IPACM_LOG_DEBUG;
+	}
+}
+
+void ipacm_log_ipanat_relay(ipa_nat_log_level_t level, const char* msg)
+{
+	if (!ipanat_relay_enabled || !msg)
+	{
+		return;
+	}
+
+	IPACM_LOG(ipanat_to_ipacm_level(level), "ipanat: %s", msg);
 }
 
 void ipacm_send_log_to_file(char* ipacm_log_data)

@@ -45,6 +45,17 @@ if (test "x${with_dltlogging}" = "xyes"); then
         AC_SUBST([DLTLOG_LIBS])
 fi
 
+AC_ARG_WITH([clog],
+        AC_HELP_STRING([--with-clog], [with CLOG (commonlog) logging enabled]))
+
+AM_CONDITIONAL(USE_CLOG, test "x${with_clog}" = "xyes")
+
+if (test "x${with_clog}" = "xyes"); then
+        PKG_CHECK_MODULES([CLOGLOG], [libclog])
+        AC_SUBST([CLOGLOG_CFLAGS])
+        AC_SUBST([CLOGLOG_LIBS])
+fi
+
 AC_ARG_WITH([glib],
       AC_HELP_STRING([--with-glib],
          [enable glib, building HLOS systems which use glib]))

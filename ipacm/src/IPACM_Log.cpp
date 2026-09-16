@@ -70,9 +70,18 @@ uint8_t ipacm_global_log_level    = IPACM_DEF_LOG_LEVEL;
 uint8_t ipacm_global_syslog_level = IPACM_DEF_SYSLOG_LEVEL;
 bool ipacm_global_log_timestamp_enable = IPACM_DEF_LOG_TIMESTAMP_ENABLE;
 
-#ifdef USE_DLT
+#ifdef USE_CLOG
+clog_context_t ipacm_clog_ctx = NULL;
+bool ipacm_clog_app_registered = false;
+bool ipacm_clog_context_registered = false;
+bool ipacm_clog_cleanup_registered = false;
+#elif defined(USE_DLT)
 DLT_DECLARE_CONTEXT(ctx);
+bool ipacm_dlt_app_registered = false;
+bool ipacm_dlt_context_registered = false;
+bool ipacm_dlt_cleanup_registered = false;
 #endif
+
 #define FILE_LOCK()   \
     do \
     { \
@@ -291,6 +300,7 @@ char *get_time_string(char *buffer, int len)
 /* This function initialize IPACM Logging
  * 	- DLT Logging enablement
  * 	- File backed Logging enablement
+ * 	- CLOG
  * File backed logging use case is to get
  * IPACM logs from ramdump
  */
@@ -309,13 +319,68 @@ int log_init() {
 		return IPACM_FAILURE;
 	}
 
-	/* DLT logging logic is added as part of log_init
-	 * APP ID name is capped to 4 characters so
-	 * IPACM name cant be used instead using IPA
-	 */
-#ifdef USE_DLT
-	DLT_REGISTER_APP("QIPA", "Qualcomm IPACM ctx");
-	DLT_REGISTER_CONTEXT(ctx, "GNRL", "General context level in IPACM");
+/* CLOG implicitly register with DLT 
+ * Same DLT ID Is passed to CLOG and DLT
+ */
+#ifdef USE_CLOG
+	if (!ipacm_clog_context_registered && !ipacm_clog_app_registered)
+	{
+		clog_return_t clog_ret;
+
+		clog_ret = CLOG_REGISTER_APP(IPACM_CLOG_APP_ID, "QIPA",
+				"Qualcomm IPACM for CLOG");
+		if (clog_ret != CLOG_RETURN_OK)
+		{
+			syslog(LOG_ERR, "ipacm: clog_register_app failed %d, using syslog",
+					clog_ret);
+		}
+		else
+		{
+			ipacm_clog_app_registered = true;
+			/*
+			 * #define CLOG_REGISTER_CONTEXT(numeric_ctx_id, ctx_id, ctx_desc, diag_id, logcat_tag_val, syslog_tag_val)
+			 * @arg1 : Provided by platform
+			 * @arg2 : App specific context id string
+			 * @arg3 : Description of context
+			 * @arg4 : diag SSID
+			 * @arg5 : logcat tag
+			 * @arg6 : syslog tag
+			 */
+			ipacm_clog_ctx = CLOG_REGISTER_CONTEXT(IPACM_CLOG_CTX_ID, "QIPA",
+					"IPACM Context for CLOG", IPACM_CLOG_DIAG_SSID,
+					"IPACM_LOGCAT", "IPACM_SYS");
+			if (ipacm_clog_ctx == NULL)
+			{
+				syslog(LOG_ERR, "ipacm: clog_register_context failed, using syslog");
+				CLOG_UNREGISTER_APP();
+				ipacm_clog_app_registered = false;
+			}
+			else
+			{
+				ipacm_clog_context_registered = true;
+			}
+		}
+	}
+
+	if (!ipacm_clog_cleanup_registered)
+	{
+		atexit(log_deinit);
+		ipacm_clog_cleanup_registered = true;
+	}
+#elif defined(USE_DLT)
+	if (!ipacm_dlt_app_registered && !ipacm_dlt_context_registered)
+	{
+		DLT_REGISTER_APP("QIPA", "Qualcomm IPACM ctx for DLT");
+		ipacm_dlt_app_registered = true;
+		DLT_REGISTER_CONTEXT(ctx, "QIPA", "DLT Context level for IPACM");
+		ipacm_dlt_context_registered = true;
+	}
+
+	if (!ipacm_dlt_cleanup_registered)
+	{
+		atexit(log_deinit);
+		ipacm_dlt_cleanup_registered = true;
+	}
 #endif
 	memset(&metadata, '\0', sizeof(ipacm_log_file_metadata_t));
 	if(log_init_done)
@@ -422,17 +487,32 @@ int log_init() {
 
 void log_deinit()
 {
-	/* This function is created to avoid code duplication
-	 * in signal handling as well as IPACM main exit
-	 * due to some error
-	 * DLT is connection based we dont need unregister
-	 * but this is good practice to call unregister
-	 * This function can be later reused if needed for other
-	 * logging enhancements.
-	 */
-#ifdef USE_DLT
-	DLT_UNREGISTER_CONTEXT(ctx);
-	DLT_UNREGISTER_APP();
+
+#ifdef USE_CLOG
+	if (ipacm_clog_context_registered)
+	{
+		(void)CLOG_UNREGISTER_CONTEXT(ipacm_clog_ctx);
+		ipacm_clog_ctx = NULL;
+		ipacm_clog_context_registered = false;
+	}
+
+	if (ipacm_clog_app_registered)
+	{
+		(void)CLOG_UNREGISTER_APP();
+		ipacm_clog_app_registered = false;
+	}
+#elif defined(USE_DLT)
+	if (ipacm_dlt_context_registered)
+	{
+		DLT_UNREGISTER_CONTEXT(ctx);
+		ipacm_dlt_context_registered = false;
+	}
+
+	if (ipacm_dlt_app_registered)
+	{
+		DLT_UNREGISTER_APP();
+		ipacm_dlt_app_registered = false;
+	}
 #endif
 }
 

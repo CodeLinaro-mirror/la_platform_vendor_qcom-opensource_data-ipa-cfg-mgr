@@ -4013,6 +4013,15 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 		IPACM_LOG(IPACM_LOG_DEBUG, "num_offloaded_pdns: %d\n", num_offloaded_pdns);
 		IPACM_LOG(IPACM_LOG_DEBUG, "data->wan_ipv6_prefix: 0x%08x%08x\n", data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
 
+		vlan_info = (ipacm_vlan_association_info *)malloc(sizeof(ipacm_vlan_association_info));
+		if(vlan_info == NULL)
+		{
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory\n");
+			return IPACM_FAILURE;
+		}
+		memset(vlan_info, -1, sizeof(ipacm_vlan_association_info));
+		vlan_info->vlan_id = data->VlanID;
+
 		if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 		{
 			if((modem_ipv4_pdn_index >= 0) &&
@@ -4023,14 +4032,6 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 			goto v6_skip;
 		}
 
-		vlan_info = (ipacm_vlan_association_info *)malloc(sizeof(ipacm_vlan_association_info));
-		if(vlan_info == NULL)
-		{
-			IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory\n");
-			return IPACM_FAILURE;
-		}
-		memset(vlan_info, -1, sizeof(ipacm_vlan_association_info));
-		vlan_info->vlan_id = data->VlanID;
 		get_vlan_association_info(vlan_info);
 
 		if (m_is_sta_mode == WLAN_WAN)
@@ -4292,6 +4293,15 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 	{
 		IPACM_LOG(IPACM_LOG_INFO, "received v4 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, wan %s, if %d\n", data->VlanID, dev_name, ipa_if_num);
 
+		vlan_info = (ipacm_vlan_association_info *)malloc(sizeof(ipacm_vlan_association_info));
+		if(vlan_info == NULL)
+		{
+			IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory\n");
+			return IPACM_FAILURE;
+		}
+		memset(vlan_info, -1, sizeof(ipacm_vlan_association_info));
+		vlan_info->vlan_id = data->VlanID;
+
 		if(IPACM_Iface::ipacmcfg->ipacm_static_policy_enable)
 		{
 			if((modem_ipv6_pdn_index >= 0) &&
@@ -4302,14 +4312,6 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 			goto v4_skip;
 		}
 
-		vlan_info = (ipacm_vlan_association_info *)malloc(sizeof(ipacm_vlan_association_info));
-		if(vlan_info == NULL)
-		{
-			IPACM_LOG(IPACM_LOG_ERR, "Unable to allocate memory\n");
-			return IPACM_FAILURE;
-		}
-		memset(vlan_info, -1, sizeof(ipacm_vlan_association_info));
-		vlan_info->vlan_id = data->VlanID;
 		get_vlan_association_info(vlan_info);
 
 		if (m_is_sta_mode == WLAN_WAN)

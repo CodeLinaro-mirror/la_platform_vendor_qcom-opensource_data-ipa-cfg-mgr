@@ -693,7 +693,7 @@ process:
 								}
 #endif
 								IPACM_LOG(IPACM_LOG_DEBUG, "Iface name:%s\n", data->iface_name);
-								IPACM_LOG(IPACM_LOG_INFO, "found client %d, MAC %02x:%02x:%02x:%02x:%02x:%02x, total client: %d Neighbor: Iface name:%s, IfaceIndex:%d, ipv4:%x\n",
+								IPACM_LOG(IPACM_LOG_INFO, "found client %d, MAC %02x:%02x:%02x:%02x:%02x:%02x, total client: %d\n",
 												i,
 												neighbor_client[i].mac_addr[0],
 												neighbor_client[i].mac_addr[1],

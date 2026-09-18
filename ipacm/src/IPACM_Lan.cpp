@@ -23345,7 +23345,8 @@ int IPACM_Lan::eth_bridge_get_vlan_hdr_template_hdl(uint32_t* hdr_hdl, uint16_t 
 		IPACM_LOG(IPACM_LOG_DEBUG, "ipa_if_cate %d, is_if_svap %d, is_wlan_if_vlan %d, rx_prop->num_rx_props %d \n", ipa_if_cate, is_if_svap, is_wlan_if_vlan, rx_prop->num_rx_props);
 		for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++){
 			/* Easymesh vlan/svap pipe condition need to install for in 2nd handle in array  and idx 2*/
-			if ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2)) {
+			if (((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) && (rx_prop->num_rx_props > 2))
+							|| ((IPACM_Iface::ipacmcfg->device_mode == DEVMODE_STABRIDGE)  && (IPACM_Iface::ipacmcfg->device_vlan_mode) && sta_bridge)){
 				if (j != 1) {
 					IPACM_LOG(IPACM_LOG_DEBUG, "Interface is WLAN Svap or w-vlan, dont install rules on pipe %d..... continue\n", idx);
 					continue;

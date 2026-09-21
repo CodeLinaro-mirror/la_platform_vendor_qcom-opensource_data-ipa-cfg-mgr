@@ -208,6 +208,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	memset(invalid_mac, 0, sizeof(invalid_mac));
 
 	is_xlat = false;
+	is_ipv6_dummy_prefix_up = false;
 	in_collision = false;
 	hdr_hdl_dummy_v6 = 0;
 	hdr_proc_hdl_dummy_v6 = 0;
@@ -2632,6 +2633,7 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, uint16_
 					IPACM_LOG(IPACM_LOG_DEBUG, "XLAT case, new VLAN PDN prefix is 0x%08x%08x.\n",
 							ipv6_to_iface[pdn_idx].ipv6_prefix[0],
 							ipv6_to_iface[pdn_idx].ipv6_prefix[1]);
+					is_ipv6_dummy_prefix_up = true;
 				}
 			}
 
@@ -2924,8 +2926,19 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 			}
 			else if(vlan_info->v6_association == Q6_WAN && vlan_info->v6_idx[Q6_WAN] == modem_ipv6_pdn_index)
 			{
-				IPACM_LOG(IPACM_LOG_ERR, "v6 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
-				goto fail;
+				if (is_xlat && is_ipv6_dummy_prefix_up)
+				{
+					IPACM_LOG(IPACM_LOG_INFO, "XLAT case, pdn VLAN PDN prefix for dummy 0x%08x%08x so now we need to up for new ipv6 actual prefix 0x%08x%08x\n",
+						ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0], ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1],
+					data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
+					is_ipv6_dummy_prefix_up = false;
+					goto post_pdn_up;
+				}
+				else
+				{
+					IPACM_LOG(IPACM_LOG_ERR, "v6 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
+					goto fail;
+				}
 			}
 			else if(vlan_info->v6_association == Q6_WAN && vlan_info->v6_idx[Q6_WAN] != modem_ipv6_pdn_index)
 			{
@@ -2983,6 +2996,7 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 				IPACM_LOG(IPACM_LOG_DEBUG, "this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 			}
 		}
+post_pdn_up:
 		/* VLAN associated with PDN now add client backhaul prefix for vlan clients and flush neigh_cache */
 		wanup_data = (ipacm_event_iface_up *)malloc(sizeof(ipacm_event_iface_up));
 		if (wanup_data == NULL)

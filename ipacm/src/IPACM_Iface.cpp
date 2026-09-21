@@ -376,6 +376,54 @@ fail:
 	return res;
 }
 
+/* Query iface subnet IP/mask from linux interface_index via ioctl */
+int IPACM_Iface::query_iface_master_subnet_ip_from_index
+(
+	int interface_index,
+	char *interface_name,
+	ipa_private_subnet *private_subnet
+)
+{
+	int fd;
+	struct ifreq ifr;
+	uint32_t v4_addr;
+
+	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+	{
+		PERROR("get interface name socket create failed");
+		return IPACM_FAILURE;
+	}
+
+	memset(&ifr, 0, sizeof(struct ifreq));
+	ifr.ifr_ifindex = interface_index;
+	IPACMDBG_H("Interface index %d\n", interface_index);
+
+	if (ioctl(fd, SIOCGIFNAME, &ifr) < 0)
+	{
+		PERROR("call_ioctl_on_dev: ioctl failed:");
+		close(fd);
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("Received interface name %s\n", ifr.ifr_name);
+	memcpy(interface_name, ifr.ifr_name, sizeof(ifr.ifr_name));
+
+	ifr.ifr_addr.sa_family = AF_INET;
+	strlcpy(ifr.ifr_name, interface_name, IFNAMSIZ);
+	ioctl(fd, SIOCGIFADDR, &ifr);
+	IPACMDBG("addr bridge : %s\n", inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+	v4_addr = (htonl(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr));
+
+	ioctl(fd, SIOCGIFNETMASK, &ifr);
+	IPACMDBG("addr bridge mask : %s\n", inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+	private_subnet->subnet_mask = htonl(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr);
+	IPACMDBG(" total addr for bridge : %x\n", (v4_addr & private_subnet->subnet_mask));
+	private_subnet->subnet_addr = (v4_addr & private_subnet->subnet_mask);
+	close(fd);
+
+	return IPACM_SUCCESS;
+}
+
 /* Query ipa_interface_index by given linux interface_index */
 int IPACM_Iface::iface_ipa_index_query
 (

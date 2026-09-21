@@ -4764,6 +4764,14 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 						tx_index, tx_prop->tx[tx_index].ip,iptype);
 					continue;
 				}
+
+				if (tx_prop->tx[tx_index].tc_bmap)
+				{
+
+					IPACM_LOG(IPACM_LOG_DEBUG,"tc bit map is set, this is qos pipe. skip and continue \n");
+					continue;
+				}
+
 				if(IPACM_Iface::ipacmcfg->isMCC_Mode == true)
 				{
 					IPACM_LOG(IPACM_LOG_DEBUG, "In MCC mode, use alt dst pipe: %d\n",
@@ -4929,6 +4937,13 @@ PostWanUpV6:
 						tx_index, tx_prop->tx[tx_index].ip,iptype);
 					continue;
 				}
+
+				if (tx_prop->tx[tx_index].tc_bmap)
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG,"tc bit map is set, this is qos pipe. skip and continue \n");
+					continue;
+				}
+
 				/* use the STA-header handler */
 				strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.name, sizeof(rt_rule->rt_tbl_name));
 				if(hdr_proc_set_v4 == true)

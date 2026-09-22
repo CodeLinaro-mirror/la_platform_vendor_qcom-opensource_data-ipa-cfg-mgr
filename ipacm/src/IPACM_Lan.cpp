@@ -4839,6 +4839,7 @@ int IPACM_Lan::handle_eth_hdr_init(uint8_t *mac_addr, ipacm_bridge *bridge, uint
 	}
 
 	IPACM_LOG(IPACM_LOG_DEBUG, "ETH client number: %d\n", num_eth_client);
+	memset(get_client_memptr(eth_client, num_eth_client), 0, sizeof(ipa_eth_client));
 	memcpy(get_client_memptr(eth_client, num_eth_client)->mac,
 				 mac_addr,
 				 IPA_MAC_ADDR_SIZE);

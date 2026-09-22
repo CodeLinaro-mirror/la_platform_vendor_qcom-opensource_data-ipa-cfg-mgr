@@ -6723,6 +6723,9 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 				continue;
 			}
 
+			memset(&rt_rule_entry->rule, 0, sizeof(rt_rule_entry->rule));
+			rt_rule_entry->at_rear = true;
+
 			/* use the STA-header handler */
 			if (iptype == IPA_IP_v4 || is_mape_v4_interface)
 			{
@@ -6893,7 +6896,8 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
                   m_routing.DeleteRoutingHdl(mape_wan_rt_rule_hdl_v6, IPA_IP_v6);
                   mape_wan_rt_rule_hdl_v6 = 0;
                 }
-					rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
+					if(v6_p_ctx_2use)
+						rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
 			}
 		rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR;
 		rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0;

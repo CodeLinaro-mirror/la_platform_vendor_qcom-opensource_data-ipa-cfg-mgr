@@ -5061,6 +5061,39 @@ int IPACM_Lan::handle_wan_up_ex(ipacm_ext_prop *ext_prop, ipa_ip_type iptype, ui
 	bool notif_only = false;
 	bool ast_update = false;
 
+#ifdef FEATURE_IPoGRE
+	/* If IPoGRE is already up when a late WAN-up arrives, don't install the
+	 * plain modem uplink rules here - that would overwrite the GRE rules and
+	 * send LAN traffic to the modem instead of the tunnel.
+	 *
+	 * Instead, re-post the IPoGRE down+up events. These run in order: the down
+	 * event clears the old GRE state, and the up event re-installs it on a clean
+	 * base, steering the uplink back into the GRE tunnel. (Calling gre_down()/
+	 * gre_up() directly here won't work - they only do the LAN-side part and
+	 * rely on the WAN side having already done its route/header setup.)
+	 *
+	 * The WAN-up flag is checked per iptype (v4/v6) since this runs for both. */
+	if(IPACM_Iface::ipacmcfg->ipogre_enabled == true &&
+		((iptype == IPA_IP_v4 && IPACM_Wan::isWanUP(ipa_if_num)) ||
+		 (iptype == IPA_IP_v6 && IPACM_Wan::isWanUP_V6(ipa_if_num))))
+	{
+		ipacm_cmd_q_data ipogre_evt;
+		IPACMDBG_H("WAN up after IPoGRE enable (iptype %d): re-steering uplink "
+			"into GRE tunnel\n", iptype);
+
+		memset(&ipogre_evt, 0, sizeof(ipogre_evt));
+		ipogre_evt.event    = IPA_HANDLE_IPOGRE_DOWN;
+		ipogre_evt.evt_data = 0;
+		IPACM_EvtDispatcher::PostEvt(&ipogre_evt);
+
+		memset(&ipogre_evt, 0, sizeof(ipogre_evt));
+		ipogre_evt.event    = IPA_HANDLE_IPOGRE_UP;
+		ipogre_evt.evt_data = 0;
+		IPACM_EvtDispatcher::PostEvt(&ipogre_evt);
+		return IPACM_SUCCESS;
+	}
+#endif
+
 	if(rx_prop != NULL)
 	{
 		/* give mux ID of the default PDN to IPA-driver for WLAN/LAN pkts */
@@ -12561,8 +12594,8 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 	ipa_fltr_installed_notif_req_msg_v01 flt_index;
 	int fd;
 	int i, j, index, idx = 0;
-	uint32_t value = 0, total_rules = 0, v6_xlat_ul_rules = 0;
-	bool is_dev_in_vlan_mode=false;
+	uint32_t value = 0, total_rules = 0, v6_xlat_ul_rules = 0, v6_meta_ul_rules = 0;
+	bool is_dev_in_vlan_mode = false;
 	enum ipa_flt_action action_cache;
 
 	IPACMDBG_H("Set modem UL flt rules for iptype(%d), ispmipv6 %d \n", iptype, isPmipv6);
@@ -12666,6 +12699,18 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 		total_rules = total_rules + v6_xlat_ul_rules;
 		IPACMDBG("Need %d additional XLAT rules\n", v6_xlat_ul_rules);
+	}
+
+	/* for IPv6 duplicate modem UL rules once more for metadata 0xfe */
+	if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable &&
+		IPACM_Iface::ipacmcfg->IsIpv6CTEnabled())
+	{
+		for(i = 0; i < prop->num_ext_props; i++)
+			if(prop->prop[i].action != IPA_PASS_TO_EXCEPTION)
+				v6_meta_ul_rules++;
+
+		total_rules = total_rules + v6_meta_ul_rules;
+		IPACMDBG_H("Need %d additional v6 metadata 0xfe rules\n", v6_meta_ul_rules);
 	}
 
 	for (j = 0; j < rx_prop->num_rx_props / 2 && j < IPA_MAX_NUM_PROPS; j++) {
@@ -12791,13 +12836,8 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 			if (compatible_gre) {
 				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
 			} else
-#if defined(FEATURE_IPV6_NAT) && !defined(FEATURE_SOCKSv5)
-				/* for v6 nat, second pass should go directly to RT block */
-				if (IPACM_Iface::ipacmcfg->ipv6_nat_enable) flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-				else
-#endif
-					flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
-						IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+				flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() ?
+					IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
 		}
 
 		index = IPACM_Iface::ipacmcfg->getFltRuleCount(rx_prop->rx[idx].src_pipe, iptype);
@@ -13059,6 +13099,36 @@ int IPACM_Lan::handle_uplink_filter_rule(ipacm_ext_prop *prop, ipa_ip_type iptyp
 
 				//overwrite the old rule and increment the rule count
 				memcpy(&pFilteringTable->rules[i - 1], &flt_rule_entry, sizeof(flt_rule_entry));
+				index++;
+				i++;
+			}
+
+			/* for IPv6, duplicate rule once more with metadata 0xfe/0xff */
+			if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable &&
+				IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
+				prop->prop[cnt].action != IPA_PASS_TO_EXCEPTION) {
+				/* shift catchall to slot i, then build 0xfe rule
+				   in flt_rule_entry for slot i-1 */
+				memcpy(&pFilteringTable->rules[i], &pFilteringTable->rules[i - 1],
+					sizeof(flt_rule_entry));
+				memcpy(&flt_rule_entry, &pFilteringTable->rules[i - 1],
+					sizeof(flt_rule_entry));
+
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 9);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value =
+					(flt_rule_entry.rule.eq_attrib.metadata_meq32.value &
+					~(IPv6NAT_UL_METADATA_MASK << IPv6NAT_UL_METADATA_SHIFT)) |
+					(IPv6NAT_UL_METADATA_VALUE << IPv6NAT_UL_METADATA_SHIFT);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |=
+					(IPv6NAT_UL_METADATA_MASK << IPv6NAT_UL_METADATA_SHIFT);
+
+				memcpy(&pFilteringTable->rules[i - 1], &flt_rule_entry,
+					sizeof(flt_rule_entry));
+				IPACMDBG_H("Added v6 metadata 0xfe rule at index %d for cnt %d\n",
+					i - 1, cnt);
 				index++;
 				i++;
 			}
@@ -14595,7 +14665,7 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 	int clnt_indx;
 	uint8_t num_offset_meq_128 = 0;
 	struct ipa_ipfltr_mask_eq_128 *offset_meq_128 = NULL;
-	int total_rules = 0, v6_xlat_ul_rules = 0, install_total_rules = 0;
+	int total_rules = 0, v6_xlat_ul_rules = 0, v6_meta_ul_rules = 0, install_total_rules = 0;
 	enum ipa_flt_action action_cache;
 
 	IPACMDBG_H("Set modem UL flt rules\n");
@@ -14652,6 +14722,20 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 		install_total_rules = total_rules;
 		IPACMDBG_H("Need %d additional XLAT rules %d total_rules and %d rules_to_install\n", v6_xlat_ul_rules, total_rules, install_total_rules);
 	}
+
+	/* for IPv6 duplicate modem UL rules once more for metadata 0xfe */
+	if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable &&
+		IPACM_Iface::ipacmcfg->IsIpv6CTEnabled())
+	{
+		for(i = 0; i < prop->num_ext_props; i++)
+			if(prop->prop[i].action != IPA_PASS_TO_EXCEPTION)
+				v6_meta_ul_rules++;
+
+		install_total_rules = install_total_rules + v6_meta_ul_rules;
+		IPACMDBG_H("Need %d additional v6 metadata 0xfe rules, total install_total_rules %d\n",
+			v6_meta_ul_rules, install_total_rules);
+	}
+
 	clnt_indx = get_eth_client_index(mac_addr);
 
 	if (clnt_indx == IPACM_INVALID_INDEX)
@@ -14757,14 +14841,8 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 		}
 		else if(iptype == IPA_IP_v6)
 		{
-#if defined(FEATURE_IPV6_NAT) && !defined(FEATURE_SOCKSv5)
-			/* for v6 nat, second pass should go directly to RT block */
-			if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
-				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
-			else
-#endif
-				flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
-						IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
+			flt_rule_entry.rule.action = IPACM_Iface::ipacmcfg->IsIpv6CTEnabled()?
+					IPA_PASS_TO_SRC_NAT : IPA_PASS_TO_ROUTING;
 		}
 		else
 		{
@@ -14963,6 +15041,38 @@ int IPACM_Lan::install_uplink_filter_rule_per_client_v2
 					&flt_rule_entry, sizeof(flt_rule_entry));
 				index++;
 				flt_rule_entry.rule.action = action_cache;
+			}
+
+			/* for IPv6, duplicate rule once more with metadata 0xfe/0xff */
+			if (iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable &&
+				IPACM_Iface::ipacmcfg->IsIpv6CTEnabled() &&
+				prop->prop[cnt].action != IPA_PASS_TO_EXCEPTION)
+			{
+				/* load catchall, shift it to index, then build 0xfe rule at index-1 */
+				memcpy(&flt_rule_entry,
+					(void *)pFilteringTable->rules + ((index - 1) *
+					sizeof(struct ipa_flt_rule_add_v2)),
+					sizeof(flt_rule_entry));
+				memcpy((void *)pFilteringTable->rules + (index *
+					sizeof(struct ipa_flt_rule_add_v2)),
+					&flt_rule_entry, sizeof(flt_rule_entry));
+
+				flt_rule_entry.rule.action = IPA_PASS_TO_ROUTING;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32_present = 1;
+				flt_rule_entry.rule.eq_attrib.rule_eq_bitmap |= (1 << 9);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.offset = 0;
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.value =
+					(flt_rule_entry.rule.eq_attrib.metadata_meq32.value &
+					~(IPv6NAT_UL_METADATA_MASK << IPv6NAT_UL_METADATA_SHIFT)) |
+					(IPv6NAT_UL_METADATA_VALUE << IPv6NAT_UL_METADATA_SHIFT);
+				flt_rule_entry.rule.eq_attrib.metadata_meq32.mask |=
+					(IPv6NAT_UL_METADATA_MASK << IPv6NAT_UL_METADATA_SHIFT);
+				memcpy((void *)pFilteringTable->rules + ((index - 1) *
+					sizeof(struct ipa_flt_rule_add_v2)),
+					&flt_rule_entry, sizeof(flt_rule_entry));
+				IPACMDBG_H("Added v6 metadata 0xfe rule at index %d for cnt %d\n",
+					index - 1, cnt);
+				index++;
 			}
 		}
 
@@ -21209,7 +21319,7 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 	IPACMDBG_H(
 		"There's gre enable work to be done for iptype(%d)\n",
 		iptype);
-
+	bool ast_update = false;
 	// REMINDER: The logic below needs to be tested with more than
 	// one wan instance...
 
@@ -21265,23 +21375,27 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 		{   
 			mux.qmap_id = muxid;
 		}
-		mux.client  = rx_prop->rx[0].src_pipe;
+		for (int i = 0; i < rx_prop->num_rx_props; i += 2)
+		{
+			mux.client = rx_prop->rx[i].src_pipe;
 
-		IPACMDBG_H(
-			"Issuing IPA_IOC_WRITE_QMAPID ioctl -> "
-			"mux.qmap_id(%u) mux.client(%u)\n",
-			mux.qmap_id,
-			mux.client);
+			IPACMDBG_H(
+				"Issuing IPA_IOC_WRITE_QMAPID ioctl -> "
+				"mux.qmap_id(%u) mux.client(%u)\n",
+				mux.qmap_id,
+				mux.client);
 
-		ret = ioctl(fd, IPA_IOC_WRITE_QMAPID, &mux);
+			ret = ioctl(fd, IPA_IOC_WRITE_QMAPID, &mux);
+
+			if ( ret )
+			{
+				IPACMERR("Failed to write mux id %d for pipe index %d\n", mux.qmap_id, i);
+				close(fd);
+				return;
+			}
+		}
 
 		close(fd);
-
-		if ( ret )
-		{
-			IPACMERR("Failed to write mux id %d\n", mux.qmap_id);
-			return;
-		}
 	}
 
 	/*
@@ -21374,19 +21488,27 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 			return;
 		}
 	}
-
+	if ((ipa_if_cate == WLAN_IF))
+	{
+		ast_update = ((IPACM_Wlan *)this)->ast_update_needed();
+	}
 #ifdef FEATURE_VLAN_MPDN
+	if(iptype == IPA_IP_v6 && IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+	{
+		/* construct 1st pass v6NAT flt-rule */
+		add_ipv6_nat_ula_prefix_flt_rule();
+	}
 	handle_uplink_filter_rule(
 		IPACM_Iface::ipacmcfg->GetExtProp(iptype),
 		iptype,
 		IPACM_Iface::ipacmcfg->GetQmapId(),
 		false,
-		false, false,false,isPmipv6,ipogre_enabled);
+		false, ast_update,false,isPmipv6,ipogre_enabled);
 #else
 	handle_uplink_filter_rule(
 		IPACM_Iface::ipacmcfg->GetExtProp(iptype),
 		iptype,
-		IPACM_Iface::ipacmcfg->GetQmapId(), false, isPmipv6);
+		IPACM_Iface::ipacmcfg->GetQmapId(), ast_update, isPmipv6);
 #endif
 
 	/* When IPoGRE is enabled for v6 iptype, the v4 catchall rule is installed via
@@ -21403,12 +21525,12 @@ void IPACM_Lan::gre_up(bool isPmipv6,bool ipogre_enabled)/*Reusing Gre function 
 			IPA_IP_v4,
 			IPACM_Iface::ipacmcfg->GetQmapId(),
 			false,
-			false, false, false, isPmipv6, ipogre_enabled);
+			false, ast_update, false, isPmipv6, ipogre_enabled);
 #else
 		handle_uplink_filter_rule(
 			IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4),
 			IPA_IP_v4,
-			IPACM_Iface::ipacmcfg->GetQmapId(), false, isPmipv6, ipogre_enabled);
+			IPACM_Iface::ipacmcfg->GetQmapId(), ast_update, isPmipv6, ipogre_enabled);
 #endif
 	}
 
@@ -21508,23 +21630,27 @@ void IPACM_Lan::gre_down(bool isPmipv6, bool ipogre_enabled)
 		uint8_t muxid = IPACM_Iface::ipacmcfg->GetQmapId();
 		IPACM_Iface::ipacmcfg->SetQmapId(muxid);
 		mux.qmap_id = muxid;
-		mux.client  = rx_prop->rx[0].src_pipe;
+		for (int i = 0; i < rx_prop->num_rx_props; i += 2)
+		{
+			mux.client = rx_prop->rx[i].src_pipe;
 
-		IPACMDBG_H(
-			"Issuing IPA_IOC_WRITE_QMAPID ioctl -> "
-			"mux.qmap_id(%u) mux.client(%u)\n",
-			mux.qmap_id,
-			mux.client);
+			IPACMDBG_H(
+				"Issuing IPA_IOC_WRITE_QMAPID ioctl -> "
+				"mux.qmap_id(%u) mux.client(%u)\n",
+				mux.qmap_id,
+				mux.client);
 
-		ret = ioctl(fd, IPA_IOC_WRITE_QMAPID, &mux);
+			ret = ioctl(fd, IPA_IOC_WRITE_QMAPID, &mux);
+
+			if ( ret )
+			{
+				IPACMERR("Failed to write mux id %d for pipe index %d\n", mux.qmap_id, i);
+				close(fd);
+				return;
+			}
+		}
 
 		close(fd);
-
-		if ( ret )
-		{
-			IPACMERR("Failed to write mux id %d\n", mux.qmap_id);
-			return;
-		}
 		/*Delete the UL rules updated by GRE, and reinsert them normally*/
 		del_ul_flt_rules(IPA_IP_v4);
 		del_ul_flt_rules(IPA_IP_v6);
@@ -21535,6 +21661,13 @@ void IPACM_Lan::gre_down(bool isPmipv6, bool ipogre_enabled)
 		IPACM_Iface::ipacmcfg->GetQmapId(),
 		false,
 		false, false,false);
+
+		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+		{
+			/* construct 1st pass v6NAT flt-rule */
+			add_ipv6_nat_ula_prefix_flt_rule();
+		}
+
 		res = handle_uplink_filter_rule(
 		IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v6),
 		IPA_IP_v6,
@@ -21803,6 +21936,22 @@ int IPACM_Lan::gre_add_catchup_rule(
 		"Attempting to add gre catchup rule for iptype(%d)\n",
 		iptype);
 
+	int idx = ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) &&
+		(rx_prop->num_rx_props > 2)) ? 2 : 0;
+
+	if (gre_route_data[iptype].flt_gre_1st_pass_hdl)
+	{
+		IPACMDBG_H("Catchup rule already installed for iptype(%d), deleting first\n", iptype);
+		if (m_filtering.DeleteFilteringHdls(
+				&gre_route_data[iptype].flt_gre_1st_pass_hdl, iptype, 1) == false)
+		{
+			IPACMERR("Failed to delete existing catchup rule for iptype(%d)\n", iptype);
+			return IPACM_FAILURE;
+		}
+		IPACM_Iface::ipacmcfg->decreaseFltRuleCount(rx_prop->rx[idx].src_pipe, iptype, 1);
+		gre_route_data[iptype].flt_gre_1st_pass_hdl = 0;
+	}
+
 	static const int NUM_RULES = 1;
 
 	uint8_t buf[
@@ -21815,7 +21964,7 @@ int IPACM_Lan::gre_add_catchup_rule(
 		(ipa_ioc_add_flt_rule*) buf;
 
 	pFilteringTable->commit    = 1;
-	pFilteringTable->ep        = rx_prop->rx[0].src_pipe;
+	pFilteringTable->ep        = rx_prop->rx[idx].src_pipe;
 	pFilteringTable->global    = false;
 	pFilteringTable->ip        = iptype;
 	pFilteringTable->num_rules = NUM_RULES;
@@ -21987,7 +22136,7 @@ int IPACM_Lan::gre_add_catchup_rule(
 		pFilteringTable->rules[0].flt_rule_hdl;
 
 	IPACM_Iface::ipacmcfg->increaseFltRuleCount(
-		rx_prop->rx[0].src_pipe, iptype, 1);
+		rx_prop->rx[idx].src_pipe, iptype, 1);
 
 	return IPACM_SUCCESS;
 }
@@ -22014,6 +22163,9 @@ int IPACM_Lan::update_complementary_table(
 
 		const int NUM_RULES = 1;
 
+		int idx = ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) &&
+			(rx_prop->num_rx_props > 2)) ? 2 : 0;
+
 		IPACMDBG_H(
 			"Will add same rule to table of complementary iptype(%d)\n",
 			iptype);
@@ -22028,7 +22180,7 @@ int IPACM_Lan::update_complementary_table(
 			(struct ipa_ioc_add_flt_rule *) buf;
 
 		flt_rule->commit    = 1;
-		flt_rule->ep        = rx_prop->rx[0].src_pipe;
+		flt_rule->ep        = rx_prop->rx[idx].src_pipe;
 		flt_rule->global    = false;
 		flt_rule->ip        = iptype;
 		flt_rule->num_rules = NUM_RULES;
@@ -22102,7 +22254,7 @@ int IPACM_Lan::update_complementary_table(
 				iptype);
 
 			IPACM_Iface::ipacmcfg->increaseFltRuleCount(
-				rx_prop->rx[0].src_pipe, iptype, 1);
+				rx_prop->rx[idx].src_pipe, iptype, 1);
 
 			/*
 			 * Save handle for subsequent cleanup.
@@ -22697,8 +22849,10 @@ void IPACM_Lan::gre_clear_route_data(
 
 			if ( rx_prop )
 			{
+				int idx = ((ipa_if_cate == WLAN_IF) && (is_if_svap || is_wlan_if_vlan) &&
+					(rx_prop->num_rx_props > 2)) ? 2 : 0;
 				IPACM_Iface::ipacmcfg->decreaseFltRuleCount(
-					rx_prop->rx[0].src_pipe, iptype, 1);
+					rx_prop->rx[idx].src_pipe, iptype, 1);
 			}
 		}
 

@@ -62,6 +62,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear*/
 #ifdef FEATURE_EoGRE
 #include <linux/ip.h>
 #include <linux/if_tunnel.h>
+#include <linux/ip6_tunnel.h>
 #endif
 
 #define DUMMY_RGIP_ADDRESS 169
@@ -669,6 +670,16 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
     if (attrib[IFLA_IFNAME]) {  // validation
         IPACMDBG("ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
 		strlcpy(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), IPA_IFACE_NAME_LEN);
+#ifdef FEATURE_IPoGRE
+		/* Separately store the GRE interface name for IPoGRE so that
+		 * ipgre_install_dl_exception_flt_rule() can look up the interface
+		 * IP via getifaddrs().  pmip_details.tunnel_name is only written
+		 * when the call-site guard fires, which previously required
+		 * FEATURE_EoGRE due to the broken "#ifdef FEATURE_EoGRE || ..."
+		 * directive. */
+		strlcpy(pConfig->ipogre_tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), IPA_IFACE_NAME_LEN);
+		IPACMDBG_H("IPoGRE tunnel iface name: %s\n", pConfig->ipogre_tunnel_name);
+#endif
     }
 	if (!attrib[IFLA_LINKINFO]){
 		IPACMDBG("No Link info\n");
@@ -715,6 +726,43 @@ static int populate_gre_details(struct ifinfomsg* ifi, int len, int type){
 
 				IPACMDBG_H("GRE info v6: src addr:0x%x:%x:%x:%x, dst addr:0x%x:%x:%x:%x \n",
 							saddr6.s6_addr32[0],saddr6.s6_addr32[1],saddr6.s6_addr32[2],saddr6.s6_addr32[3],daddr6.s6_addr32[0],daddr6.s6_addr32[1],daddr6.s6_addr32[2],daddr6.s6_addr32[3]);
+			}
+
+			/* Learn encap_limit so IPACM can choose the correct IPoGRE
+			 * outer header template: non-zero encap_limit means the kernel
+			 * adds an 8-byte Destination Options extension header (RFC 2473)
+			 * making the outer IPv6+GRE header 52 bytes; zero means no
+			 * extension header, 44 bytes. Kernel default when the attribute
+			 * is absent is 4 (extension header present). */
+			if (greinfo[IFLA_GRE_ENCAP_LIMIT])
+			{
+				pConfig->encap_limit =
+					*(__u8 *)RTA_DATA(greinfo[IFLA_GRE_ENCAP_LIMIT]);
+				IPACMDBG_H("GRE encap_limit: %d\n", pConfig->encap_limit);
+			}
+			else
+			{
+				pConfig->encap_limit = 4; /* kernel default */
+				IPACMDBG_H("IFLA_GRE_ENCAP_LIMIT absent, using default encap_limit=4\n");
+
+			}
+
+			if (greinfo[IFLA_GRE_FLAGS])
+			{
+				__u16 gre_flags = *(__u16 *)RTA_DATA(greinfo[IFLA_GRE_FLAGS]);
+				IPACMDBG_H("IFLA_GRE_FLAGS: 0x%04x (CSUM=%d KEY=%d SEQ=%d IGN_ENCAP_LIMIT=%d)\n",
+					gre_flags,
+					(gre_flags & GRE_CSUM),
+					(gre_flags & GRE_KEY),
+					(gre_flags & GRE_SEQ),
+					(gre_flags & IP6_TNL_F_IGN_ENCAP_LIMIT));
+				pConfig->encap_enable = !(gre_flags & IP6_TNL_F_IGN_ENCAP_LIMIT);
+				IPACMDBG_H("encap_enable: %d\n", pConfig->encap_enable);
+			}
+			else
+			{
+				IPACMDBG_H("IFLA_GRE_FLAGS absent, no GRE flags set\n");
+				pConfig->encap_enable = true;
 			}
 
 			memcpy(&(pConfig->ipgre_info),&ipgre_info,sizeof(ipa_ipgre_info));
@@ -780,12 +828,16 @@ static int tunnel_delete(struct ifinfomsg* ifi, int len, int type)
 		{
 			IPACMDBG("Tunnel Delete: ifname %s \n",(char*)RTA_DATA(attrib[IFLA_IFNAME]));
 #if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
-			if(strncmp(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), strlen(pConfig->pmip_details.tunnel_name)) == 0)
+			if(pConfig->pmip_details.tunnel_name[0] != '\0' &&
+				strncmp(pConfig->pmip_details.tunnel_name, (char*)RTA_DATA(attrib[IFLA_IFNAME]), strlen(pConfig->pmip_details.tunnel_name)) == 0)
 			{
 				IPACMDBG("Tunnel name matched, Cleaning up\n");
 				pConfig->pmip_details.tunnel_name[0]='\0';
 				pConfig->pmip_details.pmipv6_tunnel_setup=false;
 				pConfig->pmip_details.pmipv6_gre_event_posted=false;
+#ifdef FEATURE_IPoGRE
+				pConfig->ipogre_tunnel_name[0] = '\0';
+#endif
 				if(pConfig->pmip_details.pmipv6_enabled)
 				{
 					/* Send GRE DOWN event */
@@ -1191,7 +1243,7 @@ static int ipa_nl_decode_nlmsg
 				 * Android but this should be processed in case of MDM for
 				 * Ehernet interface.
 				 */
-#ifdef FEATURE_EoGRE || FEATURE_PMIPV6
+#if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 				// struct nlmsghdr *h;
 				struct ifinfomsg *ifi2;
 				//ifi_type is 1 for gretap2
@@ -1407,6 +1459,18 @@ static int ipa_nl_decode_nlmsg
 							rgip_evt_data.evt_data = rgip_v4;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
 						}
+					}
+					if (IPACM_Iface::ipacmcfg->ipogre_enabled &&
+						strncmp(dev_name, IPACM_Iface::ipacmcfg->pmip_details.tunnel_name,
+							sizeof(IPACM_Iface::ipacmcfg->pmip_details.tunnel_name)) == 0)
+					{
+						IPACMDBG_H("IPoGRE iface %s link down, post IPA_HANDLE_IPOGRE_DOWN\n", dev_name);
+						IPACM_Iface::ipacmcfg->ipogre_enabled = false;
+						ipacm_cmd_q_data ipogre_evt_data;
+						memset(&ipogre_evt_data, 0, sizeof(ipogre_evt_data));
+						ipogre_evt_data.event = IPA_HANDLE_IPOGRE_DOWN;
+						ipogre_evt_data.evt_data = 0;
+						IPACM_EvtDispatcher::PostEvt(&ipogre_evt_data);
 					}
 #endif
 					IPACMDBG_H("Interface %s bring down with IP-family: %d \n", dev_name,
@@ -1871,6 +1935,21 @@ static int ipa_nl_decode_nlmsg
 							/* Refresh rgip_ip with the confirmed address */
 							IPACM_Iface::ipacmcfg->rgip_ip = raw_host_addr;
 						}
+					}
+					/* When an address is added to the GRE tunnel interface, notify
+					 * IPACM_Wan to install the DL exception filter rule. */
+					else if (strlen(IPACM_Iface::ipacmcfg->ipogre_tunnel_name) > 0 &&
+					         strncmp(dev_name, IPACM_Iface::ipacmcfg->ipogre_tunnel_name,
+					                 IPA_IFACE_NAME_LEN) == 0)
+					{
+						IPACMDBG_H("Address add on GRE tunnel iface %s (iptype=%d), "
+						           "post IPA_HANDLE_IPOGRE_ADDR_ADD\n",
+						           dev_name, data_addr->iptype);
+						ipacm_cmd_q_data gre_addr_evt;
+						memset(&gre_addr_evt, 0, sizeof(gre_addr_evt));
+						gre_addr_evt.event = IPA_HANDLE_IPOGRE_ADDR_ADD;
+						gre_addr_evt.evt_data = NULL;
+						IPACM_EvtDispatcher::PostEvt(&gre_addr_evt);
 					}
 #endif
 				}

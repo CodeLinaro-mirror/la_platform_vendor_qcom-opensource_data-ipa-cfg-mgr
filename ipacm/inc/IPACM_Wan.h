@@ -242,7 +242,8 @@ typedef struct v6_ipgre_hdr_s
  */
 #define IPV6_SRC_ADDR_IDX   2
 #define IPV6_DST_ADDR_IDX   6
-#define IPV6_GRE_PROT_IDX  12
+#define IPV6_GRE_PROT_IDX  10
+#define IPV6_GRE_PROT_IDX_OP  12
 #define IPV6_GRE_PMIP_PROT_IDX  10
 
 /* wan iface */
@@ -270,7 +271,7 @@ public:
 	static uint16_t mtu_gre_v4;
 	static uint16_t mtu_gre_v6;
 #endif
-#ifdef FEATURE_PMIPV6
+#if defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 	/*
 	 * The following is for keeping gre route rule state...
 	 *
@@ -322,6 +323,10 @@ public:
 
 	int ipgre_make_header_rmv_rt_rule(
 		ipa_ipgre_info& ipgre_info);
+
+	int ipgre_install_dl_exception_flt_rule(
+		const struct ipa_rule_attrib& rx_prop_attrib, struct ipa_flt_rule_add& flt_rule_add,
+		int fltr_rule_number, enum ipa_ip_type iptype);
 
 	void ipgre_clear_route_data(
 		enum ipa_ip_type             iptype);
@@ -718,6 +723,7 @@ public:
 	static const uint8_t v6_gre_header[];
 	static const uint8_t v4_ipogre_header[];
 	static const uint8_t v6_ipogre_header[];
+	static const uint8_t v6_ipogre_header_op[];
 	static int GetMuxByAddr(
 		enum ipa_ip_type iptype,
 		void*            addr,

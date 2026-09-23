@@ -14833,11 +14833,14 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 #endif
 					{
 						if (IPACM_Iface::ipacmcfg->mape_enable
-							&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)
-							&& get_client_memptr(wan_client, wan_index)->is_v6_gateway)
+							&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0))
 						{
-							rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
-							IPACMDBG_H("mape v6 rt_rule_entry->rule.hdr_proc_ctx_hdl %x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
+							/* MAP-E: always use normal GW header for v6 UL COMRTBLv6 rule.
+							 * MAP-E encap is handled by the IPV4 UL route rule.
+							 * Using v6_p_ctx_2use here incorrectly decapsulates LAN client
+							 * traffic when WAN and LAN share the same /64 prefix. */
+							rt_rule_entry->rule.hdr_hdl = get_client_memptr(wan_client, wan_index)->hdr_hdl_v6;
+							IPACMDBG_H("mape v6 rt_rule_entry->rule.hdr_hdl %x\n", rt_rule_entry->rule.hdr_hdl);
 						}
 						else if(get_client_memptr(wan_client, wan_index)->sta_hdr_proc_ctx_set == true)
 						{

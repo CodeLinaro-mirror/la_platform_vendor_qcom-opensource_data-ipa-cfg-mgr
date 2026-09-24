@@ -709,6 +709,7 @@ typedef struct _ipacm_ifacemgr_data
 #endif
 	char iface_name[IPA_IFACE_NAME_LEN];
 	bool is_ppp_iface;
+	bool sbr_link_up;
 }ipacm_ifacemgr_data;
 
 struct ipa_vlan_iface_info

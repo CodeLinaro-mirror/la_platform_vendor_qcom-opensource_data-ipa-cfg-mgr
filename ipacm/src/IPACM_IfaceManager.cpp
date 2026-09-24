@@ -212,13 +212,14 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(ifmgr_data.iface_name));
 
 			/*In sta-bridge mode, treating wlan instance as lan instace
-			* to avoid relying on WLAN_CLIENT_CONNECT_EX events. */
+			 * to avoid relying on WLAN_CLIENT_CONNECT_EX events. */
 			if (IPACM_Iface::ipacmcfg->device_mode == DEVMODE_STABRIDGE) {
-					IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat = ODU_IF;
-					ifmgr_data.if_index = StaData->if_index;
-					ifmgr_data.if_type = Q6_WAN;
-					create_iface_instance(&ifmgr_data);
-					break;
+				IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat = ODU_IF;
+				ifmgr_data.if_index = StaData->if_index;
+				ifmgr_data.if_type = Q6_WAN;
+				ifmgr_data.sbr_link_up = true;
+				create_iface_instance(&ifmgr_data);
+				break;
 			}
 			/* change iface category from unknown to WAN_IF */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == UNKNOWN_IF)
@@ -464,6 +465,21 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						odu->delete_iface();
 						return IPACM_FAILURE;
 					}
+					/* For STA_LINK_UP, update dst_pipe from sta_pipe so routing rules
+					 * use the SBR bridge client instead of the normal tx client. */
+					if (param->sbr_link_up && odu->tx_prop != NULL && odu->iface_query != NULL)
+					{
+						for (int idx = 0; idx < odu->iface_query->num_tx_props; idx++)
+						{
+							if (odu->tx_prop->tx[idx].sta_pipe != 0)
+							{
+								IPACMDBG_H("SBR_LINK_UP ODU: tx[%d] dst_pipe %d -> sta_pipe %d\n",
+									idx, odu->tx_prop->tx[idx].dst_pipe,
+									odu->tx_prop->tx[idx].sta_pipe);
+								odu->tx_prop->tx[idx].dst_pipe = odu->tx_prop->tx[idx].sta_pipe;
+							}
+						}
+					}
 #ifdef FEATURE_EoGRE
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_UP, odu);
 					IPACM_EvtDispatcher::registr(IPA_HANDLE_EoGRE_DOWN, odu);
@@ -548,6 +564,21 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 						/* close the netdev instance if IPA not support*/
 						odu->delete_iface();
 						return IPACM_FAILURE;
+					}
+					/* For STA_LINK_UP, update dst_pipe from sta_pipe so routing rules
+					 * use the SBR bridge client instead of the normal tx client. */
+					if (param->sbr_link_up && odu->tx_prop != NULL && odu->iface_query != NULL)
+					{
+						for (int idx = 0; idx < odu->iface_query->num_tx_props; idx++)
+						{
+							if (odu->tx_prop->tx[idx].sta_pipe != 0)
+							{
+								IPACMDBG_H("SBR_LINK_UP ODU: tx[%d] dst_pipe %d -> sta_pipe %d\n",
+									idx, odu->tx_prop->tx[idx].dst_pipe,
+									odu->tx_prop->tx[idx].sta_pipe);
+								odu->tx_prop->tx[idx].dst_pipe = odu->tx_prop->tx[idx].sta_pipe;
+							}
+						}
 					}
 					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, odu);
 					/*lan2lan ipa offload with static IP*/

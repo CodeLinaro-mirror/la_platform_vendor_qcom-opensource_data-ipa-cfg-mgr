@@ -342,6 +342,7 @@ public:
 
 	/* Header length. */
 	uint8_t hdr_len;
+	bool is_sta_bridge_iface;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	/* Clients which take HW path. */
 	ipa_lan_client_idx active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS];
@@ -417,7 +418,7 @@ public:
 	static uint32_t total_vlan_pdn_cnt_v6;
 
 	static bool odu_up;
-
+	void update_pib_sta_state();
 #if defined(FEATURE_EoGRE) || defined(FEATURE_PMIPV6) || defined(FEATURE_IPoGRE)
 	/*
 	 * The following is for keeping eogre route rule state...

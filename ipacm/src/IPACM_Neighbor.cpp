@@ -396,14 +396,6 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 										config->iface_table[ipa_interface_index].iface_name,
 										IPA_IFACE_NAME_LEN);
 								}
-								/* Also re-post IPA_LAN_CLIENT_ADD_EVENT so LanToLan (L2L) filter/routing
-								 * rules get reinstalled on reconnect. IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT
-								 * (posted below) only reaches routing/NAT handling in IPACM_Wlan
-								 * (handle_wlan_vlan_neighbor()/handle_wlan_client_ipaddr()), never
-								 * eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_ADD, ...) -- so a client
-								 * whose neighbor cache entry survives disconnect (kernel ARP entry stays
-								 * REACHABLE) never gets its L2L rules reinstalled without this. */
-								handle_neigh_clients_ops(POST_LAN_CLIENT_ADD_EVT, &(*it));
 								handle_neigh_clients_ops(POST_NEIGH_CLIENT_IP_ADD_EVT, &(*it));
 							}
 						}
@@ -802,7 +794,7 @@ void IPACM_Neighbor::handle_neighbor_add_del(ipa_cm_event_id event, void *param)
 						return;
 					}
 					handle_neigh_clients_ops(POST_LAN_CLIENT_DEL_EVT, data, true, IPA_IP_MAX);
-					handle_neigh_clients_ops(NEIGH_CLIENT_DEL, &(data->if_index));
+					handle_neigh_clients_ops(NEIGH_CLIENT_DEL, data->mac_addr, true);
 					found = true;
 				}
 				break;
@@ -1042,6 +1034,7 @@ void IPACM_Neighbor::handle_v4_neighbor(ipa_cm_event_id event, ipacm_event_data_
 	else
 	{
 		/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
+		bool erase_client = false;
 		if(event == IPA_NEW_NEIGH_EVENT)
 		{
 			/* Also save to cache for ipv4 */
@@ -1122,10 +1115,9 @@ void IPACM_Neighbor::handle_v4_neighbor(ipa_cm_event_id event, ipacm_event_data_
 						return;
 					}
 
-					int cached_if_idx = it->iface_index;
-					handle_neigh_clients_ops(NEIGH_CLIENT_DEL, &cached_if_idx);
 					handle_neigh_clients_ops(POST_LAN_CLIENT_DEL_EVT, data, true);
-					return;
+					erase_client = true;
+					break;
 				}
 			}
 			/* not find client, no need clean-up */
@@ -1133,6 +1125,8 @@ void IPACM_Neighbor::handle_v4_neighbor(ipa_cm_event_id event, ipacm_event_data_
 		if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
 		{
 			IPACM_LOG(IPACM_LOG_ERR, "client name %s not real\n", data->iface_name);
+			if (erase_client)
+				handle_neigh_clients_ops(NEIGH_CLIENT_DEL, data->mac_addr, true);
 			return;
 		}
 
@@ -1141,6 +1135,9 @@ void IPACM_Neighbor::handle_v4_neighbor(ipa_cm_event_id event, ipacm_event_data_
 			handle_neigh_clients_ops(POST_NEIGH_CLIENT_IP_ADD_EVT, data, true);
 		else
 			handle_neigh_clients_ops(POST_NEIGH_CLIENT_IP_DEL_EVT, data, true);
+
+		if (erase_client)
+			handle_neigh_clients_ops(NEIGH_CLIENT_DEL, data->mac_addr, true);
 
 		return;
 	}
@@ -1239,7 +1236,7 @@ void IPACM_Neighbor::handle_v6_neighbor(ipa_cm_event_id event, ipacm_event_data_
 				if(event == IPA_NEW_NEIGH_EVENT)
 					handle_neigh_clients_ops(POST_NEIGH_CLIENT_IP_ADD_EVT, data, true);
 				else
-					handle_neigh_clients_ops(POST_NEIGH_CLIENT_IP_DEL_EVT, &(*it));
+					handle_neigh_clients_ops(POST_NEIGH_CLIENT_IP_DEL_EVT, data, true);
 
 				break;
 			}
@@ -1263,7 +1260,9 @@ void IPACM_Neighbor::handle_v6_neighbor(ipa_cm_event_id event, ipacm_event_data_
 		NEIGH_CLIENT_ADD: Add to neighbor_client list
 			Input: ipa_neighbor_client List element
 		NEIGH_CLIENT_DEL: Delete from neighbor_client list
-			Input: iface_index to search in ipa_neighbor_client List
+			Input:  if post_data is false, data = int* (iface_index) -> delete every entry
+			on that iface. If post_data is true, data = uint8_t* (MAC, 6 bytes) ->
+			delete the single entry with that MAC.
 		POST_NEIGH_CLIENT_IP_ADD_EVT: Post IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT event
 		POST_NEIGH_CLIENT_IP_DEL_EVT: Post IPA_NEIGH_CLIENT_IP_ADDR_DEL_EVENT event
 		POST_LAN_CLIENT_ADD_EVT: Post IPA_LAN_CLIENT_ADD_EVENT event
@@ -1329,20 +1328,30 @@ void IPACM_Neighbor::handle_neigh_clients_ops(ipacm_neigh_cache_ops_type ops, vo
 
 		case NEIGH_CLIENT_DEL:
 		{
-			iface_idx = (int *)data;
+			/* post_data selects the key:
+			 *   false (default): data = int*      -> delete every entry whose iface_index matches
+			 *   true           : data = uint8_t*  -> delete the single entry whose MAC matches
+			 */
+			bool by_mac = post_data;
+			uint8_t* mac_addr = by_mac ? (uint8_t *)data : NULL;
+			iface_idx = by_mac ? NULL : (int *)data;
 			bool found = false;
 			for(it = neighbor_client.begin(); it != neighbor_client.end();)
 			{
-				if(it->iface_index == *iface_idx)
+				bool match = by_mac
+					? (memcmp(it->mac_addr, mac_addr, IPA_MAC_ADDR_SIZE) == 0)
+					: (it->iface_index == *iface_idx);
+				if(match)
 				{
-					if (!found)
-						found = true;
 					IPACM_LOG(IPACM_LOG_INFO, "Erasing client with MAC:  %02x:%02x:%02x:%02x:%02x:%02x"
 							" iface index: %d\n", it->mac_addr[0],
 							it->mac_addr[1], it->mac_addr[2],
 							it->mac_addr[3], it->mac_addr[4],
-							it->mac_addr[5], *iface_idx);
+							it->mac_addr[5], it->iface_index);
 					it = neighbor_client.erase(it);
+					found = true;
+					if(by_mac)
+						break;
 				}
 				else
 				{
@@ -1350,7 +1359,16 @@ void IPACM_Neighbor::handle_neigh_clients_ops(ipacm_neigh_cache_ops_type ops, vo
 				}
 			}
 			if(!found)
-				IPACM_LOG(IPACM_LOG_INFO, "Couldn't find the entry for client with iface_idx: %d", *iface_idx);
+			{
+				if(by_mac)
+					IPACM_LOG(IPACM_LOG_DEBUG, "Couldn't find entry for client with MAC: "
+							"%02x:%02x:%02x:%02x:%02x:%02x\n",
+							mac_addr[0], mac_addr[1], mac_addr[2],
+							mac_addr[3], mac_addr[4], mac_addr[5]);
+				else
+					IPACM_LOG(IPACM_LOG_DEBUG, "Couldn't find the entry for client with iface_idx: %d\n",
+							 *iface_idx);
+			}
 		}
 		break;
 

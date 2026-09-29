@@ -1983,6 +1983,9 @@ static int ipa_nl_decode_nlmsg
 
 								IPACMDBG_H("RGIP iface %s link up, post IPA_HANDLE_RGIP_UP with stored ip 0x%x\n",
 									dev_name, IPACM_Iface::ipacmcfg->rgip_ip_ippt);
+								IPACMDBG_H("RGIP addr add [netlink]: dummy IP, setting rgip_ip 0x%x -> 0x%x (ippt)\n",
+									IPACM_Iface::ipacmcfg->rgip_ip,
+									IPACM_Iface::ipacmcfg->rgip_ip_ippt);
 								IPACM_Iface::ipacmcfg->rgip_ip = IPACM_Iface::ipacmcfg->rgip_ip_ippt;
 								ipacm_cmd_q_data rgip_evt_data;
 								uint32_t *rgip_v4 = (uint32_t*) malloc(sizeof(uint32_t));
@@ -2014,6 +2017,8 @@ static int ipa_nl_decode_nlmsg
 									memset(&rgip_evt_data, 0, sizeof(rgip_evt_data));
 									rgip_evt_data.event = IPA_HANDLE_RGIP_UP;
 									rgip_evt_data.evt_data = rgip_v4;
+									IPACMDBG_H("RGIP addr add [netlink]: setting rgip_ip 0x%x -> 0x%x\n",
+										IPACM_Iface::ipacmcfg->rgip_ip, raw_host_addr);
 									IPACM_Iface::ipacmcfg->rgip_ip = raw_host_addr;
 									IPACM_EvtDispatcher::PostEvt(&rgip_evt_data);
 								}
@@ -2133,6 +2138,8 @@ static int ipa_nl_decode_nlmsg
 							IPACMDBG_H("IPA_HANDLE_RGIP_DEL (addr del) with ip 0x%x\n", *rgip_v4_del);
 							rgip_evt_del_data.evt_data = rgip_v4_del;
 							IPACM_EvtDispatcher::PostEvt(&rgip_evt_del_data);
+							IPACMDBG_H("RGIP addr del [netlink]: clearing rgip_ip 0x%x -> 0\n",
+								IPACM_Iface::ipacmcfg->rgip_ip);
 							IPACM_Iface::ipacmcfg->rgip_ip = 0;
 						}
 					}

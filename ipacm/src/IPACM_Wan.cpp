@@ -14488,7 +14488,14 @@ int IPACM_Wan::ipgre_make_header_add_rt_rule(
 			IPACMERR("ipgre_add_wan_v4_addr_rt_rule failed\n");
 			return IPACM_FAILURE;
 		}
-
+		/* Remove stale RGIP proc_ctx and rt_rule installed during IPoGRE UP (when rgip_ip was 0) */
+		if (IPACM_Wan::ipgre_route_data[ipgre_info.iptype].rt_gre_add_hdl_rgip)
+		{
+			m_routing.DeleteRoutingHdl(
+			IPACM_Wan::ipgre_route_data[ipgre_info.iptype].rt_gre_add_hdl_rgip,
+						IPA_IP_v4);
+			IPACM_Wan::ipgre_route_data[ipgre_info.iptype].rt_gre_add_hdl_rgip = 0;
+		}
 		/* Install the rgip src-based route rule via dedicated API */
 		if ( ipgre_add_rgip_rt_rule(ipgre_info) != IPACM_SUCCESS )
 		{

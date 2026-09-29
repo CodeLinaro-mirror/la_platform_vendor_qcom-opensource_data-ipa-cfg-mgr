@@ -2244,7 +2244,7 @@ void IPACM_LanToLan_Iface::handle_down_event()
 				return;
 			}
 			IPACMDBG_H("it_own_peer %s\n",it_own_peer_info->peer->get_iface_pointer()->dev_name);
-			if (it_own_peer_info->is_vlan_peer){
+			if (it_own_peer_info->is_vlan_peer && it_own_peer_info->peer->get_iface_pointer()->tx_prop->num_tx_props > 2){
 				it_own_peer_hdr_type = it_own_peer_info->peer->get_iface_pointer()->tx_prop->tx[2].hdr_l2_type;
 			}
 			else {

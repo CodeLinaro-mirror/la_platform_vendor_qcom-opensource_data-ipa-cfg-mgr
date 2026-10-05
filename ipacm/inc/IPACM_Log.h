@@ -192,14 +192,28 @@ static inline DltLogLevelType ipacm_to_dlt_level(uint8_t log_level)
 	do { } while (0)
 #endif
 
+/* qxdm/syslog/file are fallback sinks, only used when neither CLOG nor DLT
+ * is compiled in -- CLOG/DLT fully replace them. */
+#if !defined(USE_CLOG) && !defined(USE_DLT)
+	#define IPACM_FALLBACK_QXDM_SYSLOG(level, core_buf) \
+		do { \
+			ipacm_send_log_to_qxdm(core_buf); \
+			if ((level) <= ipacm_global_syslog_level) \
+				syslog(LOG_USER | ((level) - 1), "%s", (core_buf)+1); \
+		} while (0)
+	#define IPACM_FALLBACK_FILE(ts_buf) ipacm_send_log_to_file(ts_buf)
+#else
+	#define IPACM_FALLBACK_QXDM_SYSLOG(level, core_buf) do { } while (0)
+	#define IPACM_FALLBACK_FILE(ts_buf) do { } while (0)
+#endif
+
 #define IPACM_LOG(incoming_log_level, fmt, ...) \
 	do { \
 		if ((incoming_log_level > ipacm_global_log_level) && (incoming_log_level > ipacm_global_syslog_level)) break; \
 		char __ipacm_log_core_buf[IPACM_LOG_MAX_CORE_BUF_LEN]; \
 		__ipacm_log_core_buf[0] = (char)('0' + (uint8_t)incoming_log_level); \
 		snprintf(__ipacm_log_core_buf+1, IPACM_LOG_MAX_CORE_BUF_LEN-1 , "%s:%d %s() " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_send_log_to_qxdm(__ipacm_log_core_buf); \
-		if (incoming_log_level <= ipacm_global_syslog_level) syslog(LOG_USER | incoming_log_level - 1, "%s", __ipacm_log_core_buf+1); \
+		IPACM_FALLBACK_QXDM_SYSLOG(incoming_log_level, __ipacm_log_core_buf); \
 		if (incoming_log_level <= ipacm_global_log_level) \
 		{\
 			char __ipacm_log_buffer_send[IPACM_LOG_MAX_BUF_LEN] = {0}; \
@@ -211,8 +225,8 @@ static inline DltLogLevelType ipacm_to_dlt_level(uint8_t log_level)
 				snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN, " %s", __ipacm_log_core_buf+1); \
 			}\
 			printf("%s\n", __ipacm_log_buffer_send); \
-			ipacm_send_log_to_file(__ipacm_log_buffer_send); \
 			IPACM_COMMON_LOG(incoming_log_level, __ipacm_log_buffer_send); \
+			IPACM_FALLBACK_FILE(__ipacm_log_buffer_send); \
 		}\
 	} while (0)
 
@@ -227,8 +241,8 @@ static inline DltLogLevelType ipacm_to_dlt_level(uint8_t log_level)
 		else {\
 			snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		} \
-		ipacm_send_log_to_file(__ipacm_log_buffer_send); \
 		IPACM_COMMON_LOG(IPACM_LOG_DEBUG, __ipacm_log_buffer_send); \
+		IPACM_FALLBACK_FILE(__ipacm_log_buffer_send); \
 	} while (0);
 
 #ifdef __cplusplus

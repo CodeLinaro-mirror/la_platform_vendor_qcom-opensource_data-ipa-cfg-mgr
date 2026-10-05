@@ -193,7 +193,7 @@ int IPACM_Iface::handle_software_routing_enable(void)
 	flt_rule_entry.status = -1;
 	flt_rule_entry.rule.action = IPA_PASS_TO_EXCEPTION;
 #ifdef FEATURE_IPA_V3
-	flt_rule_entry.rule.hashable = true;
+	flt_rule_entry.rule.hashable = false;
 #endif
 	memcpy(&flt_rule_entry.rule.attrib,
 				 &rx_prop->rx[idx].attrib,
@@ -376,6 +376,54 @@ fail:
 	return res;
 }
 
+/* Query iface subnet IP/mask from linux interface_index via ioctl */
+int IPACM_Iface::query_iface_master_subnet_ip_from_index
+(
+	int interface_index,
+	char *interface_name,
+	ipa_private_subnet *private_subnet
+)
+{
+	int fd;
+	struct ifreq ifr;
+	uint32_t v4_addr;
+
+	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+	{
+		PERROR("get interface name socket create failed");
+		return IPACM_FAILURE;
+	}
+
+	memset(&ifr, 0, sizeof(struct ifreq));
+	ifr.ifr_ifindex = interface_index;
+	IPACMDBG_H("Interface index %d\n", interface_index);
+
+	if (ioctl(fd, SIOCGIFNAME, &ifr) < 0)
+	{
+		PERROR("call_ioctl_on_dev: ioctl failed:");
+		close(fd);
+		return IPACM_FAILURE;
+	}
+
+	IPACMDBG_H("Received interface name %s\n", ifr.ifr_name);
+	memcpy(interface_name, ifr.ifr_name, sizeof(ifr.ifr_name));
+
+	ifr.ifr_addr.sa_family = AF_INET;
+	strlcpy(ifr.ifr_name, interface_name, IFNAMSIZ);
+	ioctl(fd, SIOCGIFADDR, &ifr);
+	IPACMDBG("addr bridge : %s\n", inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+	v4_addr = (htonl(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr));
+
+	ioctl(fd, SIOCGIFNETMASK, &ifr);
+	IPACMDBG("addr bridge mask : %s\n", inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+	private_subnet->subnet_mask = htonl(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr);
+	IPACMDBG(" total addr for bridge : %x\n", (v4_addr & private_subnet->subnet_mask));
+	private_subnet->subnet_addr = (v4_addr & private_subnet->subnet_mask);
+	close(fd);
+
+	return IPACM_SUCCESS;
+}
+
 /* Query ipa_interface_index by given linux interface_index */
 int IPACM_Iface::iface_ipa_index_query
 (
@@ -444,10 +492,23 @@ int IPACM_Iface::iface_ipa_index_query
 
 	for (i = 0; i < IPACM_Iface::ipacmcfg->ipa_num_ipa_interfaces; i++)
 	{
-		if (strncmp(ifr.ifr_name,
+		bool name_match = (strncmp(ifr.ifr_name,
 								IPACM_Iface::ipacmcfg->iface_table[i].iface_name,
-								sizeof(IPACM_Iface::ipacmcfg->iface_table[i].iface_name)) == 0)
+								sizeof(IPACM_Iface::ipacmcfg->iface_table[i].iface_name)) == 0);
+		bool mape_match = (i == IPACM_Iface::ipacmcfg->mape_wan_iface_table_index &&
+							IS_MAPE_IFACE(ifr.ifr_name));
+		if (name_match || mape_match)
 		{
+			if (mape_match)
+			{
+				strlcpy(IPACM_Iface::ipacmcfg->iface_table[i].iface_name,
+						ifr.ifr_name,
+						sizeof(IPACM_Iface::ipacmcfg->iface_table[i].iface_name));
+				IPACMDBG_H("Updated MAP-E iface_name to %s\n", ifr.ifr_name);
+				IPACMDBG_H(" iface_name %s mape_wan_iface_table_index %d \n",
+						IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].iface_name,
+						IPACM_Iface::ipacmcfg->mape_wan_iface_table_index);
+			}
 			IPACMDBG_H("Interface (%s) linux(%d) mapped to ipa(%d) \n", ifr.ifr_name,
 							 IPACM_Iface::ipacmcfg->iface_table[i].netlink_interface_index, i);
 
@@ -556,6 +617,7 @@ void IPACM_Iface::iface_addr_query
 						data_addr->if_index = interface_index;
 						data_addr->ipv4_addr = 	iface_ipv4.s_addr;
 						data_addr->ipv4_addr = ntohl(data_addr->ipv4_addr);
+						data_addr->ipv4_addr = (data_addr->ipv4_addr & ntohl(net_mask->sin_addr.s_addr));
 						data_addr->ipv4_addr_mask = ntohl(net_mask->sin_addr.s_addr);
 						strlcpy(data_addr->iface_name, ifr.ifr_name, sizeof(data_addr->iface_name));
 						IPACMDBG_H("Posting IPA_ADDR_ADD_EVENT with if index:%d, if name:%s, ipv4 addr:0x%x subnet: 0x%x\n",
@@ -762,6 +824,10 @@ int IPACM_Iface::query_iface_property(void)
 	{
 		IPACMDBG_H(" Has rx/tx properties registered for iface %s, add for NATTING \n", dev_name);
         IPACM_Iface::ipacmcfg->AddNatIfaces(dev_name);
+		if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+		{
+			IPACM_Iface::ipacmcfg->restore_vlan_nat_ifaces(dev_name);
+		}
 	}
 
 	close(fd);

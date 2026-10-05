@@ -65,6 +65,7 @@ char* dump_file = 0;
 void* mmap_addr = NULL;
 void* write_addr = 0;
 int max_filesize = 0;
+int dynamic_logs_enable = 0;
 int log_init_done = 0;
 pthread_mutex_t file_lock;
 

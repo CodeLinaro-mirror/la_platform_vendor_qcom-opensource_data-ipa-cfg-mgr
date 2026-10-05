@@ -295,6 +295,8 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 						else if(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].ip_vsn == IP_V6)
 						{
 							str_size = strlen(content);
+							if (str_size >= MAX_XML_STR_LEN)
+								str_size = MAX_XML_STR_LEN - 1;
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
 							inet_pton(AF_INET6, content_buf, &ip6_addr);
@@ -384,6 +386,8 @@ static int IPACM_swallow_xml_parse_tree(const char *xml_file, xmlNode* xml_node,
 						else if(config->extd_swallow_entries[config->num_extd_swallow_entries - 1].ip_vsn == IP_V6)
 						{
 							str_size = strlen(content);
+							if (str_size >= MAX_XML_STR_LEN)
+								str_size = MAX_XML_STR_LEN - 1;
 							memset(content_buf, 0, sizeof(content_buf));
 							memcpy(content_buf, (void *)content, str_size);
 							inet_pton(AF_INET6, content_buf, &ip6_addr);
@@ -794,6 +798,20 @@ static int ipacm_cfg_xml_parse_tree
 							config->lan_stats_enable = false;
 							IPACMDBG_H("LAN Stats enable %d buf(%d)\n", config->lan_stats_enable, atoi(content_buf));
 						}
+					}
+				}
+				else if (IPACM_util_icmp_string((char*)xml_node->name, LAN_Stats_Mode_TAG) == 0)
+				{
+					IPACMDBG_H("inside lan statistics mode\n");
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						content_buf[MAX_XML_STR_LEN-1] = '\0';
+						config->lan_stats_mode = atoi(content_buf);
+						IPACMDBG_H("LAN Stats mode %d buf(%d)\n", config->lan_stats_mode, atoi(content_buf));
 					}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, LAN2LAN_Stats_Enable_TAG) == 0)
@@ -1215,6 +1233,18 @@ static int ipacm_cfg_xml_parse_tree
 								IPACMDBG_H("max_filesz %d \n",config->max_file_size);
 							}
 						}
+				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACMDEBUG_TAG))
+				{
+					content = IPACM_read_content_element(xml_node);
+					if (content)
+					{
+						str_size = strlen(content);
+						memset(content_buf, 0, sizeof(content_buf));
+						memcpy(content_buf, (void *)content, str_size);
+						dynamic_logs_enable = atoi(content_buf);
+						IPACMDBG_H("dynamic_logs_enable: %d\n", dynamic_logs_enable);
+					}
 				}
 				else if (IPACM_util_icmp_string((char*)xml_node->name, IPACM_MPDN_Enable_TAG) == 0)
 				{
@@ -1787,7 +1817,7 @@ int IPACM_read_tunnel_xml(const char *xml_file, IPACM_tunnel_conf_t* tunnel_cfg)
 	if (root == NULL || IPACM_util_icmp_string((char*)root->name, system_TAG) != 0)
 	{
 		IPACMERR("The XML %s is not valid. Please start from %s tag", xml_file, system_TAG);
-		ret_val = IPACM_FAILURE;
+		xmlFreeDoc(doc);
 		return IPACM_FAILURE;
 	}
 
@@ -1796,9 +1826,11 @@ int IPACM_read_tunnel_xml(const char *xml_file, IPACM_tunnel_conf_t* tunnel_cfg)
 	{
 		IPACMERR("IPACM_xml_parse: ipacm_tunnel_xml_parse_tree returned parse error!\n");
 		memset(tunnel_cfg, 0, sizeof(IPACM_tunnel_conf_t));
+		xmlFreeDoc(doc);
 		return IPACM_FAILURE;
 	}
 
+	xmlFreeDoc(doc);
 	return IPACM_SUCCESS;
 }
 

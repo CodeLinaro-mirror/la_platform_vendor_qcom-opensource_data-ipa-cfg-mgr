@@ -47,6 +47,7 @@
 #include "IPACM_EvtDispatcher.h"
 #include "IPACM_Iface.h"
 #include "IPACM_Wan.h"
+#include "IPACM_Netlink.h"
 
 void ParseCTV6Message(struct nf_conntrack *ct);
 
@@ -203,23 +204,53 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 	{
 		const ipacm_ct_evt_data* evt_data = static_cast<const ipacm_ct_evt_data*>(data);
 		IPACMDBG_H("Received IPA_PROCESS_CT_MESSAGE_V6 event\n");
+
+		/* ct_should_run tracks whether the CT path should process this event.
+		 * It is set to false when NAT handles a real (non-dummy) connection
+		 * with actual address/port translation, to prevent duplicate rules. */
+		bool ct_should_run = IsIpv6CTEnabled();
+
 #ifdef FEATURE_IPV6_NAT
 		if(IPACM_Iface::ipacmcfg->ipv6_nat_enable) {
-			Ipv6NatEntry entry;
+			Ipv6NatEntry nat_entry;
 
-			IPACMDBG_H("IPv6NAT is Enabled\n");
-			CreateIpv6NatEntryFromCtEventData(evt_data, entry);
-			ProcessCTMessage_v6(evt_data, entry);
-		} else
+			IPACMDBG_H("nat enabled\n");
+			CreateIpv6NatEntryFromCtEventData(evt_data, nat_entry);
+
+			/* A real NAT connection has actual address or port translation:
+			 *   GetClientIp() != GetPublicIp()  (address was translated)
+			 *   OR m_srcPort != m_publicPort     (port was translated)
+			 * Pure CT conntracks (no translation) must not be processed by
+			 * NAT — doing so would cause a "Duplicate rule" error when CT
+			 * also tries to add the same connection. */
+			bool is_real_nat = nat_entry.Valid()
+			                   && !nat_entry.m_isDummy
+			                   && (nat_entry.GetClientIp() != nat_entry.GetPublicIp()
+			                       || nat_entry.m_srcPort != nat_entry.m_publicPort);
+
+			if (is_real_nat) {
+				/* Real NAT: address/port translation is happening.
+				 * CT must NOT also process this event.
+				 * NAT owns ct destruction here. */
+				IPACMDBG_H("Real NAT entry (address/port translated): CT path suppressed\n");
+				ct_should_run = false;
+				ProcessCTMessage_v6(evt_data, nat_entry, true, true);
+			} else {
+				/* Dummy/invalid NAT or no actual translation (pure CT traffic).
+				 * CT may also process; defer ct destruction to CT block. */
+				ProcessCTMessage_v6(evt_data, nat_entry, !ct_should_run, true);
+			}
+		}
 #endif
-			if (IsIpv6CTEnabled()) {
-				Ipv6ctEntry entry;
-				IPACMDBG_H("IPv6CT is Enabled\n");
-				CreateIpv6ctEntryFromCtEventData(evt_data, entry);
-				ProcessCTMessage_v6(evt_data, entry);
+		if (ct_should_run) {
+			Ipv6ctEntry ct_entry;
+
+			CreateIpv6ctEntryFromCtEventData(evt_data, ct_entry);
+			/* CT owns ct destruction here. */
+			ProcessCTMessage_v6(evt_data, ct_entry, true, false);
 		}
 #ifdef CT_OPT
-			ProcessCTV6Message(data);
+		ProcessCTV6Message(data);
 #endif
 		break;
 	}
@@ -388,6 +419,8 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 			wan_data = static_cast<const ipacm_event_iface_up*>(data);
 			static_cast<Ipv6IpAddress&>(wan_ipaddr_v6).CreateFromArray(wan_data->ipv6_addr, false);
 			TriggerWANUp_v6(wan_data);
+			IPACMDBG_H("Query Getneigh for v6 \n");
+			ipa_nl_query_newneigh(AF_INET6);
 		}
 		break;
 
@@ -460,8 +493,10 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 				break;
 			}
 		}
-		if(!pConfig->ipv6_nat_enable)
 #endif
+		/* Update conntrack v6 filters when IPv6CT is active, regardless of
+		 * whether IPv6NAT is also enabled. */
+		if(IsIpv6CTEnabled())
 			IPACM_ConntrackClient::UpdateFilters_v6(static_cast<ipacm_event_iface_up*>(data));
 		break;
 
@@ -513,8 +548,10 @@ void IPACM_ConntrackListener::event_callback(ipa_cm_event_id evt,
 				break;
 			}
 			IPACMDBG("Received IPA_HANDLE_RGIP_DEL event\n");
-
-			nat_inst->RemovePdn(IPACM_Iface::ipacmcfg->rgip_ip);
+			uint32_t *rgip_del_data = (uint32_t *)data;
+			uint32_t del_ip = rgip_del_data ? *rgip_del_data : IPACM_Iface::ipacmcfg->rgip_ip;
+			IPACMDBG_H("IPA_HANDLE_RGIP_DEL: removing PDN for ip 0x%x\n", del_ip);
+			nat_inst->RemovePdn(del_ip);
 			IPACM_Iface::ipacmcfg->rgip_ip = 0;
 			rgip_addr = 0;
 			break;
@@ -1596,7 +1633,7 @@ void IPACM_ConntrackListener::TriggerWANUp(void *in_param)
 
 	 IPACMDBG("creating nat threads\n");
 	 CreateNatThreads();
-	 IPACMDBG("sri Flushing ipv4 conntrack entries\n");
+	 IPACMDBG("Flushing ipv4 conntrack entries\n");
 	 query_conntracks(AF_INET, wan_ipaddr, 0);
 	 IPACMDBG_H("return\n");
 }
@@ -1613,8 +1650,15 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 #ifndef FEATURE_SOCKSv5
 	if (!wan_ipaddr_v6.Valid())
 	{
-		IPACMERR("Invalid WAN address,ignoring WAN UP event\n");
-		return;
+		if (IPACM_Iface::ipacmcfg->delegate_prefix_valid)
+		{
+			IPACMDBG_H("Invalid WAN address but delegate prefix is valid, proceeding with WAN UP event\n");
+		}
+		else
+		{
+			IPACMERR("Invalid WAN address,ignoring WAN UP event\n");
+			return;
+		}
 	}
 #endif
 	IPACMDBG_H("Recevied below information during wanup\n");
@@ -1637,8 +1681,8 @@ void IPACM_ConntrackListener::TriggerWANUp_v6(const ipacm_event_iface_up* evt_da
 	CreateNatThreads();
 #endif
 	WanUp_v6 = true;
-	IPACMDBG("sri Flushing ipv6 conntrack entries\n");
-	query_conntracks(AF_INET, 0, const_cast<uint32_t*>(evt_data->ipv6_addr));
+	IPACMDBG("Flushing ipv6 conntrack entries\n");
+	query_conntracks(AF_INET6, 0, const_cast<uint32_t*>(evt_data->ipv6_addr));
 	IPACMDBG_H("return\n");
 }
 
@@ -2457,7 +2501,7 @@ int v4_conntrack_callback(enum nf_conntrack_msg_type type, struct nf_conntrack *
 		orig_src_ip,repl_src_ip,private_ip,
 		(private_ip != orig_src_ip || private_ip!=repl_src_ip));
 
-	IPACMDBG("sri ori_dst : %x, repl_dst : %x \n", orig_dst_ip, repl_dst_ip);
+	IPACMDBG("ori_dst : %x, repl_dst : %x \n", orig_dst_ip, repl_dst_ip);
 
 	if((private_ip == orig_src_ip) || (private_ip == repl_src_ip) || (private_ip == orig_dst_ip) || (private_ip == repl_dst_ip))
 	{
@@ -2549,16 +2593,21 @@ int v6_conntracks_callback(enum nf_conntrack_msg_type type,struct nf_conntrack *
 		repl_params.src[0], repl_params.src[1], repl_params.src[2], repl_params.src[3]);
 	IPACMDBG("\n dst_v6_addr: 0x%08x%08x%08x%08x\n",
 		repl_params.dst[0], repl_params.dst[1], repl_params.dst[2], repl_params.dst[3]);
-	IPACMDBG(" \n %d    %d  %d   %d \n", !memcmp(orig_params.src, ip, sizeof(orig_params.src)),
-		!memcmp(repl_params.dst, ip, sizeof(repl_params.dst)),
-		!memcmp(orig_params.dst, ip, sizeof(orig_params.dst)),
-		!memcmp(repl_params.src, ip, sizeof(repl_params.src)));
+	/* Same slot order and length as the match below. */
+	IPACMDBG(" \n %d    %d  %d   %d \n", !memcmp(orig_params.src, ip, sizeof(orig_params.src)/2),
+		!memcmp(orig_params.dst, ip, sizeof(orig_params.dst)/2),
+		!memcmp(repl_params.src, ip, sizeof(repl_params.src)/2),
+		!memcmp(repl_params.dst, ip, sizeof(repl_params.dst)/2));
 
 
-	if(((!memcmp(orig_params.src, ip, sizeof(orig_params.src)/2)) &&
-	(!memcmp(repl_params.dst, ip, sizeof(repl_params.dst)/2))) ||
-	((!memcmp(orig_params.dst, ip, sizeof(orig_params.dst)/2)) &&
-	(!memcmp(repl_params.src, ip, sizeof(repl_params.src)/2))))
+	/* OR over all four slots, as in v4_conntrack_callback: the reply tuple
+	 * stops mirroring the original once IPv6 NAT translates, so AND-pairing
+	 * dropped translated flows. /2 matches the /64, catching a client's
+	 * other addresses in the delegated prefix. */
+	if((!memcmp(orig_params.src, ip, sizeof(orig_params.src)/2)) ||
+	(!memcmp(orig_params.dst, ip, sizeof(orig_params.dst)/2)) ||
+	(!memcmp(repl_params.src, ip, sizeof(repl_params.src)/2)) ||
+	(!memcmp(repl_params.dst, ip, sizeof(repl_params.dst)/2)))
 	{
 		nfct_snprintf(buf, sizeof(buf), ct, type, NFCT_O_PLAIN, NFCT_OF_TIME);
 		IPACMDBG("%s\n", buf);
@@ -2636,7 +2685,8 @@ void IPACM_ConntrackListener::query_conntracks(int af_family, uint32_t ipv4_addr
 	return;
 }
 
-void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry)
+void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data,
+		NatEntryBase& entry, bool destroy_ct, bool is_nat)
 {
 	IPACMDBG_H("\n");
 #ifdef IPACM_DEBUG
@@ -2651,11 +2701,14 @@ void IPACM_ConntrackListener::ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_d
 
 	if (entry.Valid())
 	{
-		ProcessTCPorUDPMsg_v6(evt_data, entry);
+		ProcessTCPorUDPMsg_v6(evt_data, entry, is_nat);
 	}
 
-	/* Cleanup item that was allocated during the original CT callback */
-	nfct_destroy(evt_data->ct);
+	/* Cleanup item that was allocated during the original CT callback.
+	 * When both IPv6CT and IPv6NAT are active concurrently, the caller
+	 * controls destruction to avoid a double-free.*/
+	if (destroy_ct)
+		nfct_destroy(evt_data->ct);
 	IPACMDBG_H("return\n");
 }
 
@@ -4065,6 +4118,11 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 				 }
 			 }
 
+			 if(orig_dst_ip == rgip_addr)
+			{
+				nat_entry.IsVlanUp = true;
+				i = 0;
+			}
 			 if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry.IsVlanUp))
 			 {
 				 iptodot("vlan client ip", repl_src_ip);
@@ -4077,6 +4135,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			 IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
 		 }
 		 public_ip = orig_dst_ip;
+		if (orig_dst_ip == rgip_addr && rgip_pass_enable)
+			ip_pass_enable = 1;
 #endif
 	 }
 	 else if(IPS_SRC_NAT & status)
@@ -4107,7 +4167,11 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 					}
 				}
 			}
-
+			if(repl_dst_ip == rgip_addr)
+			{
+				nat_entry.IsVlanUp = true;
+				i = 0;
+			}
 			if((i >= IPA_MAX_NUM_HW_PDNS) && (num_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!nat_entry.IsVlanUp))
 			{
 				iptodot("vlan client ip", orig_src_ip);
@@ -4120,6 +4184,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg(
 			IPACMDBG_H("IsVlanUp %d\n", nat_entry.IsVlanUp);
 		 }
 		 public_ip = repl_dst_ip;
+		if (repl_dst_ip == rgip_addr && rgip_pass_enable)
+			ip_pass_enable = 1;
 		 /* this is rmnet ip. for static policy
 		  * can have another table to check if default PDN or not
 		  * add another table map VLAN ID with the PDN IP.
@@ -4434,9 +4500,10 @@ IGNORE:
 	return;
 }
 
-void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry)
+void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data,
+	NatEntryBase& entry, bool is_nat)
 {
-	IPACMDBG_H("Received conntrack event with type: %d\n", evt_data->type);
+	IPACMDBG_H("Received conntrack event with type: %d, is_nat: %d\n", evt_data->type, is_nat);
 	entry.DebugDump("with");
 
 	bool isTempEntry = false;
@@ -4454,7 +4521,8 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 		CheckSTAClient_v6(entry, isTempEntry);
 	}
 
-	if(!IPACM_Iface::ipacmcfg->ipv6_nat_enable)
+	/* Route to CT processing path when is_nat=false, NAT processing path when is_nat=true */
+	if(!is_nat)
 	{
 		uint64_t src_ipv6_msb = 0;
 
@@ -4502,6 +4570,12 @@ void IPACM_ConntrackListener::ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt
 						}
 					}
 				}
+			}
+			if(IPACM_Iface::ipacmcfg->ipogre_enabled)
+			{
+				entry.IsVlanUp = true;
+				i =0;
+				IPACMDBG_H("IPOGRE enabled vlan client\n");
 			}
 			if((i >= IPA_MAX_NUM_HW_PDNS) && (num_v6_vlan_pdns >= IPA_MAX_NUM_HW_PDNS) && (!entry.IsVlanUp))
 			{
@@ -5186,22 +5260,7 @@ void IPACM_ConntrackListener::CreateIpv6ctEntryFromCtEventData(const ipacm_ct_ev
 		IPACMDBG("addresses aren't global, bail\n");
 		goto bail;
 	}
-#ifdef FEATURE_IPoGRE
-	/*
-	 *  If either the source or the destination address shares
-	 * the same /64 subnet as wan_ipaddr_v6 (the rmnet_data v6 address), this
-	 * session does not belong to the WAN interface and must be ignored – do not
-	 * add a CT entry for it.
-	 */
-	if (wan_ipaddr_v6.Valid() && IPACM_Iface::ipacmcfg->ipogre_enabled == true)
-	{
-		if (wan_ipaddr_v6.IsSameSubnet(srcAddr) || wan_ipaddr_v6.IsSameSubnet(dstAddr) || wan_ipaddr_v6.IsSameSubnet(srcAddr_repl) || wan_ipaddr_v6.IsSameSubnet(dstAddr_repl))
-		{
-			IPACMDBG_H("v6 conntrack src/dst in rmnet_data v6 subnet, ignoring session\n");
-			goto bail;
-		}
-	}
-#endif
+
 	if (nat_iface_ipv6_addr.Find(srcAddr) != NULL)
 	{
 		entry.m_direction = NatEntryBase::DirectionOutbound;
@@ -5327,13 +5386,13 @@ bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
 		ret = ip.IsSameSubnet(wan_ipaddr_v6);
 	}
 
-	if(pConfig->blackhole_valid == true)
+	if(pConfig != NULL && pConfig->delegate_prefix_valid == true)
 	{
-		int len =  pConfig->ipv6_blackhole_len;
+		int len =  pConfig->ipv6_delegate_prefix_len;
 		const Ipv6IpAddress& ipv6 = static_cast<const Ipv6IpAddress&>(ip);
 		uint32_t v6_address[4];
 		/* Note: Assuming incoming ipv6 =  2001:0db8:85a3:0099:1111:2222:3333:4444
-		 * and Blackhole Prefix: 2001:0db8:85a3:0000::/56
+		 * and delegate_prefix Prefix: 2001:0db8:85a3:0000::/56
 		 * Assuming they are correctly populated into four 32-bit blocks for example:
 		 * v6_address[0] = 0x20010db8
 		 * v6_address[1] = 0x85a30099
@@ -5387,7 +5446,7 @@ bool IPACM_ConntrackListener::IsIpv6PrivateSubnet(const IpAddress& ip)
 			 * prefix[1] & mask:     0x85a30000 & 0xFFFFFF00 = 0x85a30000
 			 * They match! Continue loop.
 			 */
-			if ((v6_address[i] & mask) != (pConfig->ipv6_blackhole_prefix[i] & mask)) {
+			if ((v6_address[i] & mask) != (pConfig->ipv6_delegate_prefix[i] & mask)) {
 				return false;
 			}
 

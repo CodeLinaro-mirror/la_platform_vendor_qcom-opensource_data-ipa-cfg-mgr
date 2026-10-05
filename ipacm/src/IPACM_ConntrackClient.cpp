@@ -471,14 +471,6 @@ int IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Local_Addrs
    multicast addresses */
 void IPACM_ConntrackClient::IPA_Conntrack_Filters_Ignore_Ipv6_Addresses(struct nfct_filter *filter)
 {
-#ifdef FEATURE_IPV6_NAT
-	IPACM_Config *config_instance = NULL;
-
-	config_instance = IPACM_Config::GetInstance();
-
-	if(config_instance && config_instance->ipv6_nat_enable)
-		return;
-#endif
 
 	const struct nfct_filter_ipv6 filter_ipv6_link_local_addresses =
 	{

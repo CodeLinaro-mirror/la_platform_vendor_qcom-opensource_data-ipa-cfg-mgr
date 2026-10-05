@@ -45,11 +45,19 @@ SPDX-License-Identifier: BSD-3-Clause-Clear,
 #include <sys/ioctl.h>
 #include <linux/if.h>
 #include <arpa/inet.h>
+#include <ifaddrs.h>
+#include <netpacket/packet.h>
 #include <IPACM_Neighbor.h>
 #include <IPACM_EvtDispatcher.h>
 #include "IPACM_Defs.h"
 #include "IPACM_Log.h"
 #include "IPACM_Netlink.h"
+
+/* Helper: compare two 6-byte MACs; avoids repeating IPA_MAC_ADDR_SIZE at every call site */
+static inline bool mac_equal(const uint8_t *a, const uint8_t *b)
+{
+	return memcmp(a, b, IPA_MAC_ADDR_SIZE) == 0;
+}
 
 #define MAX_FDB_ROW_LEN 200
 #define MAX_FDB_PARAM_CNT 5
@@ -457,6 +465,26 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 				break;
 			}
 			IPACMDBG_H("Received IPA_USB_LINK_UP_EVENT with if_index: %d, ipa_interface_index = %d\n", data->if_index, ipa_interface_index);
+			/* Snapshot local interface MACs once; avoids O(M*N) getifaddrs calls in the loop */
+			uint8_t usb_local_macs[64][IPA_MAC_ADDR_SIZE];
+			int usb_num_local_macs = 0;
+			{
+				struct ifaddrs *ifaddr;
+				if (getifaddrs(&ifaddr) == 0)
+				{
+					for (struct ifaddrs *ifa = ifaddr; ifa && usb_num_local_macs < 64; ifa = ifa->ifa_next)
+					{
+						if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_PACKET)
+							continue;
+						const struct sockaddr_ll *sll = (const struct sockaddr_ll *)ifa->ifa_addr;
+						if (sll->sll_halen == IPA_MAC_ADDR_SIZE)
+							memcpy(usb_local_macs[usb_num_local_macs++], sll->sll_addr, IPA_MAC_ADDR_SIZE);
+					}
+					if (usb_num_local_macs == 0)
+						IPACMDBG_H("IPA_USB_LINK_UP_EVENT: self-MAC guard inactive (no AF_PACKET entries)\n");
+					freeifaddrs(ifaddr);
+				}
+			}
 			for (i = 0; i < num_neighbor_client_temp; i++)
 			{
 				/* find the client */
@@ -472,6 +500,86 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 					{
 						IPACMERR("client %d name %s not real\n", i, neighbor_client[i].iface_name);
 						continue;
+					}
+
+					/* Bridge-MAC guard: skip cached clients whose MAC is the bridge itself */
+					const uint8_t *usb_bridge_mac = NULL;
+					const char    *usb_bridge_name = NULL;
+#ifdef FEATURE_VLAN_MPDN
+					if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+					{
+						ipacm_bridge *br = IPACM_Iface::ipacmcfg->get_vlan_bridge(neighbor_client[i].iface_name);
+						if (br)
+						{
+							IPACMDBG_H("USB case1: found bridge %s MAC %02x:%02x:%02x:%02x:%02x:%02x for iface %s\n",
+								br->bridge_name,
+								br->bridge_mac[0], br->bridge_mac[1], br->bridge_mac[2],
+								br->bridge_mac[3], br->bridge_mac[4], br->bridge_mac[5],
+								neighbor_client[i].iface_name);
+							usb_bridge_mac  = br->bridge_mac;
+							usb_bridge_name = br->bridge_name;
+						}
+					}
+					/* Case 2: VLAN sub-iface — only try if case 1 did not resolve a bridge */
+					if (usb_bridge_mac == NULL && IPACM_Iface::ipacmcfg->iface_in_vlan_mode(neighbor_client[i].iface_name))
+					{
+						uint16_t vid = 0;
+						if (IPACM_Iface::ipacmcfg->get_vlan_id(neighbor_client[i].iface_name, &vid) == IPACM_SUCCESS)
+						{
+							ipacm_bridge *br = IPACM_Iface::ipacmcfg->get_vlan_bridge_from_vid(vid);
+							if (br)
+							{
+								IPACMDBG_H("USB case2: found bridge %s MAC %02x:%02x:%02x:%02x:%02x:%02x for iface %s vid %hu\n",
+									br->bridge_name,
+									br->bridge_mac[0], br->bridge_mac[1], br->bridge_mac[2],
+									br->bridge_mac[3], br->bridge_mac[4], br->bridge_mac[5],
+									neighbor_client[i].iface_name, vid);
+								usb_bridge_mac  = br->bridge_mac;
+								usb_bridge_name = br->bridge_name;
+							}
+						}
+					}
+#endif
+					if (usb_bridge_mac == NULL)
+					{
+						static const uint8_t zero_mac[IPA_MAC_ADDR_SIZE] = {0};
+						if (memcmp(IPACM_Iface::ipacmcfg->bridge_mac, zero_mac, IPA_MAC_ADDR_SIZE) != 0)
+						{
+							usb_bridge_mac  = IPACM_Iface::ipacmcfg->bridge_mac;
+							usb_bridge_name = IPACM_Iface::ipacmcfg->ipa_virtual_iface_name;
+						}
+					}
+					if (usb_bridge_mac &&
+					    mac_equal(neighbor_client[i].mac_addr, usb_bridge_mac))
+					{
+						IPACMDBG_H("IPA_USB_LINK_UP_EVENT: skipping client %d on %s: MAC "
+							"%02x:%02x:%02x:%02x:%02x:%02x matches bridge %s MAC\n",
+							i, neighbor_client[i].iface_name,
+							neighbor_client[i].mac_addr[0], neighbor_client[i].mac_addr[1],
+							neighbor_client[i].mac_addr[2], neighbor_client[i].mac_addr[3],
+							neighbor_client[i].mac_addr[4], neighbor_client[i].mac_addr[5],
+							usb_bridge_name ? usb_bridge_name : "unknown");
+						continue;
+					}
+
+					/* Self-MAC guard: compare against pre-snapshotted local MACs */
+					{
+						bool self_mac_drop = false;
+						for (int m = 0; m < usb_num_local_macs && !self_mac_drop; m++)
+						{
+							if (mac_equal(neighbor_client[i].mac_addr, usb_local_macs[m]))
+							{
+								IPACMDBG_H("IPA_USB_LINK_UP_EVENT: skipping client %d on %s: MAC "
+									"%02x:%02x:%02x:%02x:%02x:%02x matches a local iface\n",
+									i, neighbor_client[i].iface_name,
+									neighbor_client[i].mac_addr[0], neighbor_client[i].mac_addr[1],
+									neighbor_client[i].mac_addr[2], neighbor_client[i].mac_addr[3],
+									neighbor_client[i].mac_addr[4], neighbor_client[i].mac_addr[5]);
+								self_mac_drop = true;
+							}
+						}
+						if (self_mac_drop)
+							continue;
 					}
 
 					evt_data.event = IPA_LAN_CLIENT_ADD_EVENT;
@@ -612,6 +720,114 @@ void IPACM_Neighbor::event_callback(ipa_cm_event_id event, void *param)
 #endif
 process:
 			IPACMDBG("Got Neighbor event with ip_type: %d: iface_name: %s \n", data->iptype, data->iface_name);
+
+			/* Generic bridge-MAC guard: skip neighbor events where the MAC is the
+			 * bridge itself (VLAN, non-VLAN, WLAN).  The bridge MAC arriving as a
+			 * neighbor causes phantom lan2lan entries for a non-existent client. */
+			const uint8_t *bridge_mac = NULL;
+			const char    *bridge_name = NULL;
+#ifdef FEATURE_VLAN_MPDN
+			if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE)
+			{
+				/* Case 1: bridge interface itself (bridge0, br-lan) */
+				ipacm_bridge *br = IPACM_Iface::ipacmcfg->get_vlan_bridge(data->iface_name);
+				if (br)
+				{
+					IPACMDBG_H("NEIGH case1: found bridge %s MAC %02x:%02x:%02x:%02x:%02x:%02x for iface %s\n",
+						br->bridge_name,
+						br->bridge_mac[0], br->bridge_mac[1], br->bridge_mac[2],
+						br->bridge_mac[3], br->bridge_mac[4], br->bridge_mac[5],
+						data->iface_name);
+					bridge_mac  = br->bridge_mac;
+					bridge_name = br->bridge_name;
+				}
+			}
+			/* Case 2: VLAN sub-interface (eth0.1) — look up owning bridge */
+			if (!bridge_mac && IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->iface_name))
+			{
+				uint16_t vid = 0;
+				if (IPACM_Iface::ipacmcfg->get_vlan_id(data->iface_name, &vid) == IPACM_SUCCESS)
+				{
+					ipacm_bridge *br = IPACM_Iface::ipacmcfg->get_vlan_bridge_from_vid(vid);
+					if (br)
+					{
+						IPACMDBG_H("NEIGH case2: found bridge %s MAC %02x:%02x:%02x:%02x:%02x:%02x for iface %s vid %hu\n",
+							br->bridge_name,
+							br->bridge_mac[0], br->bridge_mac[1], br->bridge_mac[2],
+							br->bridge_mac[3], br->bridge_mac[4], br->bridge_mac[5],
+							data->iface_name, vid);
+						bridge_mac  = br->bridge_mac;
+						bridge_name = br->bridge_name;
+					}
+				}
+			}
+#endif
+			/* Case 3: non-VLAN or WLAN — compare against global bridge MAC */
+			if (!bridge_mac)
+			{
+				static const uint8_t zero_mac[IPA_MAC_ADDR_SIZE] = {0};
+				if (memcmp(IPACM_Iface::ipacmcfg->bridge_mac, zero_mac, IPA_MAC_ADDR_SIZE) != 0)
+				{
+					bridge_mac  = IPACM_Iface::ipacmcfg->bridge_mac;
+					bridge_name = IPACM_Iface::ipacmcfg->ipa_virtual_iface_name;
+				}
+				else
+				{
+					IPACMDBG_H("Global bridge MAC not set (all-zero) for iface %s, skipping bridge MAC check\n",
+						data->iface_name);
+				}
+			}
+
+			if (bridge_mac && mac_equal(data->mac_addr, bridge_mac))
+			{
+				IPACMDBG_H("Ignoring neighbor on %s: MAC %02x:%02x:%02x:%02x:%02x:%02x matches bridge %s MAC\n",
+					data->iface_name,
+					data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+					data->mac_addr[3], data->mac_addr[4], data->mac_addr[5],
+					bridge_name ? bridge_name : "unknown");
+				break;
+			}
+
+			/* Self-MAC guard: reject neighbor events whose MAC matches any local
+			 * interface (ath0/ath09/ath1/ath19/mld0-3/eth0/eth0.x/br-lan/br-lan2).
+			 * AF_PACKET entries in getifaddrs() give one entry per interface with
+			 * the hardware MAC directly — no extra ioctl needed per interface. */
+			{
+				bool self_mac_drop = false;
+				/* Tracks whether any AF_PACKET entry was seen; if none, the guard
+				 * silently no-ops — log a warning so the inactive guard is visible */
+				bool found_af_packet = false;
+				struct ifaddrs *ifaddr;
+				if (getifaddrs(&ifaddr) == 0)
+				{
+					for (struct ifaddrs *ifa = ifaddr; ifa && !self_mac_drop; ifa = ifa->ifa_next)
+					{
+						if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_PACKET)
+							continue;
+						found_af_packet = true;
+						const struct sockaddr_ll *sll =
+							(const struct sockaddr_ll *)ifa->ifa_addr;
+						if (sll->sll_halen == IPA_MAC_ADDR_SIZE &&
+						    mac_equal(data->mac_addr, sll->sll_addr))
+						{
+							IPACMDBG_H("Ignoring neighbor on %s: MAC "
+								"%02x:%02x:%02x:%02x:%02x:%02x matches local iface %s\n",
+								data->iface_name,
+								data->mac_addr[0], data->mac_addr[1], data->mac_addr[2],
+								data->mac_addr[3], data->mac_addr[4], data->mac_addr[5],
+								ifa->ifa_name);
+							self_mac_drop = true;
+						}
+					}
+					if (!found_af_packet)
+						IPACMDBG_H("Self-MAC guard: no AF_PACKET entries, guard inactive on %s\n",
+							data->iface_name);
+					freeifaddrs(ifaddr);
+				}
+				if (self_mac_drop)
+					break;
+			}
+
 			if (data->iptype == IPA_IP_v4)
 			{
 				if (data->ipv4_addr != 0) /* not 0.0.0.0 */
@@ -686,6 +902,10 @@ process:
 
 						}
 #endif
+						/* save originals — loop body overwrites data->if_index/iface_name on each match */
+						char orig_iface_name_v4[IPA_IFACE_NAME_LEN];
+						int  orig_if_index_v4 = data->if_index;
+						strlcpy(orig_iface_name_v4, data->iface_name, sizeof(orig_iface_name_v4));
 						/* search if seen this client or not*/
 						for (i = 0; i < num_neighbor_client_temp; i++)
 						{
@@ -770,8 +990,10 @@ process:
 								/* check if getting real netdev name yet */
 								if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
 								{
-									IPACMERR("client %d name %s not real\n", i, data->iface_name);
-									return;
+									IPACMERR("client %d name %s not real, keep searching\n", i, data->iface_name);
+									data->if_index = orig_if_index_v4;
+									strlcpy(data->iface_name, orig_iface_name_v4, sizeof(data->iface_name));
+									continue;
 								}
 								/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 								if (event == IPA_NEW_NEIGH_EVENT)
@@ -1225,6 +1447,10 @@ process:
 							}
 						}
 #endif
+						/* save originals — loop body overwrites data->if_index/iface_name on each match */
+						char orig_iface_name_mpdn[IPA_IFACE_NAME_LEN];
+						int  orig_if_index_mpdn = data->if_index;
+						strlcpy(orig_iface_name_mpdn, data->iface_name, sizeof(orig_iface_name_mpdn));
 						/* search if seen this client or not*/
 						for (i = 0; i < num_neighbor_client_temp; i++)
 						{
@@ -1297,8 +1523,10 @@ process:
 								/* check if getting real netdev name yet */
 								if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
 								{
-									IPACMERR("client %d name %s not real\n", i, data->iface_name);
-									return;
+									IPACMERR("client %d name %s not real, keep searching\n", i, data->iface_name);
+									data->if_index = orig_if_index_mpdn;
+									strlcpy(data->iface_name, orig_iface_name_mpdn, sizeof(data->iface_name));
+									continue;
 								}
 								/* construct IPA_NEIGH_CLIENT_IP_ADDR_ADD_EVENT command and insert to command-queue */
 								if(event == IPA_NEW_NEIGH_EVENT)
@@ -1567,6 +1795,26 @@ process:
 										{
 											IPACMDBG_H("Match if_index:%d client:%d copy name",data->if_index,i);
 											strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
+										}
+										else if(data->master_if_index != 0 &&
+												data->master_if_index == neighbor_client[i].iface_index)
+										{
+											/* Bridge-port event: physical port (if_index=14) is a member of
+											 * the bridge (master_if_index=17) that created this IFACE_NONE
+											 * entry (iface_index=17).  Resolve the entry in-place so the
+											 * cached IP can be used immediately without waiting for a
+											 * subsequent br-lan ARP event. */
+											IPACMDBG_H("Match master_if_index:%d client:%d resolving IFACE_NONE to %s\n",
+												data->master_if_index, i, data->iface_name);
+											if(strcmp(data->iface_name, IPA_NO_IFACE_NAME) == 0)
+											{
+												IPACMERR("resolved iface name is still IPA_NO_IFACE_NAME, skipping\n");
+												continue;
+											}
+											strlcpy(neighbor_client[i].iface_name, data->iface_name, sizeof(neighbor_client[i].iface_name));
+											neighbor_client[i].iface_index = data->if_index;
+											if(ipa_interface_index != IPACM_FAILURE)
+												neighbor_client[i].ipa_if_num = ipa_interface_index;
 										}
 										else{
 											IPACMDBG_H("if index mismatch continue..\n");

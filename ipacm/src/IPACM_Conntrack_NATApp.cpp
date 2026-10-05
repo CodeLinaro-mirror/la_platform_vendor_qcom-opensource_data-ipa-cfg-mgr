@@ -458,6 +458,12 @@ int NatApp::RemovePdn(uint32_t pub_ip)
 
 	CHK_TBL_HDL();
 
+	if(pub_ip == 0)
+	{
+		IPACMERR("RemovePdn called with invalid IP 0.0.0.0, ignoring\n");
+		return IPACM_FAILURE;
+	}
+
 	IPACMDBG_H("RemovePDN IP: %x\n", pub_ip);
 	ret = ipa_nat_get_pdn_index(pub_ip, &pdn_index);
 	if(ret)
@@ -2798,7 +2804,7 @@ int NatProxyBase::AddEntry(NatEntryBase& entry)
 	}
 
 	uint32_t entry_handle = 0, additional_handle = 0;
-	int uc_act_handle;
+	int uc_act_handle = -1;
 	int ret = DoAddEntry(entry, entry_handle, additional_handle, uc_act_handle);
 	if (!ret)
 	{

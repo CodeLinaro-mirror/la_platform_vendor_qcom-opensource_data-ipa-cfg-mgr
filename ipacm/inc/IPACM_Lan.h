@@ -577,12 +577,12 @@ public:
 #endif
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 
-	void handle_stats_client_connect(int if_index, uint8_t *mac_addr );
+	void handle_stats_client_connect(int if_index, uint8_t *mac_addr, uint16_t vlan_id = 0);
 	/* handle lan client connect event. */
-	virtual int handle_lan_client_connect(uint8_t *mac_addr);
+	virtual int handle_lan_client_connect(uint8_t *mac_addr, uint16_t vlan_id = 0);
 
 	/* handle lan client disconnect event. */
-	virtual int handle_lan_client_disconnect(uint8_t *mac_addr);
+	virtual int handle_lan_client_disconnect(uint8_t *mac_addr, uint16_t vlan_id = 0);
 
 	/* install UL filter rule from Q6 per client */
 	virtual int install_uplink_filter_rule_per_client
@@ -650,6 +650,11 @@ public:
 
 	/* set lan client info. */
 	virtual int clear_lan_client_info(struct wan_ioctl_lan_client_info_v2 *client_info);
+
+
+	virtual int set_lan_client_info_vlan(struct wan_ioctl_lan_client_info_vlan *client_info);
+
+	virtual int clear_lan_client_info_vlan(struct wan_ioctl_lan_client_info_vlan *client_info);
 
 	/* Enable per client stats. */
 	virtual int enable_per_client_stats(bool *status);
@@ -865,7 +870,9 @@ protected:
 		return false;
 	}
 
-	inline int get_free_active_lan_stats_index(uint8_t *mac_addr)
+	inline int get_free_active_lan_stats_index(uint8_t *mac_addr,
+		uint8_t mode = IPA_LAN_STATS_MODE_0,
+		uint16_t vlan_id = 0)
 	{
 		uint8_t cnt;
 
@@ -874,6 +881,70 @@ protected:
 			IPACMDBG_H("LAN stats functionality is not enabled.\n");
 			return -1;
 		}
+
+#ifdef IPA_HW_FNR_STATS
+		if (mode == IPA_LAN_STATS_MODE_1)
+		{
+
+			for (cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
+			{
+				if (IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx != -1 &&
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].vlan_id == vlan_id)
+				{
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].ref_count++;
+					IPACMDBG_H("Mode1: reuse active slot %d vlan_id %d ref_count=%d\n",
+						cnt, vlan_id,
+						IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].ref_count);
+					return cnt;
+				}
+			}
+			for (cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
+			{
+				if (IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx == -1)
+				{
+					IPACMDBG_H("Mode1: new active slot %d for vlan_id %d\n", cnt, vlan_id);
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx = cnt;
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].vlan_id = vlan_id;
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].ipa_if_num = ipa_if_num;
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].ref_count = 1;
+					return cnt;
+				}
+			}
+			IPACMDBG_H("Mode1: no active slot available for vlan_id %d\n", vlan_id);
+			return -1;
+		}
+
+		if (mode == IPA_LAN_STATS_MODE_2)
+		{
+			/* Mode 2: look up by (MAC, VLAN ID) — reuse if found (reconnect case) */
+			for (cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
+			{
+				if (IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx != -1 &&
+					memcmp(IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0 &&
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].vlan_id == vlan_id)
+				{
+					IPACMDBG_H("Mode2: reuse active slot %d for mac+vlan_id %d\n", cnt, vlan_id);
+					return cnt;
+				}
+			}
+			/* Allocate new slot for this unique (MAC, VLAN ID) pair */
+			for (cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
+			{
+				if (IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx == -1)
+				{
+					IPACMDBG_H("Mode2: new active slot %d for mac+vlan_id %d\n", cnt, vlan_id);
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx = cnt;
+					memcpy(IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].mac, mac_addr, IPA_MAC_ADDR_SIZE);
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].vlan_id = vlan_id;
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].ipa_if_num = ipa_if_num;
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].ref_count = 1;
+					return cnt;
+				}
+			}
+			IPACMDBG_H("Mode2: no active slot available for mac+vlan_id %d\n", vlan_id);
+			return -1;
+		}
+#endif /* IPA_HW_FNR_STATS */
 
 		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				mac_addr[0], mac_addr[1], mac_addr[2],
@@ -894,7 +965,9 @@ protected:
 		return -1;
 	}
 
-	inline int get_free_inactive_lan_stats_index(uint8_t *mac_addr)
+	inline int get_free_inactive_lan_stats_index(uint8_t *mac_addr,
+		uint8_t mode = IPA_LAN_STATS_MODE_0,
+		uint16_t vlan_id = 0)
 	{
 		uint8_t cnt;
 
@@ -904,10 +977,50 @@ protected:
 			return -1;
 		}
 
+#ifdef IPA_HW_FNR_STATS
+		if (mode == IPA_LAN_STATS_MODE_1)
+		{
+			/* Mode 1: allocate a new inactive slot keyed by vlan_id. */
+			for (cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
+			{
+				if (IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].lan_stats_idx == -1)
+				{
+					IPACMDBG_H("Mode1: new inactive slot %d for vlan_id %d\n", cnt, vlan_id);
+					IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].lan_stats_idx = cnt;
+					IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].vlan_id = vlan_id;
+					IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].ipa_if_num = ipa_if_num;
+					IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].ref_count = 1;
+					return cnt;
+				}
+			}
+			IPACMDBG_H("Mode1: no inactive slot available for vlan_id %d\n", vlan_id);
+			return -1;
+		}
+
+		if (mode == IPA_LAN_STATS_MODE_2)
+		{
+			/* Mode 2: allocate a new inactive slot keyed by (MAC, VLAN ID). */
+			for (cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
+			{
+				if (IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].lan_stats_idx == -1)
+				{
+					IPACMDBG_H("Mode2: new inactive slot %d for mac+vlan_id %d\n", cnt, vlan_id);
+					IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].lan_stats_idx = cnt;
+					memcpy(IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].mac, mac_addr, IPA_MAC_ADDR_SIZE);
+					IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].vlan_id = vlan_id;
+					IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].ipa_if_num = ipa_if_num;
+					IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].ref_count = 1;
+					return cnt;
+				}
+			}
+			IPACMDBG_H("Mode2: no inactive slot available for mac+vlan_id %d\n", vlan_id);
+			return -1;
+		}
+#endif /* IPA_HW_FNR_STATS */
+
 		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5]);
-
 
 		for(cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
 		{
@@ -924,7 +1037,9 @@ protected:
 		return -1;
 	}
 
-	inline int get_lan_stats_index(uint8_t *mac_addr)
+	inline int get_lan_stats_index(uint8_t *mac_addr,
+		uint8_t mode = IPA_LAN_STATS_MODE_0,
+		uint16_t vlan_id = 0)
 	{
 		uint8_t cnt;
 
@@ -933,6 +1048,41 @@ protected:
 			IPACMDBG_H("LAN stats functionality is not enabled.\n");
 			return -1;
 		}
+
+#ifdef IPA_HW_FNR_STATS
+		if (mode == IPA_LAN_STATS_MODE_1)
+		{
+			/* Mode 1: look up active slot by vlan_id. */
+			for (cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
+			{
+				if (IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx != -1 &&
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].vlan_id == vlan_id)
+				{
+					IPACMDBG_H("Mode1: found active slot %d for vlan_id %d\n", cnt, vlan_id);
+					return cnt;
+				}
+			}
+			IPACMDBG_H("Mode1: no active slot for vlan_id %d\n", vlan_id);
+			return -1;
+		}
+
+		if (mode == IPA_LAN_STATS_MODE_2)
+		{
+			/* Mode 2: look up active slot by (MAC, VLAN ID). */
+			for (cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
+			{
+				if (IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].lan_stats_idx != -1 &&
+					memcmp(IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0 &&
+					IPACM_Iface::ipacmcfg->active_lan_client_index[cnt].vlan_id == vlan_id)
+				{
+					IPACMDBG_H("Mode2: found active slot %d for mac+vlan_id %d\n", cnt, vlan_id);
+					return cnt;
+				}
+			}
+			IPACMDBG_H("Mode2: no active slot for mac+vlan_id %d\n", vlan_id);
+			return -1;
+		}
+#endif /* IPA_HW_FNR_STATS */
 
 		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				mac_addr[0], mac_addr[1], mac_addr[2],
@@ -955,7 +1105,9 @@ protected:
 		return -1;
 	}
 
-	inline int get_available_inactive_lan_client(uint8_t *mac_addr)
+	inline int get_available_inactive_lan_client(uint8_t *mac_addr,
+		uint8_t mode = IPA_LAN_STATS_MODE_0,
+		uint16_t *out_vlan_id = nullptr)
 	{
 		uint8_t cnt;
 
@@ -964,6 +1116,51 @@ protected:
 			IPACMDBG_H("LAN stats functionality is not enabled.\n");
 			return IPACM_FAILURE;
 		}
+
+#ifdef IPA_HW_FNR_STATS
+		if (mode == IPA_LAN_STATS_MODE_1)
+		{
+			/* Mode 1: return the vlan_id of the first inactive VLAN slot. */
+			for (cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
+			{
+				if (IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].lan_stats_idx != -1)
+				{
+					IPACMDBG_H("Mode1: found inactive slot %d vlan_id %d\n",
+						cnt,
+						IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].vlan_id);
+					if (out_vlan_id)
+						*out_vlan_id =
+							IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].vlan_id;
+					return IPACM_SUCCESS;
+				}
+			}
+			IPACMDBG_H("Mode1: no inactive client\n");
+			return IPACM_FAILURE;
+		}
+
+		if (mode == IPA_LAN_STATS_MODE_2)
+		{
+			/* Mode 2: return the (MAC, VLAN ID) of the first inactive slot. */
+			for (cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
+			{
+				if (IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].lan_stats_idx != -1)
+				{
+					IPACMDBG_H("Mode2: found inactive slot %d mac+vlan_id %d\n",
+						cnt,
+						IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].vlan_id);
+					memcpy(mac_addr,
+						IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].mac,
+						IPA_MAC_ADDR_SIZE);
+					if (out_vlan_id)
+						*out_vlan_id =
+							IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].vlan_id;
+					return IPACM_SUCCESS;
+				}
+			}
+			IPACMDBG_H("Mode2: no inactive client\n");
+			return IPACM_FAILURE;
+		}
+#endif /* IPA_HW_FNR_STATS */
 
 		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				mac_addr[0], mac_addr[1], mac_addr[2],
@@ -982,13 +1179,56 @@ protected:
 		return IPACM_FAILURE;
 	}
 
-	inline int reset_active_lan_stats_index(int8_t idx, uint8_t *mac_addr)
+	inline int reset_active_lan_stats_index(int8_t idx, uint8_t *mac_addr,
+		uint8_t mode = IPA_LAN_STATS_MODE_0,
+		uint16_t vlan_id = 0)
 	{
 		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
 		{
 			IPACMDBG_H("LAN stats functionality is not enabled.\n");
 			return IPACM_FAILURE;
 		}
+
+#ifdef IPA_HW_FNR_STATS
+		if (mode == IPA_LAN_STATS_MODE_1)
+		{
+			/* Mode 1: decrement ref_count; free slot only when it reaches 0. */
+			if (idx < 0 || idx >= IPA_MAX_NUM_HW_PATH_CLIENTS_V2 ||
+				IPACM_Iface::ipacmcfg->active_lan_client_index[idx].vlan_id != vlan_id)
+			{
+				IPACMDBG_H("Mode1: slot %d invalid or vlan_id mismatch\n", idx);
+				return IPACM_FAILURE;
+			}
+			IPACM_Iface::ipacmcfg->active_lan_client_index[idx].ref_count--;
+			IPACMDBG_H("Mode1: slot %d vlan_id %d ref_count now %d\n",
+				idx, vlan_id,
+				IPACM_Iface::ipacmcfg->active_lan_client_index[idx].ref_count);
+			if (IPACM_Iface::ipacmcfg->active_lan_client_index[idx].ref_count <= 0)
+			{
+				IPACMDBG_H("Mode1: last client on vlan_id %d, freeing slot %d\n",
+					vlan_id, idx);
+				memset(&IPACM_Iface::ipacmcfg->active_lan_client_index[idx], -1,
+					sizeof(IPACM_Config::ipa_lan_client_idx));
+			}
+			return IPACM_SUCCESS;
+		}
+
+		if (mode == IPA_LAN_STATS_MODE_2)
+		{
+			/* Mode 2: match by (MAC, VLAN ID) — hard-reset (no ref_count). */
+			if (idx < 0 || idx >= IPA_MAX_NUM_HW_PATH_CLIENTS_V2 ||
+				memcmp(IPACM_Iface::ipacmcfg->active_lan_client_index[idx].mac, mac_addr, IPA_MAC_ADDR_SIZE) != 0 ||
+				IPACM_Iface::ipacmcfg->active_lan_client_index[idx].vlan_id != vlan_id)
+			{
+				IPACMDBG_H("Mode2: slot %d invalid or mac+vlan_id mismatch\n", idx);
+				return IPACM_FAILURE;
+			}
+			IPACMDBG_H("Mode2: freeing active slot %d for mac+vlan_id %d\n", idx, vlan_id);
+			memset(&IPACM_Iface::ipacmcfg->active_lan_client_index[idx], -1,
+				sizeof(IPACM_Config::ipa_lan_client_idx));
+			return IPACM_SUCCESS;
+		}
+#endif /* IPA_HW_FNR_STATS */
 
 		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				mac_addr[0], mac_addr[1], mac_addr[2],
@@ -1004,7 +1244,9 @@ protected:
 		return IPACM_SUCCESS;
 	}
 
-	inline int reset_inactive_lan_stats_index(uint8_t *mac_addr)
+	inline int reset_inactive_lan_stats_index(uint8_t *mac_addr,
+		uint8_t mode = IPA_LAN_STATS_MODE_0,
+		uint16_t vlan_id = 0)
 	{
 		uint8_t cnt;
 
@@ -1013,6 +1255,47 @@ protected:
 			IPACMDBG_H("LAN stats functionality is not enabled.\n");
 			return IPACM_FAILURE;
 		}
+
+#ifdef IPA_HW_FNR_STATS
+		if (mode == IPA_LAN_STATS_MODE_1)
+		{
+			/* Mode 1: free inactive slot keyed by vlan_id. */
+			for (cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
+			{
+				if (IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].lan_stats_idx != -1 &&
+					IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].vlan_id == vlan_id)
+				{
+					IPACMDBG_H("Mode1: freeing inactive slot %d for vlan_id %d\n",
+						cnt, vlan_id);
+					memset(&IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt], -1,
+						sizeof(IPACM_Config::ipa_lan_client_idx));
+					return IPACM_SUCCESS;
+				}
+			}
+			IPACMDBG_H("Mode1: no inactive slot for vlan_id %d\n", vlan_id);
+			return IPACM_FAILURE;
+		}
+
+		if (mode == IPA_LAN_STATS_MODE_2)
+		{
+			/* Mode 2: free inactive slot keyed by (MAC, VLAN ID). */
+			for (cnt = 0; cnt < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; cnt++)
+			{
+				if (IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].lan_stats_idx != -1 &&
+					memcmp(IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].mac, mac_addr, IPA_MAC_ADDR_SIZE) == 0 &&
+					IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt].vlan_id == vlan_id)
+				{
+					IPACMDBG_H("Mode2: freeing inactive slot %d for mac+vlan_id %d\n",
+						cnt, vlan_id);
+					memset(&IPACM_Iface::ipacmcfg->inactive_lan_client_index[cnt], -1,
+						sizeof(IPACM_Config::ipa_lan_client_idx));
+					return IPACM_SUCCESS;
+				}
+			}
+			IPACMDBG_H("Mode2: no inactive slot for mac+vlan_id %d\n", vlan_id);
+			return IPACM_FAILURE;
+		}
+#endif /* IPA_HW_FNR_STATS */
 
 		IPACMDBG_H("Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
 				mac_addr[0], mac_addr[1], mac_addr[2],
@@ -1049,6 +1332,47 @@ protected:
 				memset(&IPACM_Iface::ipacmcfg->inactive_lan_client_index[i], -1, sizeof(IPACM_Config::ipa_lan_client_idx));
 		}
 	}
+
+#ifdef IPA_HW_FNR_STATS
+	/* Mode 1: reset active/inactive entries for this iface by decrementing ref_count;
+	 * only clear an entry when ref_count reaches 0 (last client on that VLAN). */
+	inline void reset_vlan_stats_index()
+	{
+		uint8_t i;
+
+		if (!IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable)
+		{
+			IPACMDBG_H("LAN stats functionality is not enabled.\n");
+			return;
+		}
+
+		for (i = 0; i < IPA_MAX_NUM_HW_PATH_CLIENTS_V2; i++)
+		{
+			if (IPACM_Iface::ipacmcfg->active_lan_client_index[i].ipa_if_num == ipa_if_num &&
+				IPACM_Iface::ipacmcfg->active_lan_client_index[i].lan_stats_idx != -1)
+			{
+				IPACM_Iface::ipacmcfg->active_lan_client_index[i].ref_count--;
+				IPACMDBG_H("Mode 1: active index %d VLAN %d ref_count now %d\n",
+					i, IPACM_Iface::ipacmcfg->active_lan_client_index[i].vlan_id,
+					IPACM_Iface::ipacmcfg->active_lan_client_index[i].ref_count);
+				if (IPACM_Iface::ipacmcfg->active_lan_client_index[i].ref_count <= 0)
+					memset(&IPACM_Iface::ipacmcfg->active_lan_client_index[i], -1,
+						sizeof(IPACM_Config::ipa_lan_client_idx));
+			}
+			if (IPACM_Iface::ipacmcfg->inactive_lan_client_index[i].ipa_if_num == ipa_if_num &&
+				IPACM_Iface::ipacmcfg->inactive_lan_client_index[i].lan_stats_idx != -1)
+			{
+				IPACM_Iface::ipacmcfg->inactive_lan_client_index[i].ref_count--;
+				IPACMDBG_H("Mode 1: inactive index %d VLAN %d ref_count now %d\n",
+					i, IPACM_Iface::ipacmcfg->inactive_lan_client_index[i].vlan_id,
+					IPACM_Iface::ipacmcfg->inactive_lan_client_index[i].ref_count);
+				if (IPACM_Iface::ipacmcfg->inactive_lan_client_index[i].ref_count <= 0)
+					memset(&IPACM_Iface::ipacmcfg->inactive_lan_client_index[i], -1,
+						sizeof(IPACM_Config::ipa_lan_client_idx));
+			}
+		}
+	}
+#endif /* IPA_HW_FNR_STATS */
 
 #endif
 

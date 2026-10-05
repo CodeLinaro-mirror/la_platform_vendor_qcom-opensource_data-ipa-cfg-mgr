@@ -92,7 +92,7 @@ typedef struct _ipa_rm_client
 #ifdef FEATURE_PPPOE
 #define IPA_PPPOE_TABLE IPA_TMP_DIR"/ipa_pppoe_table.txt"
 #define MAX_PPPOE_ROW_LEN 200
-#define MAX_PPPOE_PARAM_CNT 3
+#define MAX_PPPOE_PARAM_CNT 4
 #define MAX_PPPOE_PARAM_LEN 50
 #define IPA_SYS_CMD_LEN 200
 #endif
@@ -385,6 +385,14 @@ struct qos_delete_param_info {
 	qos_client_info qos_client_list[];
 };
 
+#ifdef IPA_HW_FNR_STATS
+typedef enum {
+	IPA_LAN_STATS_MODE_0 = 0,
+	IPA_LAN_STATS_MODE_1 = 1,
+	IPA_LAN_STATS_MODE_2 = 2,
+} ipa_lan_stats_mode_t;
+#endif /* IPA_HW_FNR_STATS */
+
 /* iface */
 class IPACM_Config
 {
@@ -496,23 +504,33 @@ public:
 		uint8_t mac[IPA_MAC_ADDR_SIZE];
 		/* IPACM interface id */
 		int ipa_if_num;
+		uint16_t vlan_id;
+		int      ref_count;
 	} ipa_lan_client_idx;
 
 	bool ipacm_lan_stats_enable;
 	bool ipacm_lan_stats_enable_set;
 	bool ipacm_lan2lan_stats_enable;
 	bool ipacm_lan2lan_stats_enable_set;
+
 	/* Clients which take HW path/ stats V2. */
 	bool lan_stats_inited;
 	static ipa_lan_client_idx active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS_V2];
 	/* Clients which take SW path. This will be used as a place holder to move clients back to HW path. */
 	static ipa_lan_client_idx inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS_V2];
 #ifdef IPA_HW_FNR_STATS
+	uint8_t lan_stats_mode;
 	struct ipa_ioc_flt_rt_counter_alloc fnr_counters;
 	/* Setting an index to 1 would mean that it is under use and 0, unused*/
 	struct cnt_idx cnt_idx[IPA_MAX_FLT_RT_CLIENTS_V2];
 	pthread_mutex_t cnt_idx_lock;
 	bool hw_fnr_stats_support;
+
+	struct ipacm_vlan_counter_entry {
+		uint8_t wan_cnt_idx; /* shared HW FNR counter index for this VLAN */
+		int     ref_count;   /* number of clients currently using this counter */
+	};
+	std::map<uint16_t, ipacm_vlan_counter_entry> vlan_counter_map;
 #endif //IPA_HW_FNR_STATS
 #endif
 	bool ipacm_msgflt_enable;
@@ -612,6 +630,17 @@ public:
 	pmipv6_status pmip_details;
 
 	bool ipogre_enabled;
+#ifdef FEATURE_IPoGRE
+	/* Name of the GRE virtual interface (e.g. "gre6-gre0"), distinct from
+	 * pmip_details.tunnel_name which is only populated under FEATURE_EoGRE
+	 * or FEATURE_PMIPV6 due to the broken #ifdef guard at the call-site. */
+	char ipogre_tunnel_name[IPA_IFACE_NAME_LEN];
+	/* Accumulated v4/v6 addresses assigned to the IPoGRE tunnel interface,
+	 * sent to the dataipa driver via IPA_IOC_SET_IPOGRE_IFACE_ADDR. */
+	GreIfaceIpInfo_t ipogre_iface_ip_info;
+#endif
+	int encap_limit;
+	bool encap_enable;
 	bool eth_pdu_enabled;
 	typedef struct ipgre_tunnel_id_info {
 		bool ipogre_enabled;
@@ -640,9 +669,9 @@ public:
 	bool rt_tbl_inter_l2l_v4_set;
 	bool rt_tbl_inter_l2l_v6_set;
 
-	uint32_t ipv6_blackhole_prefix[4];
-	uint32_t ipv6_blackhole_len;
-	bool blackhole_valid;
+	uint32_t ipv6_delegate_prefix[4];
+	uint32_t ipv6_delegate_prefix_len;
+	bool delegate_prefix_valid;
 	/* Indicates current number of client ipv6 */
 	int ipa_num_clients_ipv6;
 
@@ -746,12 +775,22 @@ public:
 
 #ifdef FEATURE_PPPOE
 	uint16_t pppoe_get_session_id(const char *pppoe_dev_name);
+	uint16_t pppoe_get_session_id_from_proc(const char *ppp_dev_name, uint16_t vlan_id);
+	int get_mac_name_from_proc(const char *p_dev_name, uint8_t *mac_addr);
 	void get_pppoe_session_info(const char *pppoe_dev_name, const char *phy_dev_name = NULL, uint16_t vlan_id = 0);
 	void update_pppoe_session_info(const char *pppoe_dev_name, char *params[MAX_PPPOE_PARAM_CNT]);
 	int get_pppoe_vlan_pcp( uint16_t *vlan_id, uint8_t *pcp);
 	int get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id);
+	int get_pppoe_vlan_id_proc(const char *ppp_dev_name, uint16_t *vlan_id);
+	int get_phy_name_from_proc(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN]);
 	int get_pppoe_indx(char *pppoe_dev_name);
 	int get_phy_name_from_bridge_iface(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN]);
+	/* Check if eth_wan_br_wan_enable is set by reading /proc/net/pppoe.
+	 * Scans all PPPoE sessions; if any session's device field contains
+	 * "br-wanpppoe", sets eth_wan_br_wan_enable = true and returns true.
+	 * Returns false if no br-wan PPPoE session is found.
+	 */
+	bool check_eth_wan_br_wan_enable(void);
 #endif
 	bool is_svap_related(const char *phy_inf);
 
@@ -795,6 +834,10 @@ public:
 	int reset_cnt_idx(int index, bool reset_all);
 	int get_free_cnt_idx(void);
 	int ipacm_reset_hw_fnr_counters(const uint8_t start_id, const uint8_t end_id);
+
+	int  get_vlan_counter(uint16_t vlan_id, uint8_t *cnt_idx);
+	void register_vlan_counter(uint16_t vlan_id, uint8_t cnt_idx);
+	void release_vlan_counter(uint16_t vlan_id);
 #endif
 
 	inline int get_free_ip_pass_pdn_index(char *dev_name)
@@ -1504,7 +1547,7 @@ public:
 			if((prefix[0] == ipa_ipv6_prefixes[i].addr[0])
 				&& (prefix[1] == ipa_ipv6_prefixes[i].addr[1])
 				&& (vlan_id == ipa_ipv6_prefixes[i].vlan_id)
-			    && (is_bridge == ipa_ipv6_prefixes[i].is_bridge))
+			    && ((multi_vlan_bridge_config_enable) ? (is_bridge == ipa_ipv6_prefixes[i].is_bridge) : true))
 			{
 				IPACMDBG_H("prefix 0x[%X][%X] already exists vlan_id inp %d saved %d\n is_bridge %d",
 					prefix[0], prefix[1], vlan_id, ipa_ipv6_prefixes[i].vlan_id, ipa_ipv6_prefixes[i].is_bridge);
@@ -1656,14 +1699,14 @@ public:
 				IPACMDBG("no match with [%X][%X]\n", ipa_ipv6_prefixes[i].addr[0], ipa_ipv6_prefixes[i].addr[1]);
 			}
 		}
-		int len  = ipv6_blackhole_len;
-		if(blackhole_valid == true)
+		int len  = ipv6_delegate_prefix_len;
+		if(delegate_prefix_valid == true)
 		{
 			for (int i = 0; i < 4; ++i) {
 				/* Note: Assuming incoming prefix =  2001:0db8:85a3:0099:1111:2222:3333:4444
 				 * prefix[0] = 0x20010db8
 				 * prefix[1] = 0x85a30099
-				 * and Blackhole Prefix: 2001:0db8:85a3:0000::/56
+				 * and delegate_prefix Prefix: 2001:0db8:85a3:0000::/56
 				 * example len = 56
 				 * If no bits left to check, it's a match
 				 * ITERATION 1 (i=0): len is 56. (Skip)
@@ -1699,15 +1742,15 @@ public:
 				/* Compare the masked values
 				 * ITERATION 1 (i=0):
 				 * prefix[0] & mask: 0x20010db8 & 0xFFFFFFFF = 0x20010db8
-				 * ipv6_blackhole_prefix[0] & mask:     0x20010db8 & 0xFFFFFFFF = 0x20010db8
+				 * ipv6_delegate_prefix[0] & mask:     0x20010db8 & 0xFFFFFFFF = 0x20010db8
 				 * They match! Continue loop.
 				 *
 				 * ITERATION 2 (i=1):
 				 * prefix[1] & mask: 0x85a30099 & 0xFFFFFF00 = 0x85a30000
-				 * ipv6_blackhole_prefix[1] & mask:     0x85a30000 & 0xFFFFFF00 = 0x85a30000
+				 * ipv6_delegate_prefix[1] & mask:     0x85a30000 & 0xFFFFFF00 = 0x85a30000
 				 * They match! Continue loop.
 				 */
-				if ((prefix[i] & mask) != (ipv6_blackhole_prefix[i] & mask)) {
+				if ((prefix[i] & mask) != (ipv6_delegate_prefix[i] & mask)) {
 					return false;
 				}
 

@@ -165,7 +165,8 @@ private:
 #endif
 
 	void ProcessCTMessage(void *);
-	void ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry);
+	void ProcessCTMessage_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry,
+	                         bool destroy_ct = true, bool is_nat = false);
 #if defined(FEATURE_SOCKSv5) && defined (IPA_SOCKV5_EVENT_MAX)
 	void ProcessSocksv5Conn(ipa_socksv5_msg *socksv5_info, bool is_add);
 	void PostRouteAddVlanPdn(uint32_t public_ip);
@@ -180,7 +181,8 @@ private:
 	int DetermineTempEntry( struct nf_conntrack *ct,
 	 enum nf_conntrack_msg_type type,
 	 u_int8_t l4proto, nat_entry_bundle* nat_entry,nat_table_entry *rule, process_conntrack_bundle *params);
-	void ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry);
+	void ProcessTCPorUDPMsg_v6(const ipacm_ct_evt_data* evt_data, NatEntryBase& entry,
+	                            bool is_nat = false);
 	void CreateIpv6ctEntryFromCtEventData(const ipacm_ct_evt_data* evt_data, Ipv6ctEntry& entry) const;
 #ifdef FEATURE_IPV6_NAT
 	void CreateIpv6NatEntryFromCtEventData(const ipacm_ct_evt_data* evt_data, Ipv6NatEntry& entry) const;

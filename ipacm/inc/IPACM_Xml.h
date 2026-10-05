@@ -232,6 +232,7 @@ if (!(a)) {                                                 \
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 #define LAN_Stats_TAG                        "LANStats"
 #define LAN_Stats_Enable_TAG                 "EnableLANStats"
+#define LAN_Stats_Mode_TAG                   "LANStatsMode"
 #define LAN2LAN_Stats_TAG                    "LAN2LANStats"
 #define LAN2LAN_Stats_Enable_TAG             "EnableLAN2LANStats"
 #endif
@@ -262,6 +263,7 @@ if (!(a)) {                                                 \
 #define IPACM_Wlan_Vlan_Mpdn_Enabled         "IPACMVlanMpdnEnabled"
 #define IPACMLOG_TAG                         "IPACMLog"
 #define IPACMFILEVAR_TAG                     "IPACMfilevar"
+#define IPACMDEBUG_TAG                       "IPACMDebug"
 
 #define Static_Policy_TAG                    "PolicyBasedRouting"
 #define Static_Policy_Enabled                "StaticPolicyEnabled"
@@ -478,6 +480,7 @@ typedef struct  _IPACM_conf_t
 	bool qos_mode;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool lan_stats_enable;
+	uint8_t lan_stats_mode;
 	bool lan2lan_stats_enable;
 #endif
 	int max_file_size;

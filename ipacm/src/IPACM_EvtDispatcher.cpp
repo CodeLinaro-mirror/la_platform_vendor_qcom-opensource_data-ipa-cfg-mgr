@@ -117,28 +117,67 @@ int IPACM_EvtDispatcher::PostEvt
 
 void IPACM_EvtDispatcher::ProcessEvt(ipacm_cmd_q_data *data)
 {
+	cmd_evts *tmp;
 
-	cmd_evts *tmp = head, tmp1;
+	/*
+	 * Phase 1: snapshot all matching listener pointers while the list is
+	 * unmodified.
+	 *
+	 * A callback that calls delete-this (e.g. IPA_WAN_CRADLE instance
+	 * close) runs ~IPACM_Wan() which calls deregistr(this).  deregistr
+	 * walks the live list and free()s every cmd_evts node whose obj
+	 * matches -- including nodes that are ahead of the current position.
+	 * The old single-pass loop captured tmp1.next before the callback
+	 * and then followed it afterwards; if deregistr freed that node the
+	 * next memcpy read from freed memory, causing SIGSEGV.
+	 *
+	 * Collecting all matching pointers first keeps the traversal entirely
+	 * in Phase 1, before any callback can mutate the list.
+	 */
+	IPACM_Listener *matched[128];
+	int n = 0;
 
-	if(head == NULL)
+	for(tmp = head; tmp != NULL; tmp = tmp->next)
 	{
-		IPACMDBG("Queue is empty\n");
-	}
-
-	while(tmp != NULL)
-	{
-	        memcpy(&tmp1, tmp, sizeof(tmp1));
-		if(data->event == tmp1.event)
+		if(data->event == tmp->event)
 		{
-			ipacm_event_stats[data->event]++;
-			tmp1.obj->event_callback(data->event, data->evt_data);
-			IPACMDBG(" Find matched registered events %d\n", data->event);
+			if(n < (int)(sizeof(matched)/sizeof(matched[0])))
+				matched[n++] = tmp->obj;
+			else
+				IPACMERR("ProcessEvt: matched[] full, event %d listener dropped\n",
+					data->event);
 		}
-	        tmp = tmp1.next;
 	}
 
-	IPACMDBG(" Finished process events %d\n", data->event);
-			
+	/*
+	 * Phase 2: dispatch to each collected listener.
+	 *
+	 * Guard each call by re-scanning the live list: an earlier callback
+	 * in this same dispatch round may have deregistered a later object
+	 * (cross-object deletion).  Skip any listener that is no longer
+	 * present.
+	 */
+	for(int i = 0; i < n; i++)
+	{
+		bool still_alive = false;
+		for(tmp = head; tmp != NULL; tmp = tmp->next)
+		{
+			if(tmp->obj == matched[i] && tmp->event == data->event)
+			{
+				still_alive = true;
+				break;
+			}
+		}
+		if(!still_alive)
+			continue;
+
+		ipacm_event_stats[data->event]++;
+		matched[i]->event_callback(data->event, data->evt_data);
+		IPACMDBG(" Find matched registered events %d\n", data->event);
+	}
+
+	IPACMDBG("Finished process events %d\n", data->event);
+
 	if(data->evt_data != NULL)
 	{
 		IPACMDBG("free the event:%d data: %p\n", data->event, data->evt_data);

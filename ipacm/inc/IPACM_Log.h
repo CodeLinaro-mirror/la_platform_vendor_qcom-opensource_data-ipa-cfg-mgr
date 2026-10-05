@@ -74,6 +74,8 @@ extern "C"
 #define IPACM_LOG_COLLECTION_BOOTFILE "/data/data_ipa/boot_ipacm_log.txt"
 #endif
 
+extern int dynamic_logs_enable;
+
 typedef struct ipacm_log_buffer_s {
 	char	user_data[MAX_BUF_LEN];
 } ipacm_log_buffer_t;
@@ -103,7 +105,7 @@ void ipacm_set_log_enabled(int enable);
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s: " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_send (buffer_send); \
-		if (g_ipacm_logs_enabled) { \
+		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
 			printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 			memset(dmesg_cmd, 0, MAX_BUF_LEN); \
 			snprintf(dmesg_cmd, MAX_BUF_LEN, "echo %s > /dev/kmsg", buffer_send); \
@@ -119,7 +121,7 @@ void ipacm_set_log_enabled(int enable);
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s()", __FILE__, __LINE__, __FUNCTION__); \
 		ipacm_log_send (buffer_send); \
-		if (g_ipacm_logs_enabled) { \
+		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
 			perror(fmt); \
 		} \
 	} while (0);
@@ -128,7 +130,7 @@ void ipacm_set_log_enabled(int enable);
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send,MAX_BUF_LEN,"ERROR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_send (buffer_send); \
-		if (g_ipacm_logs_enabled) { \
+		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
 			printf("ERROR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 			memset(buffer_send, 0, MAX_BUF_LEN); \
 			snprintf(buffer_send, MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
@@ -140,7 +142,7 @@ void ipacm_set_log_enabled(int enable);
 		memset(buffer_send, 0, MAX_BUF_LEN); \
 		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		ipacm_log_send (buffer_send); \
-		if (g_ipacm_logs_enabled) { \
+		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
 			printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 			memset(buffer_send, 0, MAX_BUF_LEN); \
 			snprintf(buffer_send, MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
@@ -154,20 +156,20 @@ void ipacm_set_log_enabled(int enable);
 	} while (0);
 #define IPACMERR(fmt, ...) \
 	do { \
-		if (g_ipacm_logs_enabled) { \
+		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
 			printf("ERR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		} \
 	} while (0);
 #define IPACMDBG_H(fmt, ...) \
 	do { \
-		if (g_ipacm_logs_enabled) { \
+		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
 			printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		} \
 	} while (0);
 #endif
 #define IPACMDBG(fmt, ...) \
 	do { \
-		if (g_ipacm_logs_enabled) { \
+		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
 			printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 			memset(buffer_send, 0, MAX_BUF_LEN); \
 			snprintf(buffer_send, MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
@@ -177,7 +179,7 @@ void ipacm_set_log_enabled(int enable);
 
 #define IPACMLOG(fmt, ...) \
 	do { \
-		if (g_ipacm_logs_enabled) { \
+		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
 			printf(fmt, ##__VA_ARGS__); \
 			memset(buffer_send, 0, MAX_BUF_LEN); \
 			snprintf(buffer_send, MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \

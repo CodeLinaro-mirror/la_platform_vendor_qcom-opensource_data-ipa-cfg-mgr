@@ -120,6 +120,8 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_LAN_CLIENT_DISCONNECT_EVENT),          /* ipacm_event_data_mac */
 	__stringify(IPA_LAN_CLIENT_UPDATE_EVENT),              /* ipacm_event_data_mac */
 #endif
+	__stringify(IPA_IP_PASS_UPDATE_EVENT),          /* ipacm_ip_pass_pdn_info */
+	__stringify(IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT),         /* Handle PDN info update.*/
 	__stringify(IPA_EXTERNAL_EVENT_MAX),
 	__stringify(IPA_HANDLE_WAN_UP),                        /* ipacm_event_iface_up  */
 	__stringify(IPA_HANDLE_WAN_DOWN),                      /* ipacm_event_iface_up  */
@@ -165,12 +167,11 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_HANDLE_SOCKSv5_DOWN),                  /* NULL */
 	__stringify(IPA_ADD_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
 	__stringify(IPA_DEL_SOCKSv5_CONN),                     /* ipa_socksv5_msg */
-	__stringify(IPA_UPDATE_SOCKSv5_CONN),                  /* NULL */
+	__stringify(IPA_UPDATE_SOCKSv5_v6_CONN),               /* NULL */
 #endif
 	__stringify(IPA_MAC_ADD_DEL_FLT_EVENT),                /* ipacm_event_data_mac */
 	__stringify(IPA_IP_COLLISION_UPDATE_EVENT),          /* ipacm_ip_collision_pdn_info */
-	__stringify(IPA_IP_PASS_UPDATE_EVENT),          /* ipacm_ip_pass_pdn_info */
-	__stringify(IPA_HANDLE_IP_PASS_PDN_INFO_UPDATE_EVENT),         /* Handle PDN info update.*/
+	__stringify(IPA_RGIP_PASS_UPDATE_EVENT),               /* ipacm_event_rgip_pass_info */
 #ifdef IPA_IOCTL_SET_PKT_THRESHOLD
 	__stringify(IPA_PKT_THRESHOLD_UPDATE_EVENT),           /* ipa_set_pkt_threshold */
 #endif
@@ -184,6 +185,11 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WAN_HANDLE_EoGRE_UP),                  /* Handle eogre enable event for WAN. */
 	__stringify(IPA_WAN_HANDLE_EoGRE_DOWN),                /* Handle eogre disable event for WAN. */
 #endif
+	__stringify(IPA_DSCP_PCP_CONFIG_CHANGE_EVENT),         /* NULL */
+#ifdef FEATURE_PMIPV6
+	__stringify(IPA_HANDLE_GRE_UP),                      /* Handle gre enable event. */
+	__stringify(IPA_HANDLE_GRE_DOWN),                    /* Handle gre disable event. */
+#endif
 #ifdef FEATURE_IPoGRE
 	__stringify(IPA_HANDLE_IPOGRE_UP),                      /* Handle ipogre enable event. */
 	__stringify(IPA_HANDLE_IPOGRE_DOWN),                    /* Handle ipogre disable event. */
@@ -191,11 +197,7 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_WAN_HANDLE_IPOGRE_DOWN),
 	__stringify(IPA_HANDLE_RGIP_UP),                /* Handle ipogre disable event. */
 	__stringify(IPA_HANDLE_RGIP_DEL),                /* Handle ipogre disable event. */
-#endif
-	__stringify(IPA_DSCP_PCP_CONFIG_CHANGE_EVENT),         /* NULL */
-#ifdef FEATURE_PMIPV6
-	__stringify(IPA_HANDLE_GRE_UP),                      /* Handle gre enable event. */
-	__stringify(IPA_HANDLE_GRE_DOWN),                    /* Handle gre disable event. */
+	__stringify(IPA_HANDLE_IPOGRE_ADDR_ADD),        /* address added to GRE tunnel iface */
 #endif
 	__stringify(IPA_HANDLE_MACSEC_ADD),                    /* Handle macsec map add event */
 	__stringify(IPA_HANDLE_MACSEC_DEL),                    /* Handle macsec map delete event */
@@ -224,6 +226,13 @@ const char *ipacm_event_name[] = {
 	__stringify(IPA_MAPE_DEL_FMR_RULE),                    /* ipacm_event_data_addr */
 	__stringify(IPACM_EVENT_MAX)
 };
+
+/* getEventName() indexes this table with the event id directly, so an entry
+ * missing from the table silently mislabels every event id after it. This only
+ * catches a count mismatch, not a reordering, so entries must be kept in the
+ * same order and under the same feature guards as enum ipa_cm_event_id. */
+static_assert(sizeof(ipacm_event_name) / sizeof(ipacm_event_name[0]) == IPACM_EVENT_MAX + 1,
+	"ipacm_event_name[] is out of sync with enum ipa_cm_event_id");
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	IPACM_Config::ipa_lan_client_idx IPACM_Config::active_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS_V2];
 	IPACM_Config::ipa_lan_client_idx IPACM_Config::inactive_lan_client_index[IPA_MAX_NUM_HW_PATH_CLIENTS_V2];
@@ -276,11 +285,12 @@ IPACM_Config::IPACM_Config()
 	eth_vlan_wan_enable = false;
 	rt_tbl_inter_l2l_v4_set = false;
 	rt_tbl_inter_l2l_v6_set = false;
-	blackhole_valid = false;
+	delegate_prefix_valid = false;
 	memset(&rt_tbl_inter_l2l_v4, 0, sizeof(rt_tbl_inter_l2l_v4));
 	memset(&rt_tbl_inter_l2l_v6, 0, sizeof(rt_tbl_inter_l2l_v6));
 
-	memset(ipv6_blackhole_prefix, 0, sizeof(ipv6_blackhole_prefix));
+	memset(ipv6_delegate_prefix, 0, sizeof(ipv6_delegate_prefix));
+	ipv6_delegate_prefix_len = 0;
 	memset(&rt_tbl_default_v4, 0, sizeof(rt_tbl_default_v4));
 	memset(&rt_tbl_lan_v4, 0, sizeof(rt_tbl_lan_v4));
 	memset(&rt_tbl_wan_v4, 0, sizeof(rt_tbl_wan_v4));
@@ -361,6 +371,7 @@ IPACM_Config::IPACM_Config()
 	memset(&ipgre_info, 0, sizeof(ipgre_info));
 	memset(&ipogre_details, 0, sizeof(ipogre_details));
 	ipogre_enabled  = false;
+	ipogre_tunnel_name[0] = '\0';
 #endif
 	ext_router_mode = IPA_PREFIX_DISABLED;
 
@@ -507,6 +518,40 @@ int IPACM_Config::reset_cnt_idx(int index, bool reset_all)
 		}
 	}
 	return IPACM_SUCCESS;
+}
+
+int IPACM_Config::get_vlan_counter(uint16_t vlan_id, uint8_t *cnt_idx_out)
+{
+	auto it = vlan_counter_map.find(vlan_id);
+	if (it != vlan_counter_map.end()) {
+		*cnt_idx_out = it->second.wan_cnt_idx;
+		it->second.ref_count++;
+		return 0;
+	}
+	return -1;
+}
+
+/* Register a new counter for a VLAN (first client on this VLAN across all ifaces). */
+void IPACM_Config::register_vlan_counter(uint16_t vlan_id, uint8_t cnt_idx_in)
+{
+	ipacm_vlan_counter_entry entry;
+	entry.wan_cnt_idx = cnt_idx_in;
+	entry.ref_count   = 1;
+	vlan_counter_map[vlan_id] = entry;
+}
+
+/* Decrement ref_count for a VLAN counter. Frees the counter when last client disconnects. */
+void IPACM_Config::release_vlan_counter(uint16_t vlan_id)
+{
+	auto it = vlan_counter_map.find(vlan_id);
+	if (it == vlan_counter_map.end()) {
+		return;
+	}
+	it->second.ref_count--;
+	if (it->second.ref_count <= 0) {
+		reset_cnt_idx(it->second.wan_cnt_idx, false);
+		vlan_counter_map.erase(it);
+	}
 }
 
 int IPACM_Config::ipacm_alloc_fnr_counters(struct ipa_ioc_flt_rt_counter_alloc *fnr_counters)
@@ -780,11 +825,11 @@ reread:
 		}
 	}
 
-	strlcpy(iface_table[mape_wan_iface_table_index].iface_name,MAPE_IFACE_NAME,strlen(MAPE_IFACE_NAME)+1);
-	IPACMDBG_H(" iface_name %s \n",iface_table[mape_wan_iface_table_index].iface_name);
 	iface_table[mape_wan_iface_table_index].if_cat = WAN_IF;
 	iface_table[mape_wan_iface_table_index].if_mode = ROUTER;
 	iface_table[mape_wan_iface_table_index].virtual_iface = true;
+	/* iface_name is stamped later by iface_ipa_index_query(); empty until then */
+	IPACMDBG_H("MAPE slot iface_name pending kernel discovery\n");
 	memcpy(iface_table[mape_wan_iface_table_index].phy_dev_name, cfg->mape_wan_iface_name, sizeof(iface_table[mape_wan_iface_table_index].phy_dev_name));
 	IPACMDBG_H(" phy_dev_name %s \n",iface_table[mape_wan_iface_table_index].phy_dev_name);
 
@@ -872,8 +917,9 @@ reread:
 	{
 		/* Read the configuration only once. */
 		ipacm_lan_stats_enable = cfg->lan_stats_enable;
+		lan_stats_mode = cfg->lan_stats_mode;
 		ipacm_lan_stats_enable_set = true;
-		IPACMDBG_H("ipacm_lan_stats_enable %d. \n", ipacm_lan_stats_enable);
+		IPACMDBG_H("ipacm_lan_stats_enable %d mode %d. \n", ipacm_lan_stats_enable, lan_stats_mode);
 	}
 	if (!ipacm_lan2lan_stats_enable_set)
 	{
@@ -941,6 +987,12 @@ skip_fnr_alloc:
 			memset(active_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
 			inactive_lan_client_index[i].lan_stats_idx = -1;
 			memset(inactive_lan_client_index[i].mac, 0, IPA_MAC_ADDR_SIZE);
+#ifdef IPA_HW_FNR_STATS
+			active_lan_client_index[i].vlan_id    = 0;
+			active_lan_client_index[i].ref_count   = 0;
+			inactive_lan_client_index[i].vlan_id   = 0;
+			inactive_lan_client_index[i].ref_count  = 0;
+#endif
 		}
 		lan_stats_inited = true;
 	}
@@ -1625,10 +1677,11 @@ int IPACM_Config::DelExtProp(ipa_ip_type ip_type)
 
 const char* IPACM_Config::getEventName(ipa_cm_event_id event_id)
 {
-	if(event_id >= sizeof(ipacm_event_name)/sizeof(ipacm_event_name[0]))
+	if((size_t)event_id >= sizeof(ipacm_event_name)/sizeof(ipacm_event_name[0]))
 	{
 		IPACMERR("Event name array is not consistent with event array!\n");
-		return NULL;
+		/* callers pass the result straight to %s, so never hand back NULL */
+		return "IPA_UNKNOWN_EVENT";
 	}
 
 	return ipacm_event_name[event_id];
@@ -5263,9 +5316,14 @@ void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name, const char
 			params[i] = tok;
 			tok = strtok_r(NULL, " ", &ptr);
 		}
-		IPACMDBG_H("%s %s %s\n", params[0], params[1], params[2]);
+		IPACMDBG_H("%s %s %s\n", params[0], params[1], params[2] ? params[2] : "(null)");
 		/* Compare the pppoe dev associated vid and passed vlan_id,
 		 * If match then update session info */
+		if (params[2] == NULL)
+		{
+			IPACMDBG_H("Incomplete pppoe row, skipping\n");
+			continue;
+		}
 		lastVid = strrchr(params[2], '.');
 		if((lastVid != NULL) && (lastVid + 1 != NULL))
 		{
@@ -5329,6 +5387,57 @@ void IPACM_Config::get_pppoe_session_info(const char *pppoe_dev_name, const char
 	fclose(fp);
 }
 
+bool IPACM_Config::check_eth_wan_br_wan_enable(void)
+{
+	FILE *fp = NULL;
+	char *tok = NULL, *ptr = NULL;
+	char *params[MAX_PPPOE_PARAM_CNT] = { NULL };
+	char pppoe_row[MAX_PPPOE_ROW_LEN] = {0}, cmd_pppoe_row[MAX_PPPOE_ROW_LEN] = {0};
+	int i;
+
+	fp = fopen("/proc/net/pppoe", "r");
+	if (fp == NULL)
+	{
+		IPACMERR("can't open /proc/net/pppoe\n");
+		return false;
+	}
+
+	while (fgets(pppoe_row, MAX_PPPOE_ROW_LEN, fp) != NULL)
+	{
+		snprintf(cmd_pppoe_row, MAX_PPPOE_ROW_LEN, "Id");
+		if (strstr(pppoe_row,cmd_pppoe_row))
+		{
+			continue;
+		}
+
+		/*parse the fdb entry*/
+		tok = strtok_r(pppoe_row, " ", &ptr);
+		for (i = 0; (tok != NULL) && i < MAX_PPPOE_PARAM_CNT; ++i )
+		{
+			params[i] = tok;
+			tok = strtok_r(NULL, " ", &ptr);
+		}
+
+		char *dev_name = params[2];
+		if (dev_name == NULL)
+		{
+			IPACMERR("Invalid dev_name parameter, continue.\n");
+			continue;
+		}
+
+		if (strstr(dev_name, "br-wanpppoe"))
+		{
+			IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable = true;
+			IPACMDBG_H("Got session info for %s br-wan enabled %d\n", dev_name, IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
+			fclose(fp);
+			return true;
+		}
+	}
+	IPACMDBG_H("Got session but br-wan enabled %d\n", IPACM_Iface::ipacmcfg->eth_wan_br_wan_enable);
+	fclose(fp);
+	return false;
+}
+
 void IPACM_Config::update_pppoe_session_info(const char *pppoe_dev_name, char *params[MAX_PPPOE_PARAM_CNT])
 {
 	char *end_ptr = NULL, *is_vlan = NULL, *copy_param = NULL, *phy_name = NULL, *ptr = NULL;
@@ -5356,6 +5465,7 @@ void IPACM_Config::update_pppoe_session_info(const char *pppoe_dev_name, char *p
 		IPACMERR("Memory allocation failed for pppoe_config\n");
 		return;
 	}
+	memset(pppoe_config, 0, sizeof(ipa_ioc_pppoe_info));
 
 	session_id = strtol(params[0], &end_ptr, 16);
 	if (*end_ptr != '\0')
@@ -5438,13 +5548,14 @@ int IPACM_Config::get_pppoe_vlan_id(char *pppoe_dev_name, uint16_t *vlan_id)
 			sizeof(pppoe_mpdn_table[i].pppoe_dev_name)) == 0)
 		{
 			IPACMDBG_H("Found pppoe iface in pppoe list: %s with vlan id: %d\n",
-				pppoe_mpdn_table[i].pppoe_dev_name);
+				pppoe_mpdn_table[i].pppoe_dev_name, pppoe_mpdn_table[i].vlan_id);
 			*vlan_id = pppoe_mpdn_table[i].vlan_id;
 			ret = IPACM_SUCCESS;
 			break;
 		}
 	}
-
+	if (ret != IPACM_SUCCESS)
+		IPACMERR("No VLAN found in /proc/net/pppoe for %s\n", pppoe_dev_name);
 	pthread_mutex_unlock(&pppoe_map_lock);
 
 	return ret;
@@ -5502,6 +5613,183 @@ int IPACM_Config::get_pppoe_indx(char *pppoe_dev_name)
 	pthread_mutex_unlock(&pppoe_map_lock);
 
 	return ret;
+}
+
+int IPACM_Config::get_phy_name_from_proc(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN])
+{
+	FILE *fp = NULL;
+	char line[256], session_id[32], mac[32], phy_device[32], ppp_dev[32];
+
+	if (p_dev_name == NULL || phy_name == NULL)
+	{
+		IPACMERR("Null argument passed\n");
+		return IPACM_FAILURE;
+	}
+
+	fp = fopen("/proc/net/pppoe", "r");
+	if (!fp)
+	{
+		IPACMERR("Failed to open /proc/net/pppoe\n");
+		return IPACM_FAILURE;
+	}
+	/* Skip header line */
+	if (fgets(line, sizeof(line), fp) == NULL)
+	{
+		fclose(fp);
+		return IPACM_FAILURE;
+	}
+
+	while (fgets(line, sizeof(line), fp))
+	{
+		/* Fields: Id(hex)  MAC(xx:xx:xx:xx:xx:xx)  Device  PPP-Device */
+		if (sscanf(line, "%15s %17s %15s %15s", session_id, mac, phy_device, ppp_dev) != 4)
+			continue;
+		if (strcmp(ppp_dev, p_dev_name) == 0)
+		{
+			char *dot = strchr(phy_device, '.');
+			if (dot)
+				*dot = '\0';
+			IPACMDBG_H("PPPoE dev %s phy name found %s\n", p_dev_name, phy_device);
+			strlcpy(phy_name, phy_device, ETH_PHY_IFACE_LEN);
+			fclose(fp);
+			return IPACM_SUCCESS;
+		}
+	}
+	IPACMERR("PPPoE devname %s not found\n", p_dev_name);
+	fclose(fp);
+	return IPACM_FAILURE;
+}
+
+int IPACM_Config::get_pppoe_vlan_id_proc(const char *ppp_dev_name, uint16_t *vlan_id)
+{
+	FILE *fp = NULL;
+	char line[MAX_LINE_LEN];
+	char session_id[32], mac[32], phy_device[32], ppp_dev[32];
+
+	if (ppp_dev_name == NULL || vlan_id == NULL)
+	{
+		IPACMERR("Null argument passed\n");
+		return IPACM_FAILURE;
+	}
+
+	fp = fopen("/proc/net/pppoe", "r");
+	if (fp == NULL)
+	{
+		IPACMERR("Failed to open /proc/net/pppoe\n");
+		return IPACM_FAILURE;
+	}
+
+	/* skip header line */
+	if (fgets(line, sizeof(line), fp) == NULL)
+	{
+		fclose(fp);
+		return IPACM_FAILURE;
+	}
+
+	while (fgets(line, sizeof(line), fp))
+	{
+		/* Fields: Id(hex)  MAC(xx:xx:xx:xx:xx:xx)  Device  PPP-Device */
+		if (sscanf(line, "%15s %17s %15s %15s", session_id, mac, phy_device, ppp_dev) != 4)
+			continue;
+		if (strcmp(ppp_dev, ppp_dev_name) == 0)
+		{
+			char *dot = strchr(phy_device, '.');
+			if (dot)
+			{
+				*vlan_id = (uint16_t)atoi(dot + 1);
+				IPACMDBG_H("PPPoE dev %s -> phy %s -> VLAN ID %d\n",
+					ppp_dev_name, phy_device, *vlan_id);
+				fclose(fp);
+				return IPACM_SUCCESS;
+			}
+		}
+	}
+	fclose(fp);
+
+	IPACMDBG_H("No VLAN found in /proc/net/pppoe for %s\n", ppp_dev_name);
+	return IPACM_FAILURE;
+}
+
+uint16_t IPACM_Config::pppoe_get_session_id_from_proc(const char *ppp_dev_name, uint16_t vlan_id)
+{
+FILE *fp = NULL;
+		char line[256], session_id[32], mac[32], device[32], ppp_dev[32];
+		if(!ppp_dev_name)
+			return 0;
+
+		fp = fopen("/proc/net/pppoe", "r");
+		if (!fp)
+		{
+			IPACMERR("Failed to open %s\n", "/proc/net/pppoe");
+			return 0;
+    }
+		/* Skip header line */
+		fgets(line, sizeof(line), fp);
+		while (fgets(line, sizeof(line), fp))
+		{
+			 /* Fields: Id(hex)  MAC(xx:xx:xx:xx:xx:xx)  Device  PPP-Device */
+			if (sscanf(line, "%15s %17s %15s %15s", session_id, mac, device, ppp_dev) != 4)
+					continue;
+			if (strcmp(ppp_dev, ppp_dev_name) == 0)
+			{
+				uint16_t id = (uint16_t)strtol(session_id, NULL, 16);
+				IPACMDBG("PPPOE dev %s session_id found %d\n",
+						ppp_dev_name, id);
+				fclose(fp);
+				return id;
+			}
+		}
+		IPACMERR("PPPoe devname %s not found\n", ppp_dev_name);
+		fclose(fp);
+		return 0;
+}
+
+int IPACM_Config::get_mac_name_from_proc(const char *p_dev_name, uint8_t *mac_addr)
+{
+FILE *fp = NULL;
+	char line[256], session_id[32], mac[32], phy_device[32], ppp_dev[32];
+	int tmp_var[IPA_MAC_ADDR_SIZE];
+
+	fp = fopen("/proc/net/pppoe", "r");
+	if (!fp)
+	{
+		IPACMERR("Failed to open %s\n", "/proc/net/pppoe");
+		return IPACM_FAILURE;
+	}
+	/* Skip header line */
+	fgets(line, sizeof(line), fp);
+
+	while (fgets(line, sizeof(line), fp))
+	{
+			/* Fields: Id(hex)  MAC(xx:xx:xx:xx:xx:xx)  Device  PPP-Device */
+		if (sscanf(line, "%15s %17s %15s %15s", session_id, mac, phy_device, ppp_dev) != 4)
+				continue;
+			if (strcmp(ppp_dev, p_dev_name) == 0)
+			{
+				if( IPA_MAC_ADDR_SIZE != sscanf( mac, "%x:%x:%x:%x:%x:%x%*c",
+					&tmp_var[0], &tmp_var[1], &tmp_var[2],
+					&tmp_var[3], &tmp_var[4], &tmp_var[5] ) )
+				{
+					IPACMERR("couldnt parse the mac address\n");
+					fclose(fp);
+					return IPACM_FAILURE;
+				}
+				else
+				{
+					for (int j = 0 ; j < IPA_MAC_ADDR_SIZE; j++)
+					{
+						mac_addr[j] = (uint8_t)tmp_var[j];
+					}
+				}
+				IPACMDBG("PPPOE dev %s mac name found %s\n",
+						ppp_dev, mac);
+				fclose(fp);
+				return IPACM_SUCCESS;
+			}
+	}
+	IPACMERR("PPPoe devname %s not found\n", ppp_dev);
+	fclose(fp);
+	return IPACM_FAILURE;
 }
 
 int IPACM_Config::get_phy_name_from_bridge_iface(const char *p_dev_name, char phy_name[ETH_PHY_IFACE_LEN])

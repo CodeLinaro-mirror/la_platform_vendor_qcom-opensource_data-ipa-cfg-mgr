@@ -2462,7 +2462,8 @@ void IPACM_LanToLan_Iface::install_iface_cross_proc_ctx(IPACM_LanToLan_Iface *pe
 
 	peer_l2_hdr_type = peer_iface->m_p_iface->tx_prop->tx[0].hdr_l2_type;
 
-	if(m_is_vlan && peer_l2_hdr_type == IPA_HDR_L2_ETHERNET_II)
+	if((m_is_vlan && peer_l2_hdr_type == IPA_HDR_L2_ETHERNET_II) &&
+	(!peer_iface->m_is_cross_proc_ctx_handled))
 	{
 		IPACM_LOG(IPACM_LOG_INFO, "Adding header Proc Context\n");
 		increment_ref_cnt_peer_l2_hdr_type(peer_l2_hdr_type);
@@ -2471,6 +2472,7 @@ void IPACM_LanToLan_Iface::install_iface_cross_proc_ctx(IPACM_LanToLan_Iface *pe
 			add_hdr_proc_ctx(peer_l2_hdr_type, peer_iface->m_p_iface->dev_name);
 			IPACM_LOG(IPACM_LOG_DEBUG, "Added header Proc Context for %s\n", peer_iface->m_p_iface->dev_name);
 		}
+		peer_iface->m_is_cross_proc_ctx_handled = true;
 	}
 
 	return;

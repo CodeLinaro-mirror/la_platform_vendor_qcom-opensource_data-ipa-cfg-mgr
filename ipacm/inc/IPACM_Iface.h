@@ -186,7 +186,7 @@ public:
 	int num_dft_rt_v6;
 
 	uint32_t dft_v4fl_rule_hdl[IPA_MAX_NUM_PROPS][IPV4_DEFAULT_FILTERTING_RULES];
-	uint32_t dft_v6fl_rule_hdl[IPA_MAX_NUM_PROPS][IPV6_DEFAULT_FILTERTING_RULES + IPV6_DEFAULT_LAN_FILTERTING_RULES];
+	uint32_t dft_v6fl_rule_hdl[IPA_MAX_NUM_PROPS][IPV6_DEFAULT_FILTERTING_RULES + IPA_MAX_NUM_OFFLOAD_VLANS];
 	/* create additional set of v6 RT-rules in Wanv6RT table*/
 
 	uint32_t dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + (2 * MAX_DEFAULT_v6_ROUTE_RULES)];
@@ -201,11 +201,13 @@ public:
 	ipa_ioc_query_intf_tx_props *tx_prop;
 	ipa_ioc_query_intf_rx_props *rx_prop;
 
+	bool is_ppp_iface;
+
 	virtual int handle_down_evt() = 0;
 
 	virtual int handle_addr_evt(ipacm_event_data_addr *data) = 0;
 
-	IPACM_Iface(char *iface_name, int iface_index);
+	IPACM_Iface(char *iface_name, int iface_index, bool is_ppp_iface = false);
 
 	virtual void event_callback(ipa_cm_event_id event, void *data) = 0;
 
@@ -233,6 +235,7 @@ public:
 	static IPACM_Routing m_routing;
 	static IPACM_Filtering m_filtering;
 	static IPACM_Header m_header;
+	static uint32_t odu_subnet_fl_rule_hdl[IPA_IP_MAX];
 
 	/* software routing enable */
 	virtual int handle_software_routing_enable(void);
@@ -279,7 +282,7 @@ public:
 		ipa_ip_type      iptype,
 		ipa_rule_attrib* attrib ) {
 		if ( ! VALID_IPA_IP_TYPE(iptype) || ! attrib ) {
-			IPACMERR(
+			IPACM_LOG(IPACM_LOG_ERR, 
 				"Bad iptype(%u) and/or attribute pointer(%p) is NULL.\n",
 				iptype, attrib);
 		}
@@ -289,7 +292,7 @@ public:
 			addr2network(iptype, attrib->u.v6.dst_addr);
 			addr2network(iptype, attrib->u.v6.dst_addr_mask);
 		} else {
-			IPACMDBG_H("IP type is not IPv6, do nothing: %d\n", iptype);
+			IPACM_LOG(IPACM_LOG_DEBUG, "IP type is not IPv6, do nothing: %d\n", iptype);
 		}
 	}
 

@@ -60,6 +60,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 #include <time.h>
 #include <sys/time.h>
 #include <sys/mman.h>
+#include "IPACM_Config.h"
 
 char* dump_file = 0;
 void* mmap_addr = NULL;
@@ -68,6 +69,17 @@ int max_filesize = 0;
 int dynamic_logs_enable = 0;
 int log_init_done = 0;
 pthread_mutex_t file_lock;
+
+//boot log globals
+int boot_log_fd = -1;
+void* boot_mmap_addr = NULL;
+void* boot_write_addr = NULL;
+int boot_max_filesize  = 0;
+int boot_log_init_done = 0;
+int boot_log_full = 0;
+pthread_mutex_t boot_file_lock;
+
+uint8_t ipacm_global_log_level    = IPACM_DEF_LOG_LEVEL;
 
 extern "C" {
 int g_ipacm_logs_enabled = 1;
@@ -136,6 +148,22 @@ bool is_kernel_version_newer_than(
 		return false;
 }
 
+void get_kernel_version(char *kernel_ver)
+{
+	struct utsname utsname;
+	int ret;
+	memset(kernel_ver, 0, KERNEL_VERSION_LENGTH);
+	ret = uname(&utsname);
+	if (ret)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "Error: uname %d (%s)\n",
+			ret, strerror(errno));
+		return;
+	}
+	memcpy(kernel_ver, utsname.release, KERNEL_VERSION_LENGTH - 1);
+	IPACM_LOG(IPACM_LOG_DEBUG, "kernel_ver %s\n", kernel_ver);
+}
+
 /* start IPACMDIAG socket*/
 int create_socket(unsigned int *sockfd)
 {
@@ -154,12 +182,8 @@ int create_socket(unsigned int *sockfd)
   return IPACM_SUCCESS;
 }
 
-void ipacm_log_send( void * user_data)
+void ipacm_send_log_to_qxdm( void * user_data)
 {
-	if (!g_ipacm_logs_enabled) {
-		return;
-	}
-
 	ipacm_log_buffer_t ipacm_log_buffer;
 	int numBytes=0, len;
 	struct sockaddr_un ipacmlog_socket;
@@ -179,7 +203,7 @@ void ipacm_log_send( void * user_data)
 	strlcpy(ipacmlog_socket.sun_path, IPACMLOG_FILE,sizeof(ipacmlog_socket.sun_path));
 	len = strlen(ipacmlog_socket.sun_path) + sizeof(ipacmlog_socket.sun_family);
 
-	memcpy(ipacm_log_buffer.user_data, user_data, MAX_BUF_LEN);
+	memcpy(ipacm_log_buffer.user_data, user_data, IPACM_LOG_MAX_BUF_LEN);
 
         if ((numBytes = sendto(ipacm_log_sockfd, (void *)&ipacm_log_buffer, sizeof(ipacm_log_buffer.user_data), 0,
 			(struct sockaddr *)&ipacmlog_socket, len)) == -1)
@@ -190,11 +214,45 @@ void ipacm_log_send( void * user_data)
 	return;
 }
 
+char *get_time_string(char *buffer, int len)
+{
+   struct timeval tv;
+   struct tm *tm;
+   unsigned long long milliseconds = 0;
+   char timestamp_buf[IPACM_LOG_TIMESTAMP_BUF_LEN];
+
+   if (!buffer || len <= 0)
+     return NULL;
+
+   gettimeofday(&tv, NULL);
+   tm = localtime(&tv.tv_sec);
+
+   if (!tm)
+     return NULL;
+	 milliseconds = (tv.tv_sec * 1000LL) + (tv.tv_usec / 1000);
+
+   strftime(timestamp_buf, 30, "%H:%M:%S", tm);
+   snprintf(buffer, len, "%s%lld", timestamp_buf, milliseconds);
+
+   return buffer;
+}
+
 /* IPACM logging initialization*/
 int log_init(int file_size) {
         int ret = 0;
         int trunc_ret = -1;
-        dump_file = IPACM_LOG_COLLECTION_FILE;
+	dump_file = IPACM_LOG_COLLECTION_FILE;
+	IPACM_Config* config;
+	config = IPACM_Config::GetInstance();
+
+	if(config->ipacm_log_level >= IPACM_LOG_DISABLED && config->ipacm_log_level < IPACM_LOG_LVL_MAX)
+	{
+		ipacm_global_log_level = config->ipacm_log_level;
+	}
+	else
+	{
+		printf("Logging level invalid\n");
+	}
 
         if(max_filesize != file_size)
         {
@@ -219,7 +277,29 @@ int log_init(int file_size) {
         }
         else
         {
-            /* no change */
+            //if boot log size changes
+	    if (boot_log_init_done && config->max_boot_file_size > boot_max_filesize)
+		{
+		size_t write_offset = (char*)boot_write_addr - (char*)boot_mmap_addr;
+		munmap(boot_mmap_addr, boot_max_filesize);
+
+		if (ftruncate(boot_log_fd, config->max_boot_file_size) < 0)
+		{
+			perror("Boot ftruncate resize failed\n");
+			return -errno;
+		}
+
+		boot_mmap_addr = mmap(NULL, config->max_boot_file_size, PROT_READ | PROT_WRITE, MAP_SHARED, boot_log_fd, 0);
+		if ((void*)-1 == boot_mmap_addr || NULL == boot_mmap_addr)
+		{
+			perror("Boot mmap resize failed\n");
+			return -errno;
+		}
+		memset((char*)boot_mmap_addr + boot_max_filesize, ' ',config->max_boot_file_size - boot_max_filesize);
+		boot_write_addr = (char*)boot_mmap_addr + write_offset;
+		boot_max_filesize = config->max_boot_file_size;
+		boot_log_full = 0;
+		}
             return 0;
         }
 
@@ -229,9 +309,9 @@ int log_init(int file_size) {
 		return -errno;
 	}
 
-        trunc_ret = ftruncate(log_fd, max_filesize);
-        if(0 > trunc_ret)
-        {
+	trunc_ret = ftruncate(log_fd, max_filesize);
+	if(0 > trunc_ret)
+	{
 		perror("Ftruncate failed\n");
 		return -errno;
 	}
@@ -242,26 +322,63 @@ int log_init(int file_size) {
 		return -errno;
 	}
 
-        mmap_addr = mmap(NULL, max_filesize, PROT_READ|PROT_WRITE, MAP_SHARED, log_fd, 0);
+    mmap_addr = mmap(NULL, max_filesize, PROT_READ|PROT_WRITE, MAP_SHARED, log_fd, 0);
 
-        if((void*)-1 == mmap_addr || NULL == mmap_addr)
-        {
-                perror("Mmap failed\n");
-		return -errno;
-        }
+    if((void*)-1 == mmap_addr || NULL == mmap_addr)
+    {
+        	perror("Mmap failed\n");
+			return -errno;
+    }
 
 	write_addr = mmap_addr;
 	memset(mmap_addr,' ', max_filesize);
 
 	/* Now log init is complete */
 	log_init_done = 1;
-        g_ipacm_logs_enabled = 1;
-        return 0;
+    g_ipacm_logs_enabled = 1;
+
+	/* Boot log init */
+	if (config->max_boot_file_size > 0 && !boot_log_init_done)
+	{
+		boot_log_fd = open(IPACM_LOG_COLLECTION_BOOTFILE, O_RDWR | O_CREAT | O_TRUNC, 0644);
+		if (boot_log_fd < 0)
+		{
+			perror("Boot logger file open failed\n");
+			return -errno;
+		}
+
+		if (ftruncate(boot_log_fd, config->max_boot_file_size) < 0)
+		{
+			perror("Boot ftruncate failed\n");
+			return -errno;
+		}
+
+		if (pthread_mutex_init(&boot_file_lock, NULL) != 0)
+		{
+			perror("Boot mutex init failed\n");
+			return -errno;
+		}
+
+		boot_mmap_addr = mmap(NULL, config->max_boot_file_size, PROT_READ | PROT_WRITE, MAP_SHARED, boot_log_fd, 0);
+		if ((void*)-1 == boot_mmap_addr || NULL == boot_mmap_addr)
+		{
+			perror("Boot mmap failed\n");
+			return -errno;
+		}
+
+		boot_write_addr    = boot_mmap_addr;
+		memset(boot_mmap_addr, ' ', config->max_boot_file_size);
+		boot_max_filesize  = config->max_boot_file_size;
+		boot_log_init_done = 1;
+	}
+    return 0;
+
 }
-void ipacm_log_dump(char* ipacm_log_data)
+
+void ipacm_send_log_to_file(char* ipacm_log_data)
 {
         int input_len = 0;
-	if(!log_init_done || !g_ipacm_logs_enabled)
+	if(!log_init_done || !(g_ipacm_logs_enabled || dynamic_logs_enable))
 	{
 		return;
 	}
@@ -274,6 +391,27 @@ void ipacm_log_dump(char* ipacm_log_data)
 		write_addr = mmap_addr;
 	}
 	snprintf((char*)write_addr, input_len, "%s", ipacm_log_data);
-	write_addr = (char*)write_addr + (input_len - 1); //start of line
+	write_addr = (char*)write_addr + (input_len - 1); 
 	FILE_UNLOCK();
+}
+
+void ipacm_send_log_to_boot_file(char* ipacm_log_data)
+{
+    if (!boot_log_init_done|| boot_log_full)
+        return;
+
+    int input_len = strlen(ipacm_log_data) + 1;
+
+    pthread_mutex_lock(&boot_file_lock);
+    if (((char*)boot_write_addr + input_len) <=
+        ((char*)boot_mmap_addr + boot_max_filesize - 1))
+    {
+        snprintf((char*)boot_write_addr, input_len, "%s", ipacm_log_data);
+        boot_write_addr = (char*)boot_write_addr + (input_len - 1);
+    }
+    else
+    {
+	boot_log_full = 1; 
+    }
+    pthread_mutex_unlock(&boot_file_lock);
 }

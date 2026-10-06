@@ -12,6 +12,14 @@
 	</PublicIpSupport>
 	<IPACM>
 		<IPACMDebug>0</IPACMDebug>
+		<IPACMLog>
+			<IPACMfilevar>2097152</IPACMfilevar>
+			<!-- 0 = disable file logging. 20971520 = enable file (size: 20MB) logging. -->
+			<IPACMLogLevel>8</IPACMLogLevel>
+			<!-- logging levels 4 = ERR, 6 = ERR+WARN, 7 = ERR+WARN+INFO, 8 = ERR+WARN+INFO+DEBUG, 0 = disabled -->
+			<IPACMBootFileSize>65536</IPACMBootFileSize>
+			<!-- 0 = disable boot file logging. 65536 = boot log stops writing and does not roll over. -->
+		</IPACMLog>
 		<IPACMIface>
 			<Iface>
 			   <Name>rndis0</Name>
@@ -741,13 +749,23 @@
 		<IPACMQOS>
 			<IPACMQOSEnabled>0</IPACMQOSEnabled>
 		</IPACMQOS>
-		<IPACMLog>
-			<IPACMfilevar>2097152</IPACMfilevar>
-		</IPACMLog>
 		<DeviceMode>
 			<IPACMDeviceMode>Default</IPACMDeviceMode>
 			<Vlan>Disable</Vlan>
 			<MgmtVlanId>0</MgmtVlanId>
 		</DeviceMode>
+		<IPACMPPPOE>
+			<IPACMPPPOEEnabled>0</IPACMPPPOEEnabled>
+		</IPACMPPPOE>
+		<IPACMIPOEEthVlanWan>
+			<IPOEEthVlanWanEnabled>0</IPOEEthVlanWanEnabled>
+			<IPOEVlanLanWanIface>eth0</IPOEVlanLanWanIface>
+		</IPACMIPOEEthVlanWan>
+		<MultiVlanBridgeConfig>
+			<MultiVlanOnBridgeEnable>0</MultiVlanOnBridgeEnable>
+		</MultiVlanBridgeConfig>
+		<IPACMLog>
+			<IPACMfilevar>2097152</IPACMfilevar>
+		</IPACMLog>
 	</IPACM>
 </system>

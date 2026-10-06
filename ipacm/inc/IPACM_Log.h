@@ -41,10 +41,8 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 	Skylar Chang
 
 */
-
 #ifndef IPACM_LOG_H
 #define IPACM_LOG_H
-
 #ifdef __cplusplus
 extern "C"
 {
@@ -54,14 +52,20 @@ extern "C"
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
-#include <syslog.h>
 #include <sys/utsname.h>
 #include <errno.h>
+#include <time.h>
+#include <sys/time.h>
+#include <stdint.h>
 
-#define MAX_BUF_LEN 256
+#define IPACM_LOG_MAX_BUF_LEN 288
+#define IPACM_LOG_MAX_CORE_BUF_LEN 256
+#define IPACM_LOG_TIMESTAMP_BUF_LEN 30
+#define IPACM_DEF_LOG_LEVEL 8
+
 #ifdef FEATURE_IPA_ANDROID
 #define IPACMLOG_FILE "/dev/socket/ipacm_log_file"
-#else/* defined(FEATURE_IPA_ANDROID) */
+#else /* defined(FEATURE_IPA_ANDROID) */
 #define IPACMLOG_FILE "/dev/socket/data/ipa/ipacm_log_file"
 #define KERNEL_VER_FILE "/tmp/kernel_ver.txt"
 #endif /* defined(NOT FEATURE_IPA_ANDROID)*/
@@ -75,137 +79,77 @@ extern "C"
 #endif
 
 extern int dynamic_logs_enable;
+#define KERNEL_VERSION_4_9 "4.9"
+#define KERNEL_VERSION_LENGTH 16
+
+typedef struct ipacm_log_file_metadata_s {
+	long int write_addr;
+} ipacm_log_file_metadata_t;
 
 typedef struct ipacm_log_buffer_s {
-	char	user_data[MAX_BUF_LEN];
+	char user_data[IPACM_LOG_MAX_BUF_LEN];
 } ipacm_log_buffer_t;
 
-#define KERNEL_VERSION_4_9 "4.9"
+enum ipacm_log_level_t {
+	IPACM_LOG_DISABLED = 0,
+	IPACM_LOG_ERR      = 4,
+	IPACM_LOG_WARN     = 6,
+	IPACM_LOG_INFO     = 7,
+	IPACM_LOG_DEBUG    = 8,
+	IPACM_LOG_LVL_MAX  = 9
+};
 
-#define KERNEL_VERSION_LENGTH 16
+extern uint8_t ipacm_global_log_level;
+extern int boot_log_full;
 
 bool is_kernel_version_newer_than(
 			char *version,
 			const char *cmp_verison);
 
-void ipacm_log_send( void * user_data);
-
-static char buffer_send[MAX_BUF_LEN];
-static char dmesg_cmd[MAX_BUF_LEN];
-
-void ipacm_log_dump(char ipacm_log_data[]);
-int log_init(int);
+void get_kernel_version(char* kernel_ver);
+char* get_time_string(char* buffer, int TimeStamp_len);
+void ipacm_send_log_to_qxdm(void* user_data);
+void ipacm_send_log_to_file(char ipacm_log_data[]);
+void ipacm_send_log_to_boot_file(char* ipacm_log_data);
+int  log_init(int);
 extern int g_ipacm_logs_enabled;
 void ipacm_set_log_enabled(int enable);
 
-
-/* Always gate logs on g_ipacm_logs_enabled to allow runtime enable/disable */
-#define IPACMDBG_DMESG(fmt, ...) \
-	do { \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s: " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_log_send (buffer_send); \
-		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
-			printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-			memset(dmesg_cmd, 0, MAX_BUF_LEN); \
-			snprintf(dmesg_cmd, MAX_BUF_LEN, "echo %s > /dev/kmsg", buffer_send); \
-			system(dmesg_cmd); \
-			memset(buffer_send, 0, MAX_BUF_LEN); \
-			snprintf(buffer_send, MAX_BUF_LEN,"%s:%d %s(): " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-			ipacm_log_dump(buffer_send); \
+#define IPACM_LOG(incoming_log_level, fmt, ...) \
+do { \
+		char __ipacm_log_buffer_send[IPACM_LOG_MAX_BUF_LEN]; \
+		char __ipacm_log_core_buf[IPACM_LOG_MAX_CORE_BUF_LEN]; \
+		char __ipacm_log_timestamp_buf[IPACM_LOG_TIMESTAMP_BUF_LEN]; \
+		if (g_ipacm_logs_enabled || dynamic_logs_enable) {\
+			get_time_string(__ipacm_log_timestamp_buf, IPACM_LOG_TIMESTAMP_BUF_LEN); \
+			snprintf(__ipacm_log_core_buf, IPACM_LOG_MAX_CORE_BUF_LEN, "%s:%d %s() " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+			snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN, "%s %s", __ipacm_log_timestamp_buf, __ipacm_log_core_buf); \
 		} \
-	} while (0);
-#ifdef DEBUG
-#define PERROR(fmt) \
-	do { \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s()", __FILE__, __LINE__, __FUNCTION__); \
-		ipacm_log_send (buffer_send); \
-		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
-			perror(fmt); \
-		} \
-	} while (0);
-#define IPACMERR(fmt, ...) \
-	do { \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send,MAX_BUF_LEN,"ERROR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_log_send (buffer_send); \
-		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
-			printf("ERROR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-			memset(buffer_send, 0, MAX_BUF_LEN); \
-			snprintf(buffer_send, MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-			ipacm_log_dump(buffer_send); \
-		} \
-	} while (0);
-#define IPACMDBG_H(fmt, ...) \
-	do { \
-		memset(buffer_send, 0, MAX_BUF_LEN); \
-		snprintf(buffer_send,MAX_BUF_LEN,"%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_log_send (buffer_send); \
-		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
-			printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-			memset(buffer_send, 0, MAX_BUF_LEN); \
-			snprintf(buffer_send, MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-			ipacm_log_dump(buffer_send); \
-		} \
-	} while (0);
-#else
-#define PERROR(fmt) \
-	do { \
-		perror(fmt); \
-	} while (0);
-#define IPACMERR(fmt, ...) \
-	do { \
-		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
-			printf("ERR: %s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		} \
-	} while (0);
-#define IPACMDBG_H(fmt, ...) \
-	do { \
-		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
-			printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		} \
-	} while (0);
-#endif
-#define IPACMDBG(fmt, ...) \
-	do { \
-		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
-			printf("%s:%d %s() " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-			memset(buffer_send, 0, MAX_BUF_LEN); \
-			snprintf(buffer_send, MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-			ipacm_log_dump(buffer_send); \
-		} \
+		if (!boot_log_full && (g_ipacm_logs_enabled || dynamic_logs_enable)) ipacm_send_log_to_boot_file(__ipacm_log_buffer_send); \
+		if (incoming_log_level <= ipacm_global_log_level) \
+		{\
+			ipacm_send_log_to_qxdm(__ipacm_log_core_buf); \
+			if (g_ipacm_logs_enabled || dynamic_logs_enable) \
+			{\
+				printf("%s\n", __ipacm_log_buffer_send); \
+				ipacm_send_log_to_file(__ipacm_log_buffer_send); \
+			}\
+		}\
 	} while (0);
 
-#define IPACMLOG(fmt, ...) \
+#define IPACM_LOG_PRINT_IN_PLACE(fmt, ...) \
 	do { \
-		if (g_ipacm_logs_enabled || dynamic_logs_enable) { \
-			printf(fmt, ##__VA_ARGS__); \
-			memset(buffer_send, 0, MAX_BUF_LEN); \
-			snprintf(buffer_send, MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-			ipacm_log_dump(buffer_send); \
-		} \
+		char __ipacm_log_buffer_send[IPACM_LOG_MAX_BUF_LEN]; \
+		char __ipacm_log_timestamp_buf[IPACM_LOG_TIMESTAMP_BUF_LEN]; \
+		printf(fmt, ##__VA_ARGS__); \
+		memset(__ipacm_log_buffer_send, 0, IPACM_LOG_MAX_BUF_LEN); \
+		snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN," %s %s:%d %s(): " fmt, get_time_string(__ipacm_log_timestamp_buf, IPACM_LOG_TIMESTAMP_BUF_LEN), __FILE__,  __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+		ipacm_send_log_to_file(__ipacm_log_buffer_send); \
 	} while (0);
 
-inline void get_kernel_version(char *kernel_ver)
-{
-	struct utsname utsname;
-	int ret;
-	memset(kernel_ver, 0, KERNEL_VERSION_LENGTH);
-	memset(&utsname, 0, sizeof(utsname));
-	ret = uname(&utsname);
-	if (ret)
-	{
-		IPACMERR("Error: uname %d (%s)\n",
-			ret, strerror(errno));
-		return;
-	}
-	memcpy(kernel_ver, utsname.release, KERNEL_VERSION_LENGTH - 1);
-	IPACMDBG_H("kernel_ver %s\n", kernel_ver);
-}
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* IPACM_LOG_H */
+#endif

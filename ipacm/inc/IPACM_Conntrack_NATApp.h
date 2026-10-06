@@ -27,7 +27,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #ifndef IPACM_CONNTRACK_NATAPP_H
@@ -58,9 +58,6 @@ extern "C"
 #define IPACM_GRE_FULL_FILE_NAME_NEW  "/proc/sys/net/netfilter/nf_conntrack_gre_timeout_stream"
 
 #endif
-
-#define ipv6prefixmatch(X,Y) \
-	((((X >> 32) == *Y) && ((X & 0x00000000FFFFFFFF) == *(Y+1))) ? 1 : 0)
 
 #define ipv6prefixmatch(X,Y) \
 	((((X >> 32) == *Y) && ((X & 0x00000000FFFFFFFF) == *(Y+1))) ? 1 : 0)
@@ -340,52 +337,52 @@ public:
 
 	EntryBaseClass* Find(const EntryBaseClass& other)
 	{
-		IPACMDBG_H("m_maxEntries %d\n", m_maxEntries);
+		IPACM_LOG(IPACM_LOG_DEBUG, "m_maxEntries %d\n", m_maxEntries);
 		for (int i = 0; i < m_maxEntries; ++i)
 		{
 			EntryBaseClass& curr = Get(i);
 			if (curr.Valid() && curr == other)
 			{
-				IPACMDBG_H("return matched entry with index %d\n", i);
+				IPACM_LOG(IPACM_LOG_DEBUG, "return matched entry with index %d\n", i);
 				return &curr;
 			}
 		}
 
-		IPACMDBG_H("Not found\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Not found\n");
 		return NULL;
 	}
 
 	const EntryBaseClass* Find(const EntryBaseClass& other) const
 	{
-		IPACMDBG_H("m_maxEntries %d\n", m_maxEntries);
+		IPACM_LOG(IPACM_LOG_DEBUG, "m_maxEntries %d\n", m_maxEntries);
 		for (int i = 0; i < m_maxEntries; ++i)
 		{
 			const EntryBaseClass& curr = Get(i);
 			if (curr.Valid() && curr == other)
 			{
-				IPACMDBG_H("return matched entry with index %d\n", i);
+				IPACM_LOG(IPACM_LOG_DEBUG, "return matched entry with index %d\n", i);
 				return &curr;
 			}
 		}
 
-		IPACMDBG_H("Not found\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "Not found\n");
 		return NULL;
 	}
 
 	EntryBaseClass* GetFirstEmpty()
 	{
-		IPACMDBG_H("m_maxEntries %d\n",m_maxEntries);
+		IPACM_LOG(IPACM_LOG_DEBUG, "m_maxEntries %d\n",m_maxEntries);
 		for (int i = 0; i < m_maxEntries; ++i)
 		{
 			EntryBaseClass& curr = Get(i);
 			if (!curr.Valid())
 			{
-				IPACMDBG_H("return first empty entry with index %d\n", i);
+				IPACM_LOG(IPACM_LOG_DEBUG, "return first empty entry with index %d\n", i);
 				return &curr;
 			}
 		}
 
-		IPACMDBG_H("The collection is full, no empty entry was found\n");
+		IPACM_LOG(IPACM_LOG_DEBUG, "The collection is full, no empty entry was found\n");
 		return NULL;
 	}
 
@@ -714,7 +711,7 @@ public:
 	static NatApp* GetInstance();
 
 #ifdef FEATURE_VLAN_MPDN
-	int AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass, bool is_xlat = false);
+	int AddPdn(uint32_t pub_ip, uint8_t mux_id, bool is_sta, bool ip_pass = false, bool is_xlat = false);
 	int RemovePdn(uint32_t pub_ip);
 #endif
 	bool ChkForDupGRE(const nat_table_entry *);

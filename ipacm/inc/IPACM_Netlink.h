@@ -96,10 +96,11 @@ extern "C"
 #define IPA_RTA_PARAM_CACHEINFO   (0x0020)
 #define IPA_RTA_PARAM_PRIORITY    (0x0080)
 #define IPA_RTA_PARAM_METRICS     (0x0100)
+#define IPA_RTA_PARAM_TABLE       (0x0200)
 
 
-/*--------------------------------------------------------------------------- 
-	 Type representing function callback registered with a socket listener 
+/*---------------------------------------------------------------------------
+	 Type representing function callback registered with a socket listener
 	 thread for reading from a socket on receipt of an incoming message
 ---------------------------------------------------------------------------*/
 typedef int (*ipa_sock_thrd_fd_read_f)(int fd);
@@ -118,6 +119,7 @@ typedef enum
 	IPA_LINK_TYPE_NORMAL = 0,
 	IPA_LINK_TYPE_VLAN,
 	IPA_LINK_TYPE_MACSEC,
+	IPA_LINK_TYPE_PPP,
 } ipa_nl_type_e;
 
 typedef struct
@@ -206,6 +208,7 @@ typedef struct ipa_nl_route_info_s {
 		__u32       priority;
 		__u32       metrics;
 		__u32       mtu;
+		__u32       table_id;
 		ipa_nl_proto_info_t        proto_info;
 	} attr_info;
 } ipa_nl_route_info_t;
@@ -260,15 +263,16 @@ int ipa_nl_recv_msg(int fd);
 /* map mask value for ipv6 */
 int mask_v6(int index, uint32_t *mask);
 
+/*  get ipa interface name */
 int ipa_get_if_name(char *if_name, int if_index);
 int ipa_nl_route_recvmsg(int fd, struct msghdr *msg, char **result);
 int ipa_nl_query_ip_addr_info(int);
 int ipa_nl_query_getlink(int);
 int ipa_nl_route_receive(int fd, struct msghdr *msg, int flags);
-int ipa_nl_send_getroute(ipa_ip_type ip_type);
-int ipa_nl_query_newneigh(int af_family);
+int ipa_nl_send_getroute(ipa_ip_type ip_type, char *iface_name = NULL);
+int ipa_nl_query_newneigh(int af_family, char *iface_name = NULL);
 void ipa_query_nl_getevents();
-static bool nl_lock = false;
+static pthread_mutex_t nl_lock = PTHREAD_MUTEX_INITIALIZER;
 
 #ifdef __cplusplus
 }

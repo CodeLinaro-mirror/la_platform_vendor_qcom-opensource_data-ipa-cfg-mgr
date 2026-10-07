@@ -82,6 +82,7 @@ public:
 
 	/* IPACM interface id */
 	int ipa_if_num;
+	bool iface_valid = false;
 
 	/* IPACM interface category */
 	ipacm_iface_type ipa_if_cate;

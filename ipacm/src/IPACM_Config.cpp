@@ -3306,40 +3306,63 @@ void IPACM_Config::add_l2tp_tunnel_info(l2tp_tunnel_info * data)
 
 void IPACM_Config::del_l2tp_tunnel_info(uint32_t tunnel_id)
 {
-	/* delete from tunnel list */
 	list<l2tp_tunnel_info>::iterator it_tunnel;
 	list<l2tp_vlan_mapping_info>::iterator it;
 	uint16_t l2tp_bridge_vlan = 0;
 
-	if(pthread_mutex_lock(&vlan_l2tp_lock) != 0)
+	if (pthread_mutex_lock(&vlan_l2tp_lock) != 0)
 	{
 		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
 		return;
 	}
 
-	for(it = m_l2tp_vlan_mapping.begin(); it != m_l2tp_vlan_mapping.end(); it++)
+	/* ----------------------------------------------------------------
+	 *   - Save l2tp_iface_name into a local buffer BEFORE erase().
+	 *     Accessing it->l2tp_iface_name after erase() is use-after-erase
+	 *     (UB) — the iterator is invalidated the moment erase() returns.
+	 *   - Use the return value of erase() as the next valid iterator.
+	 *     The old `it--` after erase() was also UB on an invalidated it.
+	 *   - Only call ++it in the else-branch; never in the for-header.
+	 * ---------------------------------------------------------------- */
+	for (it = m_l2tp_vlan_mapping.begin(); it != m_l2tp_vlan_mapping.end(); )
 	{
 		l2tp_bridge_vlan = 0;
-		if(it->l2tp_tunnel_id == tunnel_id)
+
+		if (it->l2tp_tunnel_id == tunnel_id)
 		{
+			/* Save everything we need BEFORE the iterator is invalidated */
 			l2tp_bridge_vlan = it->l2tp_bridge_vlan_id;
-			m_l2tp_vlan_mapping.erase(it);
-			DelNatIfaces(it->l2tp_iface_name);
-			if(num_ipa_l2tp_session > 0)
+
+			char saved_iface_name[IPA_IFACE_NAME_LEN];
+			strlcpy(saved_iface_name, it->l2tp_iface_name, sizeof(saved_iface_name));
+
+			/* erase() returns the next valid iterator — no it-- needed */
+			it = m_l2tp_vlan_mapping.erase(it);
+
+			/* Safe: using saved copy, not the now-dead iterator */
+			DelNatIfaces(saved_iface_name);
+
+			if (num_ipa_l2tp_session > 0)
 			{
 				num_ipa_l2tp_session--;
 			}
-			IPACM_LOG(IPACM_LOG_DEBUG, "Del l2tp iface %s to nat ifaces, Now num l2tp sessions %d\n",
-					it->l2tp_iface_name, num_ipa_l2tp_session);
-			it--;
+
+			IPACM_LOG(IPACM_LOG_DEBUG, "Del l2tp iface %s from nat ifaces, Now num l2tp sessions %d\n",
+				saved_iface_name, num_ipa_l2tp_session);
 		}
+		else
+		{
+			++it;   /* Only advance when NOT erasing */
+		}
+
+		/* Vlan event dispatch uses l2tp_bridge_vlan captured above (safe) */
 		if (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable == TRUE && l2tp_bridge_vlan != 0)
 		{
 			ipacm_event_route_vlan *vlan_data;
 			ipacm_cmd_q_data vlan_down_evt;
 
 			vlan_data = (ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
-			if(vlan_data == NULL)
+			if (vlan_data == NULL)
 			{
 				IPACM_LOG(IPACM_LOG_ERR, "Failed to allocate memory.\n");
 				pthread_mutex_unlock(&vlan_l2tp_lock);
@@ -3353,32 +3376,46 @@ void IPACM_Config::del_l2tp_tunnel_info(uint32_t tunnel_id)
 			vlan_down_evt.event = IPA_ROUTE_DEL_L2TP_VLAN_EVENT;
 
 			IPACM_LOG(IPACM_LOG_DEBUG, "Posting event %s with vlan_id: %d\n",
-				IPACM_Iface::ipacmcfg->getEventName(vlan_down_evt.event), vlan_data->VlanID);
+				IPACM_Iface::ipacmcfg->getEventName(vlan_down_evt.event),
+				vlan_data->VlanID);
 			IPACM_EvtDispatcher::PostEvt(&vlan_down_evt);
 		}
 	}
 
-	/* Delete tunnel from list */
-	for(it_tunnel = l2tp_tunnels.begin(); it_tunnel != l2tp_tunnels.end(); it_tunnel++)
+	/* ----------------------------------------------------------------
+	 *   - `it_tunnel--` after erase(it_tunnel) is the same UB —
+	 *     the iterator is dead. Replaced with erase() return value.
+	 *   - Only advance with ++it_tunnel in the else-branch.
+	 *   - Since we return immediately after the match, the reassigned
+	 *     iterator from erase() is never used, but the pattern is kept
+	 *     correct for safety and consistency.
+	 * ---------------------------------------------------------------- */
+	for (it_tunnel = l2tp_tunnels.begin(); it_tunnel != l2tp_tunnels.end(); )
 	{
-		if(it_tunnel->l2tp_tunnel_id == tunnel_id)
+		if (it_tunnel->l2tp_tunnel_id == tunnel_id)
 		{
 			IPACM_LOG(IPACM_LOG_DEBUG, "found tunnel with id %d\n", tunnel_id);
-			l2tp_tunnels.erase(it_tunnel);
-			it_tunnel--;
-			if(num_ipa_l2tp_tunnel > 0)
+
+			/* erase() return value captured — no it_tunnel-- needed */
+			it_tunnel = l2tp_tunnels.erase(it_tunnel);
+
+			if (num_ipa_l2tp_tunnel > 0)
 			{
 				num_ipa_l2tp_tunnel--;
 			}
+
 			IPACM_LOG(IPACM_LOG_DEBUG, "Now num l2tp tunnels are %d\n", num_ipa_l2tp_tunnel);
 			pthread_mutex_unlock(&vlan_l2tp_lock);
 			return;
+		}
+		else
+		{
+			++it_tunnel;
 		}
 	}
 
 	IPACM_LOG(IPACM_LOG_DEBUG, "tunnel with id %d not found\n", tunnel_id);
 	pthread_mutex_unlock(&vlan_l2tp_lock);
-	return;
 }
 
 

@@ -107,12 +107,11 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 		case IPA_LINK_UP_EVENT:
 			IPACM_LOG(IPACM_LOG_INFO, "Recieved IPA_LINK_UP_EVENT event: link up %d: \n", evt_data->if_index);
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
-			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(ifmgr_data.iface_name));
-			/* check for failure return */
-			if (IPACM_FAILURE == ipa_interface_index) {
+			if(IPACM_FAILURE == ipa_interface_index) {
 				IPACM_LOG(IPACM_LOG_ERR, "IPA_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
 				break;
 			}
+			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(ifmgr_data.iface_name));
 			/* LTE-backhaul */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == EMBMS_IF)
 			{
@@ -477,7 +476,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "Creating WLan interface\n");
 				IPACM_Wlan *wl = new IPACM_Wlan(param->iface_name, ipa_interface_index);
-				if (wl->rx_prop == NULL && wl->tx_prop == NULL)
+				if ((wl->rx_prop == NULL && wl->tx_prop == NULL) || !wl->iface_valid)
 				{
 					/* reset the AP-iface category to unknown */
 					IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat = UNKNOWN_IF;

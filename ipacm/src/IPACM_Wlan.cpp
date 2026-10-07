@@ -3203,6 +3203,12 @@ int IPACM_Wlan::handle_down_evt()
 	 	IPACM_Lan::delete_uplink_filter_rule_ul(&iface_ul_firewall);
 #endif
 
+	if(NULL == rx_prop)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "ERR: rx props is invalid\n");
+		return IPACM_FAILURE;
+	}
+
 	/* no iface address up, directly close iface*/
 	if (ip_type == IPACM_IP_NULL)
 	{
@@ -3213,13 +3219,13 @@ int IPACM_Wlan::handle_down_evt()
 	if(!IPACM_Iface::ipacmcfg->is_added_vlan_iface(dev_name))
 	{
 		/* delete wan filter rule */
-		if (IPACM_Wan::isWanUP(ipa_if_num) && rx_prop != NULL)
+		if (IPACM_Wan::isWanUP(ipa_if_num))
 		{
 			IPACM_LOG(IPACM_LOG_DEBUG, "LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
 			IPACM_Lan::handle_wan_down(IPACM_Wan::backhaul_is_sta_mode);
 		}
 
-		if (IPACM_Wan::isWanUP_V6(ipa_if_num) && rx_prop != NULL)
+		if (IPACM_Wan::isWanUP_V6(ipa_if_num))
 		{
 			IPACM_LOG(IPACM_LOG_DEBUG, "LAN IF goes down, backhaul type %d\n", IPACM_Wan::backhaul_is_sta_mode);
 			handle_wan_down_v6(IPACM_Wan::backhaul_is_sta_mode, true);
@@ -3236,7 +3242,7 @@ int IPACM_Wlan::handle_down_evt()
 	IPACM_LOG(IPACM_LOG_DEBUG, "finished deleting wan filtering rules\n \n");
 
 	/* Delete v4 filtering rules */
-	if (ip_type != IPA_IP_v6 && rx_prop != NULL)
+	if (ip_type != IPA_IP_v6)
 	{
 		/* delete IPv4 icmp filter rules */
 		if(m_filtering.DeleteFilteringHdls(ipv4_icmp_flt_rule_hdl[0], IPA_IP_v4, NUM_IPV4_ICMP_FLT_RULE) == false)
@@ -3290,7 +3296,7 @@ int IPACM_Wlan::handle_down_evt()
 	}
 
 	/* Delete v6 filtering rules */
-	if (ip_type != IPA_IP_v4 && rx_prop != NULL)
+	if (ip_type != IPA_IP_v4)
 	{
 		/* delete icmp filter rules */
 		if(m_filtering.DeleteFilteringHdls(ipv6_icmp_flt_rule_hdl[0], IPA_IP_v6, NUM_IPV6_ICMP_FLT_RULE) == false)
@@ -3602,7 +3608,7 @@ fail:
 #endif
 
 	/* check software routing fl rule hdl */
-	if (softwarerouting_act == true && rx_prop != NULL )
+	if (softwarerouting_act == true)
 	{
 		IPACM_LOG(IPACM_LOG_DEBUG, "Delete sw routing filtering rules\n");
 		IPACM_Iface::handle_software_routing_disable();

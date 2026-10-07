@@ -7919,6 +7919,15 @@ int IPACM_Wan::config_socksv5_rules(ipa_ioc_add_flt_rule *pFilteringTable_v6)
 }
 #endif
 
+/* Validates a PDN index before it is used to subscript
+ * ipv4_to_iface[]/ipv6_to_iface[] (both sized IPA_MAX_NUM_SW_PDNS).
+ * -1 is the "no PDN of this type is up" sentinel used throughout
+ * this function; anything else must be in [0, IPA_MAX_NUM_SW_PDNS). */
+static inline bool is_idx_valid(int idx)
+{
+	return ((idx >= 0) && (idx < IPA_MAX_NUM_SW_PDNS));
+}
+
 /*for STA mode: handle wan-iface down event */
 int IPACM_Wan::handle_down_evt()
 {
@@ -7945,13 +7954,21 @@ int IPACM_Wan::handle_down_evt()
 	/*Post v4 Vlan PDN_DOWN event if associated*/
 
 	IPACM_LOG(IPACM_LOG_DEBUG, "ip_type: %d\n", ip_type);
-	IPACM_LOG(IPACM_LOG_INFO, "sta_ipv4_pdn_index: %d ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan :%d\n",
-				 sta_ipv4_pdn_index,
-				 (sta_ipv4_pdn_index >= 0) ? ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan : 0);
+
+	if (is_idx_valid(sta_ipv4_pdn_index))
+	{
+		IPACM_LOG(IPACM_LOG_INFO, "sta_ipv4_pdn_index: %d ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan :%d\n",
+			sta_ipv4_pdn_index, ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan);
+	}
+	else
+	{
+		IPACM_LOG(IPACM_LOG_INFO, "sta_ipv4_pdn_index: %d (invalid, no wan_up_vlan)\n", sta_ipv4_pdn_index);
+	}
+
 	IPACM_LOG(IPACM_LOG_INFO, " STA wan ipv4-addr:0x%x\n", wan_v4_addr);
 
-	if((sta_ipv4_pdn_index >= 0) && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan &&
-	   (sta_ipv6_pdn_index >= 0) && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6)
+	if(is_idx_valid(sta_ipv4_pdn_index) && is_idx_valid(sta_ipv6_pdn_index) &&
+		ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_vlan_pdn *vlandown_data;
@@ -7989,7 +8006,7 @@ int IPACM_Wan::handle_down_evt()
 
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
-	else if((sta_ipv6_pdn_index >= 0) && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6)
+	else if(is_idx_valid(sta_ipv6_pdn_index) && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_vlan_pdn *vlandown_data;
@@ -7997,8 +8014,7 @@ int IPACM_Wan::handle_down_evt()
 		ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 = false;
 
 		wan_v6_is_default_gw = true;
-		if (((sta_ipv4_pdn_index == -1) || ((sta_ipv4_pdn_index >= 0) &&
-		(!ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan))) && (num_offloaded_pdns > 0))
+		if ((!is_idx_valid(sta_ipv4_pdn_index) || !ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan) && (num_offloaded_pdns > 0))
 		{
 			num_offloaded_pdns--;
 			IPACM_LOG(IPACM_LOG_INFO, "Now no of offloaded PDN is %d\n", num_offloaded_pdns);
@@ -8027,15 +8043,14 @@ int IPACM_Wan::handle_down_evt()
 
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
-	else if ((sta_ipv4_pdn_index >= 0) && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan)
+	else if (is_idx_valid(sta_ipv4_pdn_index) && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_vlan_pdn *vlandown_data;
 
 		ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan = false;
 		wan_v4_is_default_gw = true;
-		if (((sta_ipv6_pdn_index == -1) || ((sta_ipv6_pdn_index >= 0) &&
-		(!ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6))) && (num_offloaded_pdns > 0))
+		if ((!is_idx_valid(sta_ipv6_pdn_index) || !ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6) && (num_offloaded_pdns > 0))
 		{
 			num_offloaded_pdns--;
 			IPACM_LOG(IPACM_LOG_INFO, "Now no of offloaded PDN is %d\n", num_offloaded_pdns);
@@ -8126,7 +8141,7 @@ int IPACM_Wan::handle_down_evt()
 				goto fail;
 			}
 		}
-		if (sta_ipv4_pdn_index >= 0)
+		if (is_idx_valid(sta_ipv4_pdn_index))
 		{
 			ipv4_to_iface[sta_ipv4_pdn_index].ipv4_addr = 0;
 			ipv4_to_iface[sta_ipv4_pdn_index].pIface = NULL;
@@ -8170,7 +8185,7 @@ int IPACM_Wan::handle_down_evt()
 		}
 
 		IPACM_LOG(IPACM_LOG_DEBUG, "finished delete default v6 RT rules\n \n");
-		if (sta_ipv6_pdn_index >= 0)
+		if (is_idx_valid(sta_ipv6_pdn_index))
 		{
 			ipv6_to_iface[sta_ipv6_pdn_index].pIface = NULL;
 			memset(&ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);

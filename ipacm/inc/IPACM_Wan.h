@@ -514,6 +514,7 @@ private:
 	int num_wan_client;
 	uint8_t invalid_mac[IPA_MAC_ADDR_SIZE];
 	bool is_xlat;
+	bool is_ipv6_dummy_prefix_up;
 
 	/* update network stats for CNE */
 	uint32_t hdr_hdl_dummy_v6;

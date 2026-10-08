@@ -3383,7 +3383,7 @@ void IPACM_Config::del_l2tp_tunnel_info(uint32_t tunnel_id)
 	}
 
 	/* ----------------------------------------------------------------
-	 *   - `it_tunnel--` after erase(it_tunnel) is the same UB —
+	 *   - it_tunnel-- after erase(it_tunnel) is the same UB —
 	 *     the iterator is dead. Replaced with erase() return value.
 	 *   - Only advance with ++it_tunnel in the else-branch.
 	 *   - Since we return immediately after the match, the reassigned
@@ -4635,12 +4635,17 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 	new_qos_info.pcp = data->pcp;
 
 	m_qos_params.push_front(new_qos_info);
-	pthread_mutex_unlock(&qos_param_list_lock);
 
+	/*
+	 * sort() must be called BEFORE unlock(), inside the
+	 * section, so the list is fully sorted before any other thread
+	 * can observe it.
+	*/
 	m_qos_params.sort(
 		[](const qos_param_info &a, const qos_param_info &b) {
 			return a.traffic_class > b.traffic_class;
 	});
+	pthread_mutex_unlock(&qos_param_list_lock);
 
 	IPACM_LOG(IPACM_LOG_DEBUG, "Added qos iface: %s vlan id: %d with traffic class :%d \n", data->dev_name, data->dir, data->traffic_class);
 	IPACM_LOG(IPACM_LOG_DEBUG, "qos params list size now :%d \n", m_qos_params.size());

@@ -26,9 +26,9 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
-SPDX-License-Identifier: BSD-3-Clause-Clear
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+SPDX-License-Identifier: BSD-3-Clause-Clear.
 */
 /*!
 	@file
@@ -93,42 +93,46 @@ MessageQueue* MessageQueue::getInstanceExternal()
 
 void MessageQueue::enqueue(Message *item)
 {
-	if(!Head)
+	if (item == NULL)
 	{
-		Tail = item;
+		IPACM_LOG(IPACM_LOG_DEBUG, "enqueue: item is NULL, dropping\n");
+		return;
+	}
+
+	item->setnext(NULL);    // ensure new tail node has no stale next pointer
+
+	if (!Head)
+	{
+		// Queue empty — both Head and Tail point to the single new item
 		Head = item;
 	}
 	else
 	{
-		if(Tail == NULL)
-		{
-			IPACM_LOG(IPACM_LOG_DEBUG, "Tail is null\n");
-			Head->setnext(item);
-		}
-		else
-		{
-			Tail->setnext(item);
-		}
-		Tail = item;
+		// Queue non-empty — Tail is guaranteed valid whenever Head != NULL
+		Tail->setnext(item);
 	}
+	Tail = item;
 }
 
 
 Message* MessageQueue::dequeue(void)
 {
-	if(Head == NULL)
-	{
-		return NULL;
-	}
-	else
-	{
-		Message *tmp = Head;
-		Head = Head->getnext();
+    if (Head == NULL)
+    {
+        return NULL;
+    }
 
-		return tmp;
-	}
+    Message *tmp = Head;
+    Head = Head->getnext();
+
+    if (Head == NULL)
+    {
+        Tail = NULL;        //reset Tail when last item is dequeued
+    }
+
+    tmp->setnext(NULL);     // sever returned node from the queue chain
+    return tmp;
 }
-
 
 void* MessageQueue::Process(void *param)
 {

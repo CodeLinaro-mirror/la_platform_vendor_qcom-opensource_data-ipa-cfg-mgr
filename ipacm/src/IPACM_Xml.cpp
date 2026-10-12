@@ -889,6 +889,21 @@ static int ipacm_cfg_xml_parse_tree
 						IPACM_LOG(IPACM_LOG_DEBUG, "IPACMLog timestamp enable cfg val is: %u \n",config->ipacm_log_timestamp_enable);
 					}
 				}
+				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACM_QXDM_LOG_ENABLE_TAG))
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "inside ipacm qxdm log enable tag\n");
+					content = IPACM_read_content_element(xml_node);
+					config->ipacm_qxdm_log_enable = 0;
+
+					if (content!= NULL)
+					{
+						if(atoi(content)!=0)
+						{
+							config->ipacm_qxdm_log_enable = atoi(content);
+						}
+						IPACM_LOG(IPACM_LOG_DEBUG, "IPACMLog QXDM logs enable cfg val is: %u \n",config->ipacm_qxdm_log_enable);
+					}
+				}
 				else if (0 == IPACM_util_icmp_string((char*)xml_node->name, IPACM_IPANAT_LOG_ENABLE_TAG))
 				{
 					content = IPACM_read_content_element(xml_node);

@@ -201,6 +201,7 @@ public:
 	uint8_t ipacm_log_level;
 	uint8_t ipacm_syslog_level;
 	bool ipacm_log_timestamp_enable;
+	bool ipacm_qxdm_log_enable;
 	bool ipacm_ipanat_log_enable;
 
 	/* IPACM ipa_client map to rm_resource*/

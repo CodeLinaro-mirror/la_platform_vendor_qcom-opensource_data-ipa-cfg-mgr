@@ -248,6 +248,7 @@ if (!(a)) {                                                 \
 #define IPACM_LOG_LEVEL_TAG                  "IPACMLogLevel"
 #define IPACM_SYSLOG_LEVEL_TAG               "IPACMSyslogLevel"
 #define IPACM_LOG_TIMESTAMP_ENABLE_TAG       "IPACMLogTimestampEnable"
+#define IPACM_QXDM_LOG_ENABLE_TAG            "IPACMQxdmLogEnable"
 #define IPACM_IPANAT_LOG_ENABLE_TAG          "IPACMIpanatLogEnable"
 
 /*---------------------------------------------------------------------------
@@ -414,6 +415,7 @@ typedef struct  _IPACM_conf_t
 	uint8_t ipacm_log_level;
 	uint8_t ipacm_syslog_level;
 	bool ipacm_log_timestamp_enable;
+	bool ipacm_qxdm_log_enable;
 	bool ipacm_ipanat_log_enable;
 	bool ipv6_nat_enable;
 	int ipacm_l2tp_enable;

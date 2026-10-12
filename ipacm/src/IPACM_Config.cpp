@@ -590,6 +590,16 @@ int IPACM_Config::Init(void)
 		ipacm_log_timestamp_enable = IPACM_DEF_LOG_TIMESTAMP_ENABLE;
 	}
 
+	if(cfg->ipacm_qxdm_log_enable == 0 || cfg->ipacm_qxdm_log_enable == 1)
+	{
+		IPACM_LOG(IPACM_LOG_INFO, "ipacm qxdm log enable is %d\n", cfg->ipacm_qxdm_log_enable);
+		ipacm_qxdm_log_enable = cfg->ipacm_qxdm_log_enable;
+	}
+	else {
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid qxdm log enable value provided:%d, Setting default log level\n", cfg->ipacm_qxdm_log_enable);
+		ipacm_qxdm_log_enable = IPACM_DEF_QXDM_LOG_ENABLE;
+	}
+
 	ipacm_ipanat_log_enable = cfg->ipacm_ipanat_log_enable;
 	IPACM_LOG(IPACM_LOG_INFO, "ipacm ipanat log enable is %d\n", ipacm_ipanat_log_enable);
 

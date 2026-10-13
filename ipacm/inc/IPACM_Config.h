@@ -153,7 +153,7 @@ struct qos_client_info
 	int client_iface;
 
 	uint32_t dscp_hpc_hdl_v4;
-	uint32_t dscp_hpc_hdl_v6[IPV6_NUM_ADDR];
+	uint32_t dscp_hpc_hdl_v6;
 
 	bool route_rule_set_v4;
 	bool route_rule_set_v6;

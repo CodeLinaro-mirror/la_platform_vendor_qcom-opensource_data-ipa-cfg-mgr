@@ -55,6 +55,12 @@
 #include <IPACM_ConntrackListener.h>
 #include "linux/ipa_qmi_service_v01.h"
 #include <IPACM_Netlink.h>
+#include <algorithm>
+
+static inline bool has_vid(const std::vector<uint16_t> &v, uint16_t vid)
+{
+	return std::find(v.begin(), v.end(), vid) != v.end();
+}
 
 bool IPACM_Wan::wan_up = false;
 bool IPACM_Wan::wan_up_v6 = false;
@@ -122,10 +128,10 @@ int	IPACM_Wan::ipa_if_num_tether_v6[IPA_MAX_IFACE_ENTRIES];
 ipacm_ipv4_wan_iface IPACM_Wan::ipv4_to_iface[IPA_MAX_NUM_SW_PDNS];
 ipacm_ipv6_wan_iface IPACM_Wan::ipv6_to_iface[IPA_MAX_NUM_SW_PDNS];
 uint8_t IPACM_Wan::num_offloaded_pdns = 0;
-int IPACM_Wan::wlan_v4_vlan_index[IPA_MAX_WLAN_STA_IFACES] = {-1,-1};
-int IPACM_Wan::wlan_v6_vlan_index[IPA_MAX_WLAN_STA_IFACES] = {-1,-1};
-int IPACM_Wan::eth_sta_v4_vlan_index = -1;
-int IPACM_Wan::eth_sta_v6_vlan_index = -1;
+int IPACM_Wan::wlan_sta_v4_pdn_index[IPA_MAX_WLAN_STA_IFACES] = {-1,-1};
+int IPACM_Wan::wlan_sta_v6_pdn_index[IPA_MAX_WLAN_STA_IFACES] = {-1,-1};
+int IPACM_Wan::eth_sta_v4_pdn_index = -1;
+int IPACM_Wan::eth_sta_v6_pdn_index = -1;
 #endif
 
 uint16_t IPACM_Wan::mtu_default_wan = DEFAULT_MTU_SIZE;
@@ -162,6 +168,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 
 	/* Used to store the Public IP info in IP passthrough mode. */
 	wan_v4_addr = 0;
+	wan_v4_mask = 0;
 	wan_v4_addr_gw = 0;
 	public_wan_v4_addr = 0;
 	public_wan_v4_addr_set = false;
@@ -201,6 +208,7 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	memset(invalid_mac, 0, sizeof(invalid_mac));
 
 	is_xlat = false;
+	is_ipv6_dummy_prefix_up = false;
 	in_collision = false;
 	hdr_hdl_dummy_v6 = 0;
 	hdr_proc_hdl_dummy_v6 = 0;
@@ -211,6 +219,8 @@ IPACM_Wan::IPACM_Wan(int iface_index,
 	sta_ipv6_pdn_index = -1;
 	sta_ipv4_pdn_index = -1;
 	sta_vlan_id = 0;
+	pending_VID_STA.clear();
+	pending_VID_STA_v6.clear();
 #ifdef FEATURE_VLAN_MPDN
 	associated_VID = 0;
 #endif
@@ -322,21 +332,18 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 			}
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 			{
-				for(int j = 0; j <  IPA_MAX_NUM_SW_PDNS; j++)
+				if(has_vid(IPACM_Wan::ipv4_to_iface[i].associated_VIDs, vlan_id))
 				{
-					if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
+					if(IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop)
 					{
-						if(IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop)
-						{
-							*mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
-							return IPACM_SUCCESS;
-						}
-						else if((IPACM_Wan::ipv4_to_iface[i].pIface->m_is_sta_mode == WLAN_WAN) ||
-							(IPACM_Wan::ipv4_to_iface[i].pIface->m_is_sta_mode == ECM_WAN))
-						{
-							*mux_id = 0;
-							return IPACM_SUCCESS;
-						}
+						*mux_id = IPACM_Wan::ipv4_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+						return IPACM_SUCCESS;
+					}
+					else if((IPACM_Wan::ipv4_to_iface[i].pIface->m_is_sta_mode == WLAN_WAN) ||
+						(IPACM_Wan::ipv4_to_iface[i].pIface->m_is_sta_mode == ECM_WAN))
+					{
+						*mux_id = 0;
+						return IPACM_SUCCESS;
 					}
 				}
 			}
@@ -350,21 +357,18 @@ int IPACM_Wan::GetMuxByVid(uint16_t vlan_id, uint8_t *mux_id, ipa_ip_type iptype
 			}
 			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
 			{
-				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+				if(has_vid(IPACM_Wan::ipv6_to_iface[i].associated_VIDs, vlan_id))
 				{
-					if(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id)
+					if(IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop)
 					{
-						if(IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop)
-						{
-							*mux_id = IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
-							return IPACM_SUCCESS;
-						}
-						else if((IPACM_Wan::ipv6_to_iface[i].pIface->m_is_sta_mode == WLAN_WAN) ||
-							(IPACM_Wan::ipv6_to_iface[i].pIface->m_is_sta_mode == ECM_WAN))
-						{
-							*mux_id = 0;
-							return IPACM_SUCCESS;
-						}
+						*mux_id = IPACM_Wan::ipv6_to_iface[i].pIface->ext_prop->ext[0].mux_id;
+						return IPACM_SUCCESS;
+					}
+					else if((IPACM_Wan::ipv6_to_iface[i].pIface->m_is_sta_mode == WLAN_WAN) ||
+						(IPACM_Wan::ipv6_to_iface[i].pIface->m_is_sta_mode == ECM_WAN))
+					{
+						*mux_id = 0;
+						return IPACM_SUCCESS;
 					}
 				}
 			}
@@ -382,13 +386,10 @@ int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
 		{
 			if(IPACM_Wan::ipv4_to_iface[i].ipv4_addr)
 			{
-				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+				if(has_vid(IPACM_Wan::ipv4_to_iface[i].associated_VIDs, vlan_id))
 				{
-					if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
-					{
-						*mtu = IPACM_Wan::ipv4_to_iface[i].pIface->mtu_size;
-						return IPACM_SUCCESS;
-					}
+					*mtu = IPACM_Wan::ipv4_to_iface[i].pIface->mtu_size;
+					return IPACM_SUCCESS;
 				}
 			}
 		}
@@ -396,13 +397,10 @@ int IPACM_Wan::GetMTUByVid(uint16_t *mtu, uint16_t vlan_id, ipa_ip_type iptype)
 		{
 			if(IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[0] || IPACM_Wan::ipv6_to_iface[i].ipv6_prefix[1])
 			{
-				for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
+				if(has_vid(IPACM_Wan::ipv6_to_iface[i].associated_VIDs, vlan_id))
 				{
-					if(IPACM_Wan::ipv6_to_iface[i].associated_VIDs[j] == vlan_id)
-					{
-						*mtu = IPACM_Wan::ipv6_to_iface[i].pIface->mtu_size;
-						return IPACM_SUCCESS;
-					}
+					*mtu = IPACM_Wan::ipv6_to_iface[i].pIface->mtu_size;
+					return IPACM_SUCCESS;
 				}
 			}
 		}
@@ -423,11 +421,8 @@ bool IPACM_Wan::is_xlat_by_vid(uint16_t vlan_id)
 			{
 				return IPACM_Wan::ipv4_to_iface[i].is_xlat;
 			}
-			for(int j = 0; j < IPA_MAX_NUM_SW_PDNS; j++)
-			{
-				if(IPACM_Wan::ipv4_to_iface[i].associated_VIDs[j] == vlan_id)
-					return IPACM_Wan::ipv4_to_iface[i].is_xlat;
-			}
+			if(has_vid(IPACM_Wan::ipv4_to_iface[i].associated_VIDs, vlan_id))
+				return IPACM_Wan::ipv4_to_iface[i].is_xlat;
 		}
 	}
 	IPACM_LOG(IPACM_LOG_INFO, "couldn't find MUX xlat info for VID %d\n", vlan_id);
@@ -443,18 +438,6 @@ bool IPACM_Wan::is_xlat_by_ipv4(uint32_t ipv4_addr)
 	}
 	IPACM_LOG(IPACM_LOG_INFO, "couldn't find MUX xlat info for ipv4 0x%x\n", ipv4_addr);
 	return false;
-}
-
-int IPACM_Wan::get_vid_index_for_iface_v6(ipacm_ipv6_wan_iface iface, uint16_t vlan_id)
-{
-	for(int i = 0; i < IPA_MAX_NUM_SW_PDNS;i++)
-	{
-		if(iface.associated_VIDs[i] == vlan_id)
-			return i;
-	}
-
-	IPACM_LOG(IPACM_LOG_ERR, "couldn't find VID %d\n in VID array\n", vlan_id);
-	return IPACM_FAILURE;
 }
 
 #endif
@@ -857,7 +840,8 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 				{
 					/* Delete default v4 RT rule */
 					IPACM_LOG(IPACM_LOG_DEBUG, "Delete default v4 routing rules\n");
-					if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
+					if ((dft_rt_rule_hdl[0] != 0) &&
+					    (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false))
 					{
 						IPACM_LOG(IPACM_LOG_ERR, "Routing old RT rule deletion failed!\n");
 						res = IPACM_FAILURE;
@@ -1886,7 +1870,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_DUMMY_VLAN_DOWN_EVENT:
 	{
 		IPACM_LOG(IPACM_LOG_INFO, "Received IPA_DUMMY_VLAN_DOWN_EVENT event\n");
-		int vlan_idx = 0;
 		int v4_pdn_index = -1;
 		int v6_pdn_index = -1;
 		bool vlan_pdn_up = false;
@@ -1905,28 +1888,18 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			}
 			if((v6_pdn_index >= 0) && (ipv6_to_iface[v6_pdn_index].wan_up_vlan_v6))
 			{
-				for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_SW_PDNS; vlan_idx++)
+				if(has_vid(IPACM_Wan::ipv6_to_iface[v6_pdn_index].associated_VIDs, vlandown_data->VlanID))
 				{
-					if((IPACM_Wan::ipv6_to_iface[v6_pdn_index].associated_VIDs[vlan_idx] != 0) &&
-					   (IPACM_Wan::ipv6_to_iface[v6_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID))
-					{
-						vlan_pdn_up = true;
-						post_wan_vlan_pdn_event(IPA_IP_v6, v6_pdn_index, vlan_idx, vlandown_data->VlanID, false);
-						break;
-					}
+					vlan_pdn_up = true;
+					post_wan_vlan_pdn_event(IPA_IP_v6, v6_pdn_index, vlandown_data->VlanID, false);
 				}
 			}
 			if((v4_pdn_index >= 0) && (ipv4_to_iface[v4_pdn_index].wan_up_vlan))
 			{
-				for(vlan_idx = 0; vlan_idx < IPA_MAX_NUM_SW_PDNS; vlan_idx++)
+				if(has_vid(IPACM_Wan::ipv4_to_iface[v4_pdn_index].associated_VIDs, vlandown_data->VlanID))
 				{
-					if((IPACM_Wan::ipv4_to_iface[v4_pdn_index].associated_VIDs[vlan_idx] != 0) &&
-					   (IPACM_Wan::ipv4_to_iface[v4_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID))
-					{
-						vlan_pdn_up = true;
-						post_wan_vlan_pdn_event(IPA_IP_v4, v4_pdn_index, vlan_idx, vlandown_data->VlanID, false);
-						break;
-					}
+					vlan_pdn_up = true;
+					post_wan_vlan_pdn_event(IPA_IP_v4, v4_pdn_index, vlandown_data->VlanID, false);
 				}
 			}
 		}
@@ -2276,7 +2249,6 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 	case IPA_ROUTE_DEL_L2TP_VLAN_EVENT:
 		{
 			IPACM_LOG(IPACM_LOG_DEBUG, "Received IPA_ROUTE_DEL_L2TP_VLAN_EVENT event\n");
-			int vlan_idx = 0;
 			int v4_pdn_index = 0;
 			int v6_pdn_index = 0;
 			bool vlan_pdn_up = false;
@@ -2295,26 +2267,18 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 				}
 				if((v6_pdn_index >= 0) && (ipv6_to_iface[v6_pdn_index].wan_up_vlan_v6))
 				{
-					for(vlan_idx = 0; vlan_idx < ipv6_to_iface[v6_pdn_index].VID_cnt; vlan_idx++)
+					if(has_vid(IPACM_Wan::ipv6_to_iface[v6_pdn_index].associated_VIDs, vlandown_data->VlanID))
 					{
-						if(IPACM_Wan::ipv6_to_iface[v6_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID)
-						{
-							vlan_pdn_up = true;
-							post_wan_vlan_pdn_event(IPA_IP_v6, v6_pdn_index, vlan_idx, vlandown_data->VlanID, false);
-							break;
-						}
+						vlan_pdn_up = true;
+						post_wan_vlan_pdn_event(IPA_IP_v6, v6_pdn_index, vlandown_data->VlanID, false);
 					}
 				}
 				if((v4_pdn_index >= 0) && (ipv4_to_iface[v4_pdn_index].wan_up_vlan))
 				{
-					for(vlan_idx = 0; vlan_idx < ipv4_to_iface[v4_pdn_index].VID_cnt; vlan_idx++)
+					if(has_vid(IPACM_Wan::ipv4_to_iface[v4_pdn_index].associated_VIDs, vlandown_data->VlanID))
 					{
-						if(IPACM_Wan::ipv4_to_iface[v4_pdn_index].associated_VIDs[vlan_idx] == vlandown_data->VlanID)
-						{
-							vlan_pdn_up = true;
-							post_wan_vlan_pdn_event(IPA_IP_v4, v4_pdn_index, vlan_idx, vlandown_data->VlanID, false);
-							break;
-						}
+						vlan_pdn_up = true;
+						post_wan_vlan_pdn_event(IPA_IP_v4, v4_pdn_index, vlandown_data->VlanID, false);
 					}
 				}
 			}
@@ -2365,98 +2329,65 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 }
 
 #ifdef FEATURE_VLAN_MPDN
-
-int IPACM_Wan::get_wan_v4_index(ipacm_wan_iface_type sta_mode)
-{
-
-	if(sta_mode == ECM_WAN)
-		return IPACM_Wan::eth_sta_v4_vlan_index;
-	return IPACM_FAILURE;
-}
-
-int IPACM_Wan::get_wan_v6_index(ipacm_wan_iface_type sta_mode)
-{
-	if(sta_mode == ECM_WAN)
-		return IPACM_Wan::eth_sta_v6_vlan_index;
-	return IPACM_FAILURE;
-}
-
 void IPACM_Wan::get_vlan_association_info(ipacm_vlan_association_info* vlan_info)
 {
 	bool v4_found = false;
 	bool v6_found = false;
 
-	vlan_info->v6_idx[ECM_WAN] = IPACM_Wan::get_wan_v6_index(ECM_WAN);
-	vlan_info->v4_idx[ECM_WAN] = IPACM_Wan::get_wan_v4_index(ECM_WAN);
+	if(pthread_mutex_lock(&IPACM_Iface::ipacmcfg->get_vlan_association_lock) != 0)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
+		return;
+	}
+
+	vlan_info->v6_idx[ECM_WAN] = IPACM_Wan::eth_sta_v6_pdn_index;
+	vlan_info->v4_idx[ECM_WAN] = IPACM_Wan::eth_sta_v4_pdn_index;
 
 	/* check if vlan-id associated with wlan/eth-STA wan index for ipv4 */
 	for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES && !v4_found; slot++)
 	{
-		int idx = IPACM_Wan::wlan_v4_vlan_index[slot];
+		int idx = IPACM_Wan::wlan_sta_v4_pdn_index[slot];
 		if(idx < 0) continue;
-		for(int vlan_idx = 0; vlan_idx < ipv4_to_iface[idx].VID_cnt; vlan_idx++)
+		if(has_vid(ipv4_to_iface[idx].associated_VIDs, vlan_info->vlan_id))
 		{
-			if(ipv4_to_iface[idx].associated_VIDs[vlan_idx] == vlan_info->vlan_id)
-			{
-				IPACM_LOG(IPACM_LOG_DEBUG, "VlanID found in slot %d V4 WLAN STA BH\n", slot);
-				vlan_info->v4_association = WLAN_WAN;
-				vlan_info->v4_idx[WLAN_WAN] = idx;
-				vlan_info->v4_vlan_idx[WLAN_WAN] = vlan_idx;
-				v4_found = true;
-				break;
-			}
+			IPACM_LOG(IPACM_LOG_DEBUG, "VlanID found in slot %d V4 WLAN STA BH\n", slot);
+			vlan_info->v4_association = WLAN_WAN;
+			vlan_info->v4_idx[WLAN_WAN] = idx;
+			v4_found = true;
+			break;
 		}
 	}
 
-	if(!v4_found && (vlan_info->v4_idx[ECM_WAN] >= 0) && ipv4_to_iface[vlan_info->v4_idx[ECM_WAN]].VID_cnt > 0)
+	if(!v4_found && (vlan_info->v4_idx[ECM_WAN] >= 0) &&
+		has_vid(ipv4_to_iface[vlan_info->v4_idx[ECM_WAN]].associated_VIDs, vlan_info->vlan_id))
 	{
-		for (int vlan_idx = 0; vlan_idx < ipv4_to_iface[vlan_info->v4_idx[ECM_WAN]].VID_cnt; vlan_idx++)
-		{
-			if(ipv4_to_iface[vlan_info->v4_idx[ECM_WAN]].associated_VIDs[vlan_idx] == vlan_info->vlan_id)
-			{
-				IPACM_LOG(IPACM_LOG_DEBUG, "VlanID found in associated_VIDs in V4 WAN STA BH\n");
-				vlan_info->v4_association = ECM_WAN;
-				vlan_info->v4_vlan_idx[ECM_WAN] = vlan_idx;
-				v4_found = true;
-				break;
-			}
-		}
+		IPACM_LOG(IPACM_LOG_DEBUG, "VlanID found in associated_VIDs in V4 WAN STA BH\n");
+		vlan_info->v4_association = ECM_WAN;
+		v4_found = true;
 	}
 
 	/* check if vlan-id associated with wlan/eth-STA wan index for ipv6 */
 	for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES && !v6_found; slot++)
 	{
-		int idx = IPACM_Wan::wlan_v6_vlan_index[slot];
+		int idx = IPACM_Wan::wlan_sta_v6_pdn_index[slot];
 		if(idx < 0) continue;
-		for(int vlan_idx = 0; vlan_idx < ipv6_to_iface[idx].VID_cnt; vlan_idx++)
+		if(has_vid(ipv6_to_iface[idx].associated_VIDs, vlan_info->vlan_id))
 		{
-			if(ipv6_to_iface[idx].associated_VIDs[vlan_idx] == vlan_info->vlan_id)
-			{
-				IPACM_LOG(IPACM_LOG_DEBUG, "VlanID found in slot %d V6 WLAN STA BH\n", slot);
-				vlan_info->v6_association = WLAN_WAN;
-				vlan_info->v6_idx[WLAN_WAN] = idx;
-				vlan_info->v6_vlan_idx[WLAN_WAN] = vlan_idx;
-				v6_found = true;
-				goto end;
-			}
+			IPACM_LOG(IPACM_LOG_DEBUG, "VlanID found in slot %d V6 WLAN STA BH\n", slot);
+			vlan_info->v6_association = WLAN_WAN;
+			vlan_info->v6_idx[WLAN_WAN] = idx;
+			v6_found = true;
+			break; //In case v4 is with Q6 and v6 is with wlan/eth-sta
 		}
 	}
 
-	if(!v6_found && (vlan_info->v6_idx[ECM_WAN] >= 0) && ipv6_to_iface[vlan_info->v6_idx[ECM_WAN]].VID_cnt > 0)
+	if(!v6_found && (vlan_info->v6_idx[ECM_WAN] >= 0) &&
+		has_vid(ipv6_to_iface[vlan_info->v6_idx[ECM_WAN]].associated_VIDs, vlan_info->vlan_id))
 	{
-		for (int vlan_idx = 0; vlan_idx < ipv6_to_iface[vlan_info->v6_idx[ECM_WAN]].VID_cnt; vlan_idx++)
-		{
-			if(ipv6_to_iface[vlan_info->v6_idx[ECM_WAN]].associated_VIDs[vlan_idx] == vlan_info->vlan_id)
-			{
-				IPACM_LOG(IPACM_LOG_DEBUG, "VlanID found in associated_VIDs in V6 STA BH\n");
-				vlan_info->v6_association = ECM_WAN;
-				vlan_info->v6_vlan_idx[ECM_WAN] = vlan_idx;
-				v6_found = true;
-				goto end;
-			}
-		}
+		IPACM_LOG(IPACM_LOG_DEBUG, "VlanID found in associated_VIDs in V6 STA BH\n");
+		vlan_info->v6_association = ECM_WAN;
+		v6_found = true;
 	}
-
 
 	/* check if vlan-id associated with LTE wan index for ipv4+ipv6 */
 	if(!v4_found || !v6_found)
@@ -2467,75 +2398,57 @@ void IPACM_Wan::get_vlan_association_info(ipacm_vlan_association_info* vlan_info
 			bool is_wlan_v4 = false, is_wlan_v6 = false;
 			for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES; slot++)
 			{
-				if(IPACM_Wan::wlan_v4_vlan_index[slot] == pdn_idx) is_wlan_v4 = true;
-				if(IPACM_Wan::wlan_v6_vlan_index[slot] == pdn_idx) is_wlan_v6 = true;
+				if(IPACM_Wan::wlan_sta_v4_pdn_index[slot] == pdn_idx) is_wlan_v4 = true;
+				if(IPACM_Wan::wlan_sta_v6_pdn_index[slot] == pdn_idx) is_wlan_v6 = true;
 			}
-			for(int vlan_idx = 0;
-				!is_wlan_v4 && pdn_idx != vlan_info->v4_idx[ECM_WAN] &&
-				!v4_found && vlan_idx < ipv4_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+			if(!is_wlan_v4 && pdn_idx != vlan_info->v4_idx[ECM_WAN] && !v4_found &&
+				has_vid(ipv4_to_iface[pdn_idx].associated_VIDs, vlan_info->vlan_id))
 			{
-				if(ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] == vlan_info->vlan_id)
-				{
-					IPACM_LOG(IPACM_LOG_DEBUG, "VlanID found in associated_VIDs in V4 LTE BH\n");
-					vlan_info->v4_association = Q6_WAN;
-					vlan_info->v4_idx[Q6_WAN] = pdn_idx;
-					vlan_info->v4_vlan_idx[Q6_WAN] = vlan_idx;
-					v4_found = true;
-					break;
-				}
+				IPACM_LOG(IPACM_LOG_DEBUG, "VlanID found in associated_VIDs in V4 LTE BH\n");
+				vlan_info->v4_association = Q6_WAN;
+				vlan_info->v4_idx[Q6_WAN] = pdn_idx;
+				v4_found = true;
 			}
-			for(int vlan_idx = 0;
-				!is_wlan_v6 && pdn_idx != vlan_info->v6_idx[ECM_WAN] &&
-				!v6_found && vlan_idx < ipv6_to_iface[pdn_idx].VID_cnt; vlan_idx++)
+			if(!is_wlan_v6 && pdn_idx != vlan_info->v6_idx[ECM_WAN] && !v6_found &&
+				has_vid(ipv6_to_iface[pdn_idx].associated_VIDs, vlan_info->vlan_id))
 			{
-				if(ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] == vlan_info->vlan_id)
-				{
-					IPACM_LOG(IPACM_LOG_DEBUG, "VlanID found in associated_VIDs in V6 LTE BH\n");
-					vlan_info->v6_association = Q6_WAN;
-					vlan_info->v6_idx[Q6_WAN] = pdn_idx;
-					vlan_info->v6_vlan_idx[Q6_WAN] = vlan_idx;
-					v6_found = true;
-					break;
-				}
+				IPACM_LOG(IPACM_LOG_DEBUG, "VlanID found in associated_VIDs in V6 LTE BH\n");
+				vlan_info->v6_association = Q6_WAN;
+				vlan_info->v6_idx[Q6_WAN] = pdn_idx;
+				v6_found = true;
 			}
 			if(v4_found && v6_found)
 				break;
 		}
 	}
 
-end:
 	IPACM_LOG(IPACM_LOG_DEBUG, "Values on exit: \n");
-	IPACM_LOG(IPACM_LOG_DEBUG, "<LTE> VLAN <%d>: V4 -->PDN [%d] VLAN [%d] V6 -->PDN[%d] VLAN[%d]\n",
-			vlan_info->vlan_id, vlan_info->v4_idx[Q6_WAN], vlan_info->v4_vlan_idx[Q6_WAN],
-			vlan_info->v6_idx[Q6_WAN], vlan_info->v6_vlan_idx[Q6_WAN]);
-	IPACM_LOG(IPACM_LOG_DEBUG, "<WLAN> VLAN <%d>: V4 -->PDN [%d] VLAN [%d] V6 -->PDN[%d] VLAN[%d]\n",
-			vlan_info->vlan_id, vlan_info->v4_idx[WLAN_WAN], vlan_info->v4_vlan_idx[WLAN_WAN],
-			vlan_info->v6_idx[WLAN_WAN], vlan_info->v6_vlan_idx[WLAN_WAN]);
-	IPACM_LOG(IPACM_LOG_DEBUG, "<ECM> VLAN <%d>: V4 -->PDN [%d] VLAN [%d] V6 -->PDN[%d] VLAN[%d]\n",
-			vlan_info->vlan_id, vlan_info->v4_idx[ECM_WAN], vlan_info->v4_vlan_idx[ECM_WAN],
-			vlan_info->v6_idx[ECM_WAN], vlan_info->v6_vlan_idx[ECM_WAN]);
+	IPACM_LOG(IPACM_LOG_DEBUG, "<LTE> VLAN <%d>: V4 -->PDN [%d] V6 -->PDN[%d]\n",
+			vlan_info->vlan_id, vlan_info->v4_idx[Q6_WAN], vlan_info->v6_idx[Q6_WAN]);
+	IPACM_LOG(IPACM_LOG_DEBUG, "<WLAN> VLAN <%d>: V4 -->PDN [%d] V6 -->PDN[%d]\n",
+			vlan_info->vlan_id, vlan_info->v4_idx[WLAN_WAN], vlan_info->v6_idx[WLAN_WAN]);
+	IPACM_LOG(IPACM_LOG_DEBUG, "<ECM> VLAN <%d>: V4 -->PDN [%d] V6 -->PDN[%d]\n",
+			vlan_info->vlan_id, vlan_info->v4_idx[ECM_WAN], vlan_info->v6_idx[ECM_WAN]);
+	pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->get_vlan_association_lock);
 	return;
 }
 
 /*
  * iptype: IPA_IP_v4 or IPA_IP_v6
  * pdn_idx: Index in ipv4_to_iface or ipv6_to_iface
- * vlan_idx: Index in associated_VIDs of ipv4_to_iface[pdn_idx] or ipv6_to_iface[pdn_idx]
  * vlan_id: VLAN ID
  * vlan_up: True to post IPA_HANDLE_WAN_VLAN_PDN_UP. False to post IPA_HANDLE_WAN_VLAN_PDN_DOWN
  */
-void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vlan_idx, uint16_t vlan_id, bool vlan_up)
+void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, uint16_t vlan_id, bool vlan_up)
 {
 	uint8_t mux_id = 0;
-	int idx = vlan_idx + 1;
 	ipacm_cmd_q_data evt_data;
 	ipacm_event_vlan_pdn *vlan_data = NULL;
 
 	if((pdn_idx < 0) || (pdn_idx >= IPA_MAX_NUM_SW_PDNS) ||
-           (vlan_idx < 0) || (vlan_idx >= IPA_MAX_NUM_SW_PDNS) ||
            (vlan_id <= 0))
 	{
-		IPACM_LOG(IPACM_LOG_ERR, "Wrong param pdn_idx:%d, vlan_idx:%d, vlan_id:%d\n", pdn_idx, vlan_idx, vlan_id);
+		IPACM_LOG(IPACM_LOG_ERR, "Wrong param pdn_idx:%d, vlan_id:%d\n", pdn_idx, vlan_id);
 		return;
 	}
 
@@ -2550,29 +2463,20 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 
 	if(!vlan_up)
 	{
-		/* currently only support all vlans moved to WIFI not backhaul concurrency */
 		if(iptype == IPA_IP_v6)
 		{
 			GetMuxByVid(vlan_id, &mux_id, IPA_IP_v6);
-			ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] = 0;
-			for(int i = idx; i < IPA_MAX_NUM_SW_PDNS; i++)
 			{
-				if(ipv6_to_iface[pdn_idx].associated_VIDs[i] != 0)
-				{
-					ipv6_to_iface[pdn_idx].associated_VIDs[vlan_idx] =
-							ipv6_to_iface[pdn_idx].associated_VIDs[i];
-					ipv6_to_iface[pdn_idx].associated_VIDs[i] = 0;
-					vlan_idx++;
-				}
+				auto &vids = ipv6_to_iface[pdn_idx].associated_VIDs;
+				vids.erase(std::remove(vids.begin(), vids.end(), vlan_id), vids.end());
 			}
-			ipv6_to_iface[pdn_idx].VID_cnt--;
-			if(ipv6_to_iface[pdn_idx].VID_cnt == 0)
+			if(ipv6_to_iface[pdn_idx].associated_VIDs.empty())
 				ipv6_to_iface[pdn_idx].wan_up_vlan_v6 = false;
 
-			if((ipv6_to_iface[pdn_idx].pIface && ipv6_to_iface[pdn_idx].pIface->m_is_sta_mode == WLAN_WAN ||
-				ipv6_to_iface[pdn_idx].pIface->m_is_sta_mode == ECM_WAN) &&
+			if((ipv6_to_iface[pdn_idx].pIface && (ipv6_to_iface[pdn_idx].pIface->m_is_sta_mode == WLAN_WAN ||
+				ipv6_to_iface[pdn_idx].pIface->m_is_sta_mode == ECM_WAN)) &&
 				!ipv6_to_iface[pdn_idx].wan_up_vlan_v6 &&
-				!(IPACM_Wan::backhaul_is_sta_mode == true && wan_up_v6))
+				!(IPACM_Wan::backhaul_is_sta_mode && wan_up_v6))
 			{
 				for(int tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 				{
@@ -2599,7 +2503,8 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 					IPACM_LOG(IPACM_LOG_DEBUG, "ip-type %d: default v6 wan RT-rule deleted\n", ip_type);
 					if(m_routing.DeleteRoutingHdl(wan_route_rule_wan_v6_hdl_a5, IPA_IP_v6) == false)
 					{
-						IPACM_LOG(IPACM_LOG_DEBUG, "IP-family:%d, Routing rule(hdl:0x%x) deletion failed!\n", IPA_IP_v6, wan_route_rule_wan_v6_hdl_a5);
+						IPACM_LOG(IPACM_LOG_DEBUG, "IP-family:%d, Routing rule(hdl:0x%x) "
+							"deletion failed!\n", IPA_IP_v6, wan_route_rule_wan_v6_hdl_a5);
 					}
 					else
 					{
@@ -2624,25 +2529,17 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 		else if(iptype == IPA_IP_v4)
 		{
 			GetMuxByVid(vlan_id, &mux_id, IPA_IP_v4);
-			ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] = 0;
-			for(int i = idx; i < IPA_MAX_NUM_SW_PDNS; i++)
 			{
-				if(ipv4_to_iface[pdn_idx].associated_VIDs[i] != 0)
-				{
-					ipv4_to_iface[pdn_idx].associated_VIDs[vlan_idx] =
-						ipv4_to_iface[pdn_idx].associated_VIDs[i];
-					ipv4_to_iface[pdn_idx].associated_VIDs[i] = 0;
-					vlan_idx++;
-				}
+				auto &vids = ipv4_to_iface[pdn_idx].associated_VIDs;
+				vids.erase(std::remove(vids.begin(), vids.end(), vlan_id), vids.end());
 			}
-			ipv4_to_iface[pdn_idx].VID_cnt--;
-			if(ipv4_to_iface[pdn_idx].VID_cnt == 0)
+			if(ipv4_to_iface[pdn_idx].associated_VIDs.empty())
 				ipv4_to_iface[pdn_idx].wan_up_vlan = false;
 
-			if((ipv4_to_iface[pdn_idx].pIface && ipv4_to_iface[pdn_idx].pIface->m_is_sta_mode == WLAN_WAN ||
-				ipv4_to_iface[pdn_idx].pIface->m_is_sta_mode == ECM_WAN) &&
+			if((ipv4_to_iface[pdn_idx].pIface && (ipv4_to_iface[pdn_idx].pIface->m_is_sta_mode == WLAN_WAN ||
+				ipv4_to_iface[pdn_idx].pIface->m_is_sta_mode == ECM_WAN)) &&
 				!ipv4_to_iface[pdn_idx].wan_up_vlan &&
-				!(IPACM_Wan::backhaul_is_sta_mode == true && wan_up))
+				!(IPACM_Wan::backhaul_is_sta_mode && wan_up))
 			{
 				for(int tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
 				{
@@ -2680,18 +2577,15 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 		{
 			IPACM_LOG(IPACM_LOG_DEBUG, "new VLAN PDN prefix is 0x%08x%08x.\n", ipv6_prefix[0], ipv6_prefix[1]);
 			ipv6_to_iface[pdn_idx].wan_up_vlan_v6 = true;
-			if (ipv6_to_iface[pdn_idx].VID_cnt < IPA_MAX_NUM_SW_PDNS)
+			if(ipv6_to_iface[pdn_idx].associated_VIDs.size() < IPA_MAX_NUM_SW_PDNS)
 			{
-				for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+				if(!has_vid(ipv6_to_iface[pdn_idx].associated_VIDs, vlan_id))
 				{
-					if(ipv6_to_iface[pdn_idx].associated_VIDs[i] == 0)
-					{
-						ipv6_to_iface[pdn_idx].associated_VIDs[i] = vlan_id;
-						ipv6_to_iface[pdn_idx].VID_cnt++;
-						IPACM_LOG(IPACM_LOG_DEBUG, "Added vlan id %d at index %d \n", vlan_id, i);
-						break;
-					}
+					ipv6_to_iface[pdn_idx].associated_VIDs.push_back(vlan_id);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Added vlan id %d\n", vlan_id);
 				}
+				else
+					IPACM_LOG(IPACM_LOG_DEBUG, "vlan id %d already present, skipping add\n", vlan_id);
 				ipv6_to_iface[pdn_idx].pIface = this;
 			}
 			else
@@ -2707,22 +2601,22 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 				vlan_data->mux_id = 0;
 				for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES; slot++)
 				{
-					if(IPACM_Wan::wlan_v6_vlan_index[slot] == -1)
+					if(IPACM_Wan::wlan_sta_v6_pdn_index[slot] == -1)
 					{
-						IPACM_Wan::wlan_v6_vlan_index[slot] = pdn_idx;
-						IPACM_LOG(IPACM_LOG_DEBUG, "IPACM_Wan::wlan_v6_vlan_index[%d]: %d\n",
-							slot, IPACM_Wan::wlan_v6_vlan_index[slot]);
+						IPACM_Wan::wlan_sta_v6_pdn_index[slot] = pdn_idx;
+						IPACM_LOG(IPACM_LOG_DEBUG, "IPACM_Wan::wlan_sta_v6_pdn_index[%d]: %d\n",
+							slot, IPACM_Wan::wlan_sta_v6_pdn_index[slot]);
 						break;
 					}
 					if(slot == IPA_MAX_WLAN_STA_IFACES - 1)
-						IPACM_LOG(IPACM_LOG_ERR, "No free wlan_v6_vlan_index slot for pdn_idx %d\n", pdn_idx);
+						IPACM_LOG(IPACM_LOG_ERR, "No free wlan_sta_v6_pdn_index slot for pdn_idx %d\n", pdn_idx);
 				}
 			}
 			else if(m_is_sta_mode == ECM_WAN)
 			{
 				vlan_data->mux_id = 0;
-				IPACM_Wan::eth_sta_v6_vlan_index = pdn_idx;
-				IPACM_LOG(IPACM_LOG_DEBUG, "IPACM_Wan::eth_sta_v6_vlan_index: %d\n", IPACM_Wan::eth_sta_v6_vlan_index);
+				IPACM_Wan::eth_sta_v6_pdn_index = pdn_idx;
+				IPACM_LOG(IPACM_LOG_DEBUG, "IPACM_Wan::eth_sta_v6_pdn_index: %d\n", IPACM_Wan::eth_sta_v6_pdn_index);
 			}
 			else
 			{
@@ -2739,6 +2633,7 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 					IPACM_LOG(IPACM_LOG_DEBUG, "XLAT case, new VLAN PDN prefix is 0x%08x%08x.\n",
 							ipv6_to_iface[pdn_idx].ipv6_prefix[0],
 							ipv6_to_iface[pdn_idx].ipv6_prefix[1]);
+					is_ipv6_dummy_prefix_up = true;
 				}
 			}
 
@@ -2750,18 +2645,15 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 		else if(iptype == IPA_IP_v4)
 		{
 			ipv4_to_iface[pdn_idx].wan_up_vlan = true;
-			if (ipv4_to_iface[pdn_idx].VID_cnt < IPA_MAX_NUM_SW_PDNS)
+			if(ipv4_to_iface[pdn_idx].associated_VIDs.size() < IPA_MAX_NUM_SW_PDNS)
 			{
-				for(int i = 0; i < IPA_MAX_NUM_SW_PDNS; i++)
+				if(!has_vid(ipv4_to_iface[pdn_idx].associated_VIDs, vlan_id))
 				{
-					if(ipv4_to_iface[pdn_idx].associated_VIDs[i] == 0)
-					{
-						ipv4_to_iface[pdn_idx].associated_VIDs[i] = vlan_id;
-						ipv4_to_iface[pdn_idx].VID_cnt++;
-						IPACM_LOG(IPACM_LOG_DEBUG, "Added vlan id %d at index %d \n", vlan_id, i);
-						break;
-					}
+					ipv4_to_iface[pdn_idx].associated_VIDs.push_back(vlan_id);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Added vlan id %d\n", vlan_id);
 				}
+				else
+					IPACM_LOG(IPACM_LOG_DEBUG, "vlan id %d already present, skipping add\n", vlan_id);
 				ipv4_to_iface[pdn_idx].pIface = this;
 			}
 			else
@@ -2777,23 +2669,23 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 				vlan_data->mux_id = 0;
 				for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES; slot++)
 				{
-					if(IPACM_Wan::wlan_v4_vlan_index[slot] == -1)
+					if(IPACM_Wan::wlan_sta_v4_pdn_index[slot] == -1)
 					{
-						IPACM_Wan::wlan_v4_vlan_index[slot] = pdn_idx;
-						IPACM_LOG(IPACM_LOG_DEBUG, "IPACM_Wan::wlan_v4_vlan_index[%d]: %d\n",
-							slot, IPACM_Wan::wlan_v4_vlan_index[slot]);
+						IPACM_Wan::wlan_sta_v4_pdn_index[slot] = pdn_idx;
+						IPACM_LOG(IPACM_LOG_DEBUG, "IPACM_Wan::wlan_sta_v4_pdn_index[%d]: %d\n",
+							slot, IPACM_Wan::wlan_sta_v4_pdn_index[slot]);
 						break;
 					}
 					if(slot == IPA_MAX_WLAN_STA_IFACES - 1)
-						IPACM_LOG(IPACM_LOG_ERR, "No free wlan_v4_vlan_index slot for pdn_idx %d\n", pdn_idx);
+						IPACM_LOG(IPACM_LOG_ERR, "No free wlan_sta_v4_pdn_index slot for pdn_idx %d\n", pdn_idx);
 				}
 			}
 			else if(m_is_sta_mode == ECM_WAN)
 			{
 				vlan_data->ipv4_addr = wan_v4_addr;
 				vlan_data->mux_id = 0;
-				IPACM_Wan::eth_sta_v4_vlan_index = pdn_idx;
-				IPACM_LOG(IPACM_LOG_DEBUG, "IPACM_Wan::eth_sta_v4_vlan_index: %d\n", IPACM_Wan::eth_sta_v4_vlan_index);
+				IPACM_Wan::eth_sta_v4_pdn_index = pdn_idx;
+				IPACM_LOG(IPACM_LOG_DEBUG, "IPACM_Wan::eth_sta_v4_pdn_index: %d\n", IPACM_Wan::eth_sta_v4_pdn_index);
 			}
 			else
 			{
@@ -2827,17 +2719,18 @@ void IPACM_Wan::post_wan_vlan_pdn_event(ipa_ip_type iptype, int pdn_idx, int vla
 }
 
 /**
- * --STA--
- *  1. Check if it is LTE to STA switch.
- *  2. Check if the intended action of V6 association to STA is done.
- *  3. Check if V4 is already associated. Proceed to add V6
- *  4. Both V4 and V6 association is not available. Add new PDN.
- * --LTE--
- *  1. Check if it is STA to LTE switch.
- *  2. Check if the intended action of V6 association to this LTE instance is done. If so, return.
- *  3. Check if the Vlan is mapped to another V6 PDN. If so, return.
- *  4. Check if the Vlan is mapped to another V4 PDN. If so, return.
- *  5. Both V4 and V6 association is not available. Add new PDN.
+ * This function support V6 VLAN switch with below steps:
+ * 1. Get VLAN association. It could have been binded to ETH/WLAN/Modem (WAN_TYPE)
+ * 2. For each WAN_TYPE, check if the VLAN is inter switching (different type
+ *    WAN) or intra switching (same type WAN - WLAN and Modem supports this)
+ *    or already associated with intended backhaul.
+ * 3. If it is not associated anywhere, consider it a new association.
+ * 4. Use post_wan_vlan_pdn_event with vlan_up false to dissociate from a WAN
+ * 5. Decrement num_offload_pdns
+ * 6. Increment num_offload_pdns before calling handle_route_add_vlan_pdn_evt
+ *    in the end
+ * Note: Increment/decrement of num_offload_pdns during switch are done only in
+ * in the switch handler functions.
  */
 int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool v4_only_xlat)
 {
@@ -2856,8 +2749,8 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 
 	IPACM_LOG(IPACM_LOG_DEBUG, "Process IPA_ROUTE_ADD_VLAN_PDN_EVENT for IPV6\n");
 
-	if((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
-		(data->wan_ipv6_prefix[1] == ipv6_prefix[1]) || v4_only_xlat)
+	if(((data->wan_ipv6_prefix[0] == ipv6_prefix[0]) &&
+		(data->wan_ipv6_prefix[1] == ipv6_prefix[1])) || v4_only_xlat)
 	{
 		IPACM_LOG(IPACM_LOG_DEBUG, "received v6 IPA_ROUTE_ADD_VLAN_PDN_EVENT for VID %d, %d\n", data->VlanID, ipa_if_num);
 		IPACM_LOG(IPACM_LOG_DEBUG, "num_offloaded_pdns: %d\n", num_offloaded_pdns);
@@ -2879,19 +2772,13 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 			if(vlan_info->v6_association == Q6_WAN)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "Backhaul switch from LTE to STA - V6\n");
-				if(ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 &&
-					vlan_info->v6_vlan_idx[Q6_WAN] >= 0)
+				if(ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6)
 				{
-					post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN],
-							 vlan_info->v6_vlan_idx[Q6_WAN], data->VlanID, false);
-					if(vlan_info->v4_association == Q6_WAN && ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan &&
-						vlan_info->v4_vlan_idx[Q6_WAN] >= 0)
-							post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN],
-							 	vlan_info->v4_vlan_idx[Q6_WAN], data->VlanID, false);
-					if((vlan_info->v4_idx[Q6_WAN] == -1 || ((vlan_info->v4_idx[Q6_WAN] >= 0) &&
-						ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan == false)) &&
-					   ((vlan_info->v6_idx[Q6_WAN] >= 0) &&
-						ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 == false) &&
+					post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN], data->VlanID, false);
+					if(vlan_info->v4_association == Q6_WAN && ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan)
+							post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN], data->VlanID, false);
+					if(is_v4_pdn_slot_free(vlan_info->v4_idx[Q6_WAN]) &&
+					   is_v6_pdn_slot_free(vlan_info->v6_idx[Q6_WAN]) &&
 					   (num_offloaded_pdns > 0))
 					{
 						num_offloaded_pdns--;
@@ -2911,19 +2798,13 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 					goto fail;
 				}
 				IPACM_LOG(IPACM_LOG_DEBUG, "Backhaul switch from STA to STA (Dual STA) - V6\n");
-				if(ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].wan_up_vlan_v6 &&
-					vlan_info->v6_vlan_idx[WLAN_WAN] >= 0)
+				if(ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].wan_up_vlan_v6)
 				{
-					post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[WLAN_WAN],
-							 vlan_info->v6_vlan_idx[WLAN_WAN], data->VlanID, false);
-					if(vlan_info->v4_association == WLAN_WAN && ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].wan_up_vlan &&
-						vlan_info->v4_vlan_idx[WLAN_WAN] >= 0)
-							post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[WLAN_WAN],
-							 	vlan_info->v4_vlan_idx[WLAN_WAN], data->VlanID, false);
-					if((vlan_info->v4_idx[WLAN_WAN] == -1 || ((vlan_info->v4_idx[WLAN_WAN] >= 0) &&
-						ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].wan_up_vlan == false)) &&
-					   ((vlan_info->v6_idx[WLAN_WAN] >= 0) &&
-						ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].wan_up_vlan_v6 == false) &&
+					post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[WLAN_WAN], data->VlanID, false);
+					if(vlan_info->v4_association == WLAN_WAN && ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].wan_up_vlan)
+						post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[WLAN_WAN], data->VlanID, false);
+					if(is_v4_pdn_slot_free(vlan_info->v4_idx[WLAN_WAN]) &&
+					   is_v6_pdn_slot_free(vlan_info->v6_idx[WLAN_WAN]) &&
 					   (num_offloaded_pdns > 0))
 					{
 						num_offloaded_pdns--;
@@ -2934,14 +2815,28 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 				{
 					IPACM_LOG(IPACM_LOG_DEBUG, "Already posted IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) and (v4) for old STA\n");
 				}
+				/* Admit new WLAN PDN for this VID if not yet counted */
+				if(is_v4_pdn_slot_free(sta_ipv4_pdn_index) &&
+				   is_v6_pdn_slot_free(sta_ipv6_pdn_index))
+				{
+					if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "number of offloaded PDNs %d can't add more than %d, ignoring\n",
+								num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+						goto fail;
+					}
+					num_offloaded_pdns++;
+					IPACM_LOG(IPACM_LOG_DEBUG, "this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+				}
 			}
 			else if(vlan_info->v4_association == WLAN_WAN)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "iface already has v4 vlan association, not new\n");
 			}
-			else if(vlan_info->v4_idx[WLAN_WAN] == -1 && vlan_info->v6_idx[WLAN_WAN] == -1 &&
-				(sta_ipv4_pdn_index == -1 || ((sta_ipv4_pdn_index >= 0) && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan == false)) &&
-				((sta_ipv6_pdn_index >= 0) && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 == false))
+
+			if((vlan_info->v4_idx[WLAN_WAN] == -1) && (vlan_info->v6_idx[WLAN_WAN] == -1) &&
+				is_v4_pdn_slot_free(sta_ipv4_pdn_index) &&
+				is_v6_pdn_slot_free(sta_ipv6_pdn_index))
 			{
 				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
 				{
@@ -2960,20 +2855,14 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 			if(vlan_info->v6_association == Q6_WAN)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "Backhaul switch from LTE to STA - V6\n");
-				if(ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 &&
-					vlan_info->v6_vlan_idx[Q6_WAN] >= 0)
+				if(ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6)
 				{
-					post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN],
-							 vlan_info->v6_vlan_idx[Q6_WAN], data->VlanID, false);
-					if(vlan_info->v4_association == Q6_WAN && ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan &&
-						vlan_info->v4_vlan_idx[Q6_WAN] >= 0)
-						post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN],
-							 vlan_info->v4_vlan_idx[Q6_WAN], data->VlanID, false);
-					if((vlan_info->v4_idx[Q6_WAN] == -1 && ((vlan_info->v4_idx[Q6_WAN] >= 0) &&
-						ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan == false)) &&
-					   ((vlan_info->v6_idx[Q6_WAN] >= 0) &&
-						ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 == false) &&
-					    (num_offloaded_pdns > 0))
+					post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN], data->VlanID, false);
+					if(vlan_info->v4_association == Q6_WAN && ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan)
+						post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN], data->VlanID, false);
+					if(is_v4_pdn_slot_free(vlan_info->v4_idx[Q6_WAN]) &&
+					   is_v6_pdn_slot_free(vlan_info->v6_idx[Q6_WAN]) &&
+					   (num_offloaded_pdns > 0))
 					{
 						num_offloaded_pdns--;
 						IPACM_LOG(IPACM_LOG_DEBUG, "Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
@@ -2993,9 +2882,10 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "iface already has v4 vlan association, not new\n");
 			}
-			else if(vlan_info->v4_idx[ECM_WAN] == -1 && vlan_info->v6_idx[ECM_WAN] == -1 &&
-				(sta_ipv4_pdn_index == -1 || ((sta_ipv4_pdn_index >= 0) && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan == false)) &&
-				((sta_ipv6_pdn_index >= 0) && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 == false))
+
+			if((vlan_info->v4_idx[ECM_WAN] == -1) && (vlan_info->v6_idx[ECM_WAN] == -1) &&
+				is_v4_pdn_slot_free(sta_ipv4_pdn_index) &&
+				is_v6_pdn_slot_free(sta_ipv6_pdn_index))
 			{
 				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
 				{
@@ -3015,21 +2905,15 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 			if(vlan_info->v6_association == WLAN_WAN || vlan_info->v6_association == ECM_WAN)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "Backhaul switch from STA to LTE - V6\n");
-				if(ipv6_to_iface[vlan_info->v6_idx[vlan_info->v6_association]].wan_up_vlan_v6 &&
-					vlan_info->v6_vlan_idx[vlan_info->v6_association] >= 0)
+				if(ipv6_to_iface[vlan_info->v6_idx[vlan_info->v6_association]].wan_up_vlan_v6)
 				{
-					post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[vlan_info->v6_association],
-							 vlan_info->v6_vlan_idx[vlan_info->v6_association], data->VlanID, false);
+					post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[vlan_info->v6_association], data->VlanID, false);
 					if(vlan_info->v4_idx[vlan_info->v6_association] >= 0 &&
-						ipv4_to_iface[vlan_info->v4_idx[vlan_info->v6_association]].wan_up_vlan &&
-						vlan_info->v4_vlan_idx[vlan_info->v6_association] >= 0)
-							post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[vlan_info->v6_association],
-							 	vlan_info->v4_vlan_idx[vlan_info->v6_association], data->VlanID, false);
-					if((vlan_info->v4_idx[vlan_info->v6_association] == -1 || ((vlan_info->v4_idx[vlan_info->v6_association] >= 0) &&
-						ipv4_to_iface[vlan_info->v4_idx[vlan_info->v6_association]].wan_up_vlan == false)) &&
-					   ((vlan_info->v6_idx[vlan_info->v6_association] >= 0) &&
-						ipv6_to_iface[vlan_info->v6_idx[vlan_info->v6_association]].wan_up_vlan_v6 == false) &&
-					    (num_offloaded_pdns > 0))
+						ipv4_to_iface[vlan_info->v4_idx[vlan_info->v6_association]].wan_up_vlan)
+							post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[vlan_info->v6_association], data->VlanID, false);
+					if(is_v4_pdn_slot_free(vlan_info->v4_idx[vlan_info->v6_association]) &&
+					   is_v6_pdn_slot_free(vlan_info->v6_idx[vlan_info->v6_association]) &&
+					   (num_offloaded_pdns > 0))
 					{
 						num_offloaded_pdns--;
 						IPACM_LOG(IPACM_LOG_DEBUG, "Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
@@ -3042,61 +2926,54 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 			}
 			else if(vlan_info->v6_association == Q6_WAN && vlan_info->v6_idx[Q6_WAN] == modem_ipv6_pdn_index)
 			{
-				IPACM_LOG(IPACM_LOG_ERR, "v6 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
-				goto fail;
+				if (is_xlat && is_ipv6_dummy_prefix_up)
+				{
+					IPACM_LOG(IPACM_LOG_INFO, "XLAT case, pdn VLAN PDN prefix for dummy 0x%08x%08x so now we need to up for new ipv6 actual prefix 0x%08x%08x\n",
+						ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[0], ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix[1],
+					data->wan_ipv6_prefix[0], data->wan_ipv6_prefix[1]);
+					is_ipv6_dummy_prefix_up = false;
+					goto post_pdn_up;
+				}
+				else
+				{
+					IPACM_LOG(IPACM_LOG_ERR, "v6 vlan wan is already up for %s, vlan id: %d\n", dev_name, data->VlanID);
+					goto fail;
+				}
 			}
 			else if(vlan_info->v6_association == Q6_WAN && vlan_info->v6_idx[Q6_WAN] != modem_ipv6_pdn_index)
 			{
-#ifdef IPA_L2TP_TUNNEL_UDP
-				/* check if l2tp vlan associated with other than current PDN */
-				if(IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(data->VlanID))
+				IPACM_LOG(IPACM_LOG_DEBUG, "Backhaul switch from LTE to LTE - V6\n");
+				if(ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6)
 				{
-					/* remove l2tp vlan from the PDN */
-					if(ipv6_to_iface[vlan_info->v6_idx[vlan_info->v6_association]].wan_up_vlan_v6 &&
-						vlan_info->v6_vlan_idx[vlan_info->v6_association] >= 0)
+					post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN], data->VlanID, false);
+					if(vlan_info->v4_association == Q6_WAN && vlan_info->v4_idx[Q6_WAN] >= 0 &&
+						ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan)
+							post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN], data->VlanID, false);
+					if(is_v4_pdn_slot_free(vlan_info->v4_idx[Q6_WAN]) &&
+					   is_v6_pdn_slot_free(vlan_info->v6_idx[Q6_WAN]) &&
+					   (num_offloaded_pdns > 0))
 					{
-						post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[vlan_info->v6_association],
-							vlan_info->v6_vlan_idx[vlan_info->v6_association], data->VlanID, false);
-						if(vlan_info->v4_idx[vlan_info->v6_association] >= 0 &&
-							ipv4_to_iface[vlan_info->v4_idx[vlan_info->v6_association]].wan_up_vlan &&
-							vlan_info->v4_vlan_idx[vlan_info->v6_association] >= 0)
-								post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[vlan_info->v6_association],
-									vlan_info->v4_vlan_idx[vlan_info->v6_association], data->VlanID, false);
-						if((vlan_info->v4_idx[vlan_info->v6_association] == -1 || ((vlan_info->v4_idx[vlan_info->v6_association] >= 0) &&
-							ipv4_to_iface[vlan_info->v4_idx[vlan_info->v6_association]].wan_up_vlan == false)) &&
-						   ((vlan_info->v6_idx[vlan_info->v6_association] >= 0) &&
-							ipv6_to_iface[vlan_info->v6_idx[vlan_info->v6_association]].wan_up_vlan_v6 == false) &&
-						    (num_offloaded_pdns > 0))
-						{
-							num_offloaded_pdns--;
-							IPACM_LOG(IPACM_LOG_DEBUG, "Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
-						}
-					}
-					if((modem_ipv4_pdn_index == -1 || ((modem_ipv4_pdn_index >= 0) &&
-						ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan == false)) &&
-						((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 == false))
-					{
-						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
-						{
-							IPACM_LOG(IPACM_LOG_ERR, "number of offloaded PDNs %d can't add more than %d, ignoring\n",
-									num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
-							goto fail;
-						}
-						num_offloaded_pdns++;
-						IPACM_LOG(IPACM_LOG_DEBUG, "this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+						num_offloaded_pdns--;
+						IPACM_LOG(IPACM_LOG_DEBUG, "Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
 					}
 				}
 				else
 				{
-					IPACM_LOG(IPACM_LOG_ERR, "VID (%d) already mapped to v6 PDN %d, can't map to v6 PDN %d\n",data->VlanID,
-					vlan_info->v6_idx[Q6_WAN], modem_ipv6_pdn_index);
-					goto fail;
+					IPACM_LOG(IPACM_LOG_DEBUG, "Already posted IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) and (v4) for old LTE PDN\n");
 				}
-#else
-				IPACM_LOG(IPACM_LOG_ERR, "VID (%d) already mapped to v6 PDN %d, can't map to v6 PDN %d\n",data->VlanID,
-				vlan_info->v6_idx[Q6_WAN], modem_ipv6_pdn_index);
-				goto fail;
-#endif
+				/* Admit new Q6 PDN for this VID if not yet counted */
+				if(is_v4_pdn_slot_free(modem_ipv4_pdn_index) &&
+				   is_v6_pdn_slot_free(modem_ipv6_pdn_index))
+				{
+					if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "number of offloaded PDNs %d can't add more than %d, ignoring\n",
+								num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+						goto fail;
+					}
+					num_offloaded_pdns++;
+					IPACM_LOG(IPACM_LOG_DEBUG, "this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+				}
 			}
 			else if(vlan_info->v4_idx[Q6_WAN] != -1 && vlan_info->v4_idx[Q6_WAN] != modem_ipv4_pdn_index)
 			{
@@ -3104,9 +2981,10 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 					 	vlan_info->v4_idx[Q6_WAN], modem_ipv6_pdn_index);
 				goto fail;
 			}
-			else if(vlan_info->v4_idx[Q6_WAN] == -1 && vlan_info->v6_idx[Q6_WAN] == -1 &&
-				(modem_ipv4_pdn_index == -1 || ((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan == false)) &&
-				((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 == false))
+
+			if(vlan_info->v4_idx[Q6_WAN] == -1 && vlan_info->v6_idx[Q6_WAN] == -1 &&
+				is_v4_pdn_slot_free(modem_ipv4_pdn_index) &&
+				is_v6_pdn_slot_free(modem_ipv6_pdn_index))
 			{
 				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
 				{
@@ -3118,6 +2996,7 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v6(ipacm_event_route_vlan *data, bool
 				IPACM_LOG(IPACM_LOG_DEBUG, "this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
 			}
 		}
+post_pdn_up:
 		/* VLAN associated with PDN now add client backhaul prefix for vlan clients and flush neigh_cache */
 		wanup_data = (ipacm_event_iface_up *)malloc(sizeof(ipacm_event_iface_up));
 		if (wanup_data == NULL)
@@ -3150,17 +3029,18 @@ fail:
 }
 
 /**
- * --STA--
- *  1. Check if it is LTE to STA switch.
- *  2. Check if the intended action of V4 association to STA is done.
- *  3. Check if V6 is already associated. Proceed to add V4
- *  4. Both V4 and V6 association is not available. Add new PDN.
- * --LTE--
- *  1. Check if it is STA to LTE switch.
- *  2. Check if the intended action of V4 association to this LTE instance is done. If so, return.
- *  3. Check if the Vlan is mapped to another V4 PDN. If so, return.
- *  4. Check if the Vlan is mapped to another V6 PDN. If so, return.
- *  5. Both V4 and V6 association is not available. Add new PDN.
+ * This function support V4 VLAN switch with below steps:
+ * 1. Get VLAN association. It could have been binded to ETH/WLAN/Modem (WAN_TYPE)
+ * 2. For each WAN_TYPE, check if the VLAN is inter switching (different type
+ *    WAN) or intra switching (same type WAN - WLAN STA and Modem supports this)
+ *    or already associated with intended backhaul.
+ * 3. If it is not associated anywhere, consider it a new association.
+ * 4. Use post_wan_vlan_pdn_event with vlan_up false to dissociate from a WAN
+ * 5. Decrement num_offload_pdns
+ * 6. Increment num_offload_pdns before calling handle_route_add_vlan_pdn_evt
+ *    in the end
+ * Note: Increment/decrement of num_offload_pdns during switch are done only in
+ * in the switch handler functions.
  */
 int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 {
@@ -3193,19 +3073,13 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 			if(vlan_info->v4_association == Q6_WAN)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "Backhaul switch from LTE to STA - V4\n");
-				if(ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan &&
-					vlan_info->v4_vlan_idx[Q6_WAN] >= 0)
+				if(ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan)
 				{
-					post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN],
-						 vlan_info->v4_vlan_idx[Q6_WAN], data->VlanID, false);
-					if(vlan_info->v6_association == Q6_WAN && ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 &&
-						vlan_info->v6_vlan_idx[Q6_WAN] >= 0)
-						post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN],
-						 vlan_info->v6_vlan_idx[Q6_WAN], data->VlanID, false);
-					if(((vlan_info->v4_idx[Q6_WAN] >= 0) &&
-						ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan == false) &&
-					    (vlan_info->v6_idx[Q6_WAN] == -1 || ((vlan_info->v6_idx[Q6_WAN] >= 0) &&
-						ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 == false)) &&
+					post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN], data->VlanID, false);
+					if(vlan_info->v6_association == Q6_WAN && ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6)
+						post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN], data->VlanID, false);
+					if(is_v4_pdn_slot_free(vlan_info->v4_idx[Q6_WAN]) &&
+					   is_v6_pdn_slot_free(vlan_info->v6_idx[Q6_WAN]) &&
 					     (num_offloaded_pdns > 0))
 					{
 						num_offloaded_pdns--;
@@ -3225,19 +3099,13 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 					goto fail;
 				}
 				IPACM_LOG(IPACM_LOG_DEBUG, "Backhaul switch from STA to STA (Dual STA) - V4\n");
-				if(ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].wan_up_vlan &&
-					vlan_info->v4_vlan_idx[WLAN_WAN] >= 0)
+				if(ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].wan_up_vlan)
 				{
-					post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[WLAN_WAN],
-						 vlan_info->v4_vlan_idx[WLAN_WAN], data->VlanID, false);
-					if(vlan_info->v6_association == WLAN_WAN && ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].wan_up_vlan_v6 &&
-						vlan_info->v6_vlan_idx[WLAN_WAN] >= 0)
-						post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[WLAN_WAN],
-						 vlan_info->v6_vlan_idx[WLAN_WAN], data->VlanID, false);
-					if(((vlan_info->v4_idx[WLAN_WAN] >= 0) &&
-						ipv4_to_iface[vlan_info->v4_idx[WLAN_WAN]].wan_up_vlan == false) &&
-					    (vlan_info->v6_idx[WLAN_WAN] == -1 || ((vlan_info->v6_idx[WLAN_WAN] >= 0) &&
-						ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].wan_up_vlan_v6 == false)) &&
+					post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[WLAN_WAN], data->VlanID, false);
+					if(vlan_info->v6_association == WLAN_WAN && ipv6_to_iface[vlan_info->v6_idx[WLAN_WAN]].wan_up_vlan_v6)
+						post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[WLAN_WAN], data->VlanID, false);
+					if(is_v4_pdn_slot_free(vlan_info->v4_idx[WLAN_WAN]) &&
+					   is_v6_pdn_slot_free(vlan_info->v6_idx[WLAN_WAN]) &&
 					     (num_offloaded_pdns > 0))
 					{
 						num_offloaded_pdns--;
@@ -3248,14 +3116,28 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 				{
 					IPACM_LOG(IPACM_LOG_DEBUG, "Already posted IPA_HANDLE_WAN_VLAN_PDN_DOWN (v4) and (v6) for old STA\n");
 				}
+				/* Admit new WLAN PDN for this VID if not yet counted */
+				if(is_v4_pdn_slot_free(sta_ipv4_pdn_index) &&
+				   is_v6_pdn_slot_free(sta_ipv6_pdn_index))
+				{
+					if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "number of offloaded PDNs %d can't add more than %d, ignoring\n",
+								num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+						goto fail;
+					}
+					num_offloaded_pdns++;
+					IPACM_LOG(IPACM_LOG_DEBUG, "this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+				}
 			}
 			else if(vlan_info->v6_association == WLAN_WAN)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "iface already has v6 vlan association, not new\n");
 			}
-			else if(vlan_info->v4_idx[WLAN_WAN] == -1 && vlan_info->v6_idx[WLAN_WAN] == -1 &&
-				((sta_ipv4_pdn_index >= 0) && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan == false) &&
-				(sta_ipv6_pdn_index == -1 || ((sta_ipv6_pdn_index >= 0) && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 == false)))
+
+			if(vlan_info->v4_idx[WLAN_WAN] == -1 && vlan_info->v6_idx[WLAN_WAN] == -1 &&
+				is_v4_pdn_slot_free(sta_ipv4_pdn_index) &&
+				is_v6_pdn_slot_free(sta_ipv6_pdn_index))
 			{
 				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
 				{
@@ -3274,19 +3156,13 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 			if(vlan_info->v4_association == Q6_WAN)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "Backhaul switch from LTE to ECM STA - V4\n");
-				if(ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan &&
-					vlan_info->v4_vlan_idx[Q6_WAN] >= 0)
+				if(ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan)
 				{
-					post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN],
-						 vlan_info->v4_vlan_idx[Q6_WAN], data->VlanID, false);
-					if(vlan_info->v6_association == Q6_WAN && ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 &&
-						vlan_info->v6_vlan_idx[Q6_WAN] >= 0)
-							post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN],
-						 		vlan_info->v6_vlan_idx[Q6_WAN], data->VlanID, false);
-					if(((vlan_info->v4_idx[Q6_WAN] >= 0) &&
-						ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan == false) &&
-					   (vlan_info->v6_idx[Q6_WAN] == -1 || ((vlan_info->v6_idx[Q6_WAN] >= 0) &&
-						ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6 == false)) &&
+					post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN], data->VlanID, false);
+					if(vlan_info->v6_association == Q6_WAN && ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6)
+							post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN], data->VlanID, false);
+					if(is_v4_pdn_slot_free(vlan_info->v4_idx[Q6_WAN]) &&
+					   is_v6_pdn_slot_free(vlan_info->v6_idx[Q6_WAN]) &&
 					    (num_offloaded_pdns > 0))
 					{
 						num_offloaded_pdns--;
@@ -3307,9 +3183,10 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "iface already has v6 vlan association, not new\n");
 			}
-			else if(vlan_info->v4_idx[ECM_WAN] == -1 && vlan_info->v6_idx[ECM_WAN] == -1 &&
-				((sta_ipv4_pdn_index >= 0) && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan == false) &&
-				(sta_ipv6_pdn_index == -1 || ((sta_ipv6_pdn_index >= 0) && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 == false)))
+
+			if(vlan_info->v4_idx[ECM_WAN] == -1 && vlan_info->v6_idx[ECM_WAN] == -1 &&
+				is_v4_pdn_slot_free(sta_ipv4_pdn_index) &&
+				is_v6_pdn_slot_free(sta_ipv6_pdn_index))
 			{
 				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
 				{
@@ -3329,20 +3206,14 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 			if(vlan_info->v4_association == WLAN_WAN || vlan_info->v4_association == ECM_WAN)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "Backhaul switch from STA to LTE - V4\n");
-				if(ipv4_to_iface[vlan_info->v4_idx[vlan_info->v4_association]].wan_up_vlan &&
-					vlan_info->v4_vlan_idx[vlan_info->v4_association] >= 0)
+				if(ipv4_to_iface[vlan_info->v4_idx[vlan_info->v4_association]].wan_up_vlan)
 				{
-					post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[vlan_info->v4_association],
-							 vlan_info->v4_vlan_idx[vlan_info->v4_association], data->VlanID, false);
+					post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[vlan_info->v4_association], data->VlanID, false);
 					if(vlan_info->v6_idx[vlan_info->v4_association] >= 0 &&
-						ipv6_to_iface[vlan_info->v6_idx[vlan_info->v4_association]].wan_up_vlan_v6 &&
-						vlan_info->v6_vlan_idx[vlan_info->v4_association] >= 0)
-							post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[vlan_info->v4_association],
-							 	vlan_info->v6_vlan_idx[vlan_info->v4_association], data->VlanID, false);
-					if(((vlan_info->v4_idx[vlan_info->v4_association] >= 0) &&
-						ipv4_to_iface[vlan_info->v4_idx[vlan_info->v4_association]].wan_up_vlan == false) &&
-					   (vlan_info->v6_idx[vlan_info->v4_association] == -1 || ((vlan_info->v6_idx[vlan_info->v4_association] >= 0) &&
-						ipv6_to_iface[vlan_info->v6_idx[vlan_info->v4_association]].wan_up_vlan_v6 == false)) &&
+						ipv6_to_iface[vlan_info->v6_idx[vlan_info->v4_association]].wan_up_vlan_v6)
+							post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[vlan_info->v4_association], data->VlanID, false);
+					if(is_v4_pdn_slot_free(vlan_info->v4_idx[vlan_info->v4_association]) &&
+					   is_v6_pdn_slot_free(vlan_info->v6_idx[vlan_info->v4_association]) &&
 					   (num_offloaded_pdns > 0))
 					{
 						num_offloaded_pdns--;
@@ -3361,56 +3232,38 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 			}
 			else if(vlan_info->v4_idx[Q6_WAN] != -1 && vlan_info->v4_idx[Q6_WAN] != modem_ipv4_pdn_index)
 			{
-#ifdef IPA_L2TP_TUNNEL_UDP
-				/* check if l2tp vlan associated with other than current PDN */
-				if(IPACM_Iface::ipacmcfg->check_l2tp_bridge_vlan_id(data->VlanID))
+				IPACM_LOG(IPACM_LOG_DEBUG, "Backhaul switch from LTE to LTE - V4\n");
+				if(ipv4_to_iface[vlan_info->v4_idx[Q6_WAN]].wan_up_vlan)
 				{
-					/* remove l2tp vlan from the PDN */
-					if(ipv4_to_iface[vlan_info->v4_idx[vlan_info->v4_association]].wan_up_vlan &&
-						vlan_info->v4_vlan_idx[vlan_info->v4_association] >= 0)
+					post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[Q6_WAN], data->VlanID, false);
+					if(vlan_info->v6_association == Q6_WAN && vlan_info->v6_idx[Q6_WAN] >= 0 &&
+						ipv6_to_iface[vlan_info->v6_idx[Q6_WAN]].wan_up_vlan_v6)
+							post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[Q6_WAN], data->VlanID, false);
+					if(is_v4_pdn_slot_free(vlan_info->v4_idx[Q6_WAN]) &&
+					   is_v6_pdn_slot_free(vlan_info->v6_idx[Q6_WAN]) &&
+					   (num_offloaded_pdns > 0))
 					{
-						post_wan_vlan_pdn_event(IPA_IP_v4, vlan_info->v4_idx[vlan_info->v4_association],
-							 vlan_info->v4_vlan_idx[vlan_info->v4_association], data->VlanID, false);
-						if(vlan_info->v6_idx[vlan_info->v4_association] >=0 &&
-							ipv6_to_iface[vlan_info->v6_idx[vlan_info->v4_association]].wan_up_vlan_v6 &&
-							vlan_info->v6_vlan_idx[vlan_info->v4_association] >= 0)
-								post_wan_vlan_pdn_event(IPA_IP_v6, vlan_info->v6_idx[vlan_info->v4_association],
-									vlan_info->v6_vlan_idx[vlan_info->v4_association], data->VlanID, false);
-						if(((vlan_info->v4_idx[vlan_info->v4_association] >= 0) &&
-							ipv4_to_iface[vlan_info->v4_idx[vlan_info->v4_association]].wan_up_vlan == false) &&
-						   (vlan_info->v6_idx[vlan_info->v4_association] == -1 || ((vlan_info->v6_idx[vlan_info->v4_association] >= 0) &&
-							ipv6_to_iface[vlan_info->v6_idx[vlan_info->v4_association]].wan_up_vlan_v6 == false)) &&
-						    (num_offloaded_pdns > 0))
-						{
-							num_offloaded_pdns--;
-							IPACM_LOG(IPACM_LOG_DEBUG, "Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
-						}
-					}
-					if(((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan == false) &&
-						(modem_ipv6_pdn_index == -1 || ((modem_ipv6_pdn_index >= 0) &&
-						ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 == false)))
-					{
-						if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
-						{
-							IPACM_LOG(IPACM_LOG_ERR, "number of offloaded PDNs %d can't add more than %d, ignoring\n",
-							 		num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
-							goto fail;
-						}
-						num_offloaded_pdns++;
-						IPACM_LOG(IPACM_LOG_DEBUG, "this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+						num_offloaded_pdns--;
+						IPACM_LOG(IPACM_LOG_DEBUG, "Num of offloaded PDN decreased to %d\n", num_offloaded_pdns);
 					}
 				}
 				else
 				{
-					IPACM_LOG(IPACM_LOG_ERR, "VID (%d) already mapped to v4 PDN %d, can't map to v4 PDN %d\n",data->VlanID,
-						vlan_info->v4_idx[Q6_WAN], modem_ipv4_pdn_index);
-					goto fail;
+					IPACM_LOG(IPACM_LOG_DEBUG, "Already posted IPA_HANDLE_WAN_VLAN_PDN_DOWN (v4) and (v6) for old LTE PDN\n");
 				}
-#else
-				IPACM_LOG(IPACM_LOG_ERR, "VID (%d) already mapped to v4 PDN %d, can't map to v4 PDN %d\n",data->VlanID,
-						vlan_info->v4_idx[Q6_WAN], modem_ipv4_pdn_index);
-				goto fail;
-#endif
+				/* Admit new Q6 PDN for this VID if not yet counted */
+				if((modem_ipv4_pdn_index >= 0) && is_v4_pdn_slot_free(modem_ipv4_pdn_index) &&
+				   is_v6_pdn_slot_free(modem_ipv6_pdn_index))
+				{
+					if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "number of offloaded PDNs %d can't add more than %d, ignoring\n",
+								num_offloaded_pdns, IPA_MAX_NUM_HW_PDNS);
+						goto fail;
+					}
+					num_offloaded_pdns++;
+					IPACM_LOG(IPACM_LOG_DEBUG, "this is a new PDN, num of offloaded PDN increased to %d\n", num_offloaded_pdns);
+				}
 			}
 			else if(vlan_info->v6_idx[Q6_WAN] != -1 && vlan_info->v6_idx[Q6_WAN] != modem_ipv6_pdn_index)
 			{
@@ -3418,9 +3271,10 @@ int IPACM_Wan::handle_vlan_backhaul_switch_v4(ipacm_event_route_vlan *data)
 						 vlan_info->v6_idx[Q6_WAN], modem_ipv4_pdn_index);
 				goto fail;
 			}
-			else if(vlan_info->v4_idx[Q6_WAN] == -1 && vlan_info->v6_idx[Q6_WAN] == -1 &&
-				((modem_ipv4_pdn_index >= 0) && ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan == false) &&
-				(modem_ipv6_pdn_index == -1 || ((modem_ipv6_pdn_index >= 0) && ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 == false)))
+
+			if(vlan_info->v4_idx[Q6_WAN] == -1 && vlan_info->v6_idx[Q6_WAN] == -1 &&
+				is_v4_pdn_slot_free(modem_ipv4_pdn_index) &&
+				is_v6_pdn_slot_free(modem_ipv6_pdn_index))
 			{
 				if(num_offloaded_pdns >= IPA_MAX_NUM_HW_PDNS)
 				{
@@ -3650,7 +3504,7 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 				}
 			}
 PostWanUpV6:
-			post_wan_vlan_pdn_event(IPA_IP_v6, sta_ipv6_pdn_index, ipv6_to_iface[sta_ipv6_pdn_index].VID_cnt, vlan_id, true);
+			post_wan_vlan_pdn_event(IPA_IP_v6, sta_ipv6_pdn_index, vlan_id, true);
 			/* for STA mode: add firewall rules */
 			del_dft_firewall_rules(IPA_IP_v6, true);
 			config_dft_firewall_rules(IPA_IP_v6);
@@ -3719,7 +3573,7 @@ PostWanUpV6:
 				ipv6_to_iface[modem_ipv6_pdn_index].pIface = this;
 				IPACM_LOG(IPACM_LOG_DEBUG, "index allocated %d \n", modem_ipv6_pdn_index);
 			}
-			post_wan_vlan_pdn_event(IPA_IP_v6, modem_ipv6_pdn_index, ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt, vlan_id, true);
+			post_wan_vlan_pdn_event(IPA_IP_v6, modem_ipv6_pdn_index, vlan_id, true);
 			/*config_wan_firewall_rule traverses all active wan IF and configures them*/
 			config_wan_firewall_rule(IPA_IP_v6);
 			install_wan_filtering_rule(false);
@@ -3798,7 +3652,7 @@ PostWanUpV6:
 				}
 			}
 PostWanUp:
-			post_wan_vlan_pdn_event(IPA_IP_v4, sta_ipv4_pdn_index, ipv4_to_iface[sta_ipv4_pdn_index].VID_cnt, vlan_id, true);
+			post_wan_vlan_pdn_event(IPA_IP_v4, sta_ipv4_pdn_index, vlan_id, true);
 			/* for STA mode: add firewall rules */
 			del_dft_firewall_rules(IPA_IP_v4, true);
 			config_dft_firewall_rules(IPA_IP_v4);
@@ -3811,7 +3665,7 @@ PostWanUp:
 				IPACM_LOG(IPACM_LOG_DEBUG, "a v4 PDN is already up, minimal configuration is needed\n");
 				FullConfig = true;
 			}
-			post_wan_vlan_pdn_event(IPA_IP_v4, modem_ipv4_pdn_index, ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt, vlan_id, true);
+			post_wan_vlan_pdn_event(IPA_IP_v4, modem_ipv4_pdn_index, vlan_id, true);
 			config_wan_firewall_rule(IPA_IP_v4);
 			install_wan_filtering_rule(false);
 
@@ -5963,10 +5817,9 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			int pdn_mtu_sessions = 0;
 			IPACM_Wan* curr_interface = offloaded_pdns_v4[i]->pIface;
 			/* get smallest mtu out of all sessions associated with pdn */
-			for(uint32_t vid_index = 0; vid_index < offloaded_pdns_v4[i]->VID_cnt; vid_index++)
+			for(uint16_t vid : offloaded_pdns_v4[i]->associated_VIDs)
 			{
 				l2tp_vlan_mapping_info info;
-				int vid = offloaded_pdns_v4[i]->associated_VIDs[vid_index];
 				if(IPACM_Iface::ipacmcfg->get_l2tp_mapping_by_bridge_vlan_id(vid, info) == IPACM_FAILURE)
 				{
 					IPACM_LOG(IPACM_LOG_ERR, "Failed to find vlan-l2tp mapping.\n");
@@ -6005,10 +5858,9 @@ int IPACM_Wan::config_dft_firewall_rules_ex(struct ipa_flt_rule_add *rules, int 
 			int pdn_mtu_sessions = 0;
 			IPACM_Wan* curr_interface = offloaded_pdns_v6[i]->pIface;
 			//get smallest mtu out of all sessions associated with pdn
-			for(uint32_t vid_index = 0; vid_index < offloaded_pdns_v6[i]->VID_cnt; vid_index++)
+			for(uint16_t vid : offloaded_pdns_v6[i]->associated_VIDs)
 			{
 				l2tp_vlan_mapping_info info;
-				int vid = offloaded_pdns_v6[i]->associated_VIDs[vid_index];
 				if(IPACM_Iface::ipacmcfg->get_l2tp_mapping_by_bridge_vlan_id(vid, info) == IPACM_FAILURE)
 				{
 					IPACM_LOG(IPACM_LOG_ERR, "Failed to find vlan-l2tp mapping.\n");
@@ -6302,7 +6154,7 @@ int IPACM_Wan::set_pdn_num_fw_rules_by_vid(int vid, int num_fw_rules)
 		if(ipv6_to_iface[i].pIface &&
 			(ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
 		{
-			if(get_vid_index_for_iface_v6(ipv6_to_iface[i], vid) != IPACM_FAILURE ||
+			if(has_vid(ipv6_to_iface[i].associated_VIDs, vid) ||
 				(isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface) && !vid))
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "found dev %s, vid %d, num_ul_fw_rules %d update to %d\n",
@@ -6342,7 +6194,7 @@ int IPACM_Wan::get_pdn_num_fw_rules_by_vid(int vid, int *num_fw_rules)
 		if(ipv6_to_iface[i].pIface &&
 			(ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
 		{
-			if(get_vid_index_for_iface_v6(ipv6_to_iface[i], vid) != IPACM_FAILURE ||
+			if(has_vid(ipv6_to_iface[i].associated_VIDs, vid) ||
 				(isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface) && !vid))
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "found dev %s, vid %d, num_ul_fw_rules %d\n",
@@ -6379,19 +6231,16 @@ int IPACM_Wan::GetV6PrefixByVid(int vid, uint32_t *v6_prefix)
 	{
 		if(ipv6_to_iface[i].pIface && ipv6_to_iface[i].wan_up_vlan_v6)
 		{
-			for(int j = 0; j < ipv6_to_iface[i].VID_cnt; j++)
+			if(has_vid(ipv6_to_iface[i].associated_VIDs, vid))
 			{
-				if((ipv6_to_iface[i].associated_VIDs[j] == vid))
-				{
-					IPACM_LOG(IPACM_LOG_DEBUG, "found dev %s, vid %d, v6_prefix 0x[%X][%X]\n",
-						ipv6_to_iface[i].pIface->dev_name,
-						ipv6_to_iface[i].associated_VIDs[j],
-						ipv6_to_iface[i].pIface->ipv6_prefix[0],
-						ipv6_to_iface[i].pIface->ipv6_prefix[1]);
-					v6_prefix[0] = ipv6_to_iface[i].pIface->ipv6_prefix[0];
-					v6_prefix[1] = ipv6_to_iface[i].pIface->ipv6_prefix[1];
-					return IPACM_SUCCESS;
-				}
+				IPACM_LOG(IPACM_LOG_DEBUG, "found dev %s, vid %d, v6_prefix 0x[%X][%X]\n",
+					ipv6_to_iface[i].pIface->dev_name,
+					vid,
+					ipv6_to_iface[i].pIface->ipv6_prefix[0],
+					ipv6_to_iface[i].pIface->ipv6_prefix[1]);
+				v6_prefix[0] = ipv6_to_iface[i].pIface->ipv6_prefix[0];
+				v6_prefix[1] = ipv6_to_iface[i].pIface->ipv6_prefix[1];
+				return IPACM_SUCCESS;
 			}
 		}
 	}
@@ -6467,11 +6316,10 @@ IPACM_firewall_conf_t* IPACM_Wan::get_default_profile_firewall_conf_ul(int *defa
 			if(!strcmp(firewall_mpdn_config_ul.pdns[idx].net_dev,
 				ipv6_to_iface[i].pIface->dev_name))
 			{
+				*default_vid = ipv6_to_iface[i].associated_VIDs.empty() ? 0 : ipv6_to_iface[i].associated_VIDs.front();
 				IPACM_LOG(IPACM_LOG_INFO, "found %s dev in index %d, VID %d\n",
 					firewall_mpdn_config_ul.pdns[idx].net_dev,
-					i,
-					ipv6_to_iface[i].associated_VIDs[0]);
-				*default_vid = ipv6_to_iface[i].associated_VIDs[0];
+					i, *default_vid);
 			}
 		}
 	}
@@ -6492,7 +6340,7 @@ IPACM_firewall_conf_t* IPACM_Wan::get_firewall_conf_by_vid_ul(int vid)
 		if(ipv6_to_iface[i].pIface &&
 			(ipv6_to_iface[i].wan_up_vlan_v6 || isDefaultGatewayIfaceUp_v6(ipv6_to_iface[i].pIface)))
 		{
-			if(get_vid_index_for_iface_v6(ipv6_to_iface[i], vid) != IPACM_FAILURE)
+			if(has_vid(ipv6_to_iface[i].associated_VIDs, vid))
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG,"found %s dev in index %d, VID %d\n",
 					ipv6_to_iface[i].pIface->dev_name,
@@ -8085,6 +7933,15 @@ int IPACM_Wan::config_socksv5_rules(ipa_ioc_add_flt_rule *pFilteringTable_v6)
 }
 #endif
 
+/* Validates a PDN index before it is used to subscript
+ * ipv4_to_iface[]/ipv6_to_iface[] (both sized IPA_MAX_NUM_SW_PDNS).
+ * -1 is the "no PDN of this type is up" sentinel used throughout
+ * this function; anything else must be in [0, IPA_MAX_NUM_SW_PDNS). */
+static inline bool is_idx_valid(int idx)
+{
+	return ((idx >= 0) && (idx < IPA_MAX_NUM_SW_PDNS));
+}
+
 /*for STA mode: handle wan-iface down event */
 int IPACM_Wan::handle_down_evt()
 {
@@ -8112,11 +7969,20 @@ int IPACM_Wan::handle_down_evt()
 
 	IPACM_LOG(IPACM_LOG_DEBUG, "ip_type: %d\n", ip_type);
 
-	IPACM_LOG(IPACM_LOG_INFO, "sta_ipv4_pdn_index: %d ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan :%d\n", sta_ipv4_pdn_index, ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan);
+	if (is_idx_valid(sta_ipv4_pdn_index))
+	{
+		IPACM_LOG(IPACM_LOG_INFO, "sta_ipv4_pdn_index: %d ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan :%d\n",
+			sta_ipv4_pdn_index, ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan);
+	}
+	else
+	{
+		IPACM_LOG(IPACM_LOG_INFO, "sta_ipv4_pdn_index: %d (invalid, no wan_up_vlan)\n", sta_ipv4_pdn_index);
+	}
 
 	IPACM_LOG(IPACM_LOG_INFO, " STA wan ipv4-addr:0x%x\n", wan_v4_addr);
 
-	if(ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6)
+	if(is_idx_valid(sta_ipv4_pdn_index) && is_idx_valid(sta_ipv6_pdn_index) &&
+		ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_vlan_pdn *vlandown_data;
@@ -8142,10 +8008,8 @@ int IPACM_Wan::handle_down_evt()
 		vlandown_data->ipv4_addr = wan_v4_addr;
 		vlandown_data->VlanID = 0; /* Wan is down. setting this value to 0, to delete all rules. */
 		memcpy(vlandown_data->ipv6_prefix, ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix, sizeof(ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix));
-		memset(ipv4_to_iface[sta_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[sta_ipv4_pdn_index].associated_VIDs));
-		ipv4_to_iface[sta_ipv4_pdn_index].VID_cnt = 0;
-		memset(ipv6_to_iface[sta_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[sta_ipv6_pdn_index].associated_VIDs));
-		ipv6_to_iface[sta_ipv6_pdn_index].VID_cnt = 0;
+		ipv4_to_iface[sta_ipv4_pdn_index].associated_VIDs.clear();
+		ipv6_to_iface[sta_ipv6_pdn_index].associated_VIDs.clear();
 		vlandown_data->mux_id = 0;
 
 		IPACM_LOG(IPACM_LOG_INFO, "Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN  iptype V4 V6, VlanID %d, mux_id %d, if num %d\n",
@@ -8156,7 +8020,7 @@ int IPACM_Wan::handle_down_evt()
 
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
-	else if(ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6)
+	else if(is_idx_valid(sta_ipv6_pdn_index) && ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_vlan_pdn *vlandown_data;
@@ -8164,8 +8028,11 @@ int IPACM_Wan::handle_down_evt()
 		ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6 = false;
 
 		wan_v6_is_default_gw = true;
-		if (sta_ipv4_pdn_index == -1)
+		if ((!is_idx_valid(sta_ipv4_pdn_index) || !ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan) && (num_offloaded_pdns > 0))
+		{
 			num_offloaded_pdns--;
+			IPACM_LOG(IPACM_LOG_INFO, "Now no of offloaded PDN is %d\n", num_offloaded_pdns);
+		}
 
 		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 		if(vlandown_data == NULL)
@@ -8179,8 +8046,7 @@ int IPACM_Wan::handle_down_evt()
 		vlandown_data->iptype = IPA_IP_v6;
 		vlandown_data->VlanID = 0; /* Wan is down. setting this value to 0, to delete all rules. */
 		memcpy(vlandown_data->ipv6_prefix, ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix, sizeof(ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix));
-		memset(ipv6_to_iface[sta_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[sta_ipv6_pdn_index].associated_VIDs));
-		ipv6_to_iface[sta_ipv6_pdn_index].VID_cnt = 0;
+		ipv6_to_iface[sta_ipv6_pdn_index].associated_VIDs.clear();
 		vlandown_data->mux_id = 0;
 
 		IPACM_LOG(IPACM_LOG_INFO, "Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN (v6) iptype IPA_IP_v6, VlanID %d, mux_id %d, if num %d\n",
@@ -8191,16 +8057,18 @@ int IPACM_Wan::handle_down_evt()
 
 		IPACM_EvtDispatcher::PostEvt(&evt_data);
 	}
-	else if (ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan)
+	else if (is_idx_valid(sta_ipv4_pdn_index) && ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan)
 	{
 		ipacm_cmd_q_data evt_data;
 		ipacm_event_vlan_pdn *vlandown_data;
 
 		ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan = false;
 		wan_v4_is_default_gw = true;
-		if (sta_ipv6_pdn_index == -1)
+		if ((!is_idx_valid(sta_ipv6_pdn_index) || !ipv6_to_iface[sta_ipv6_pdn_index].wan_up_vlan_v6) && (num_offloaded_pdns > 0))
+		{
 			num_offloaded_pdns--;
-
+			IPACM_LOG(IPACM_LOG_INFO, "Now no of offloaded PDN is %d\n", num_offloaded_pdns);
+		}
 		vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
 		if(vlandown_data == NULL)
 		{
@@ -8213,8 +8081,7 @@ int IPACM_Wan::handle_down_evt()
 		vlandown_data->iptype = IPA_IP_v4;
 		vlandown_data->VlanID = 0; /* Wan is down. setting this value to 0, to delete all rules. */
 		vlandown_data->ipv4_addr = wan_v4_addr;
-		memset(ipv4_to_iface[sta_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[sta_ipv4_pdn_index].associated_VIDs));
-		ipv4_to_iface[sta_ipv4_pdn_index].VID_cnt = 0;
+		ipv4_to_iface[sta_ipv4_pdn_index].associated_VIDs.clear();
 		vlandown_data->mux_id = 0;
 
 		IPACM_LOG(IPACM_LOG_INFO, "Posting IPA_HANDLE_WAN_VLAN_PDN_DOWN iptype IPA_IP_v4, VlanID %d, mux_id %d, if num %d\n",
@@ -8279,27 +8146,39 @@ int IPACM_Wan::handle_down_evt()
 	if (ip_type != IPA_IP_v6)
 	{
 		IPACM_LOG(IPACM_LOG_INFO, "Delete default v4 routing rules\n");
-		if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
+		if (dft_rt_rule_hdl[0] != 0)
 		{
-		   IPACM_LOG(IPACM_LOG_INFO, "Routing rule deletion failed!\n");
-			res = IPACM_FAILURE;
-			goto fail;
-		}
-		ipv4_to_iface[sta_ipv4_pdn_index].ipv4_addr = 0;
-		ipv4_to_iface[sta_ipv4_pdn_index].pIface = NULL;
-		if(m_is_sta_mode == WLAN_WAN)
-		{
-			for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES; slot++)
+			if (m_routing.DeleteRoutingHdl(dft_rt_rule_hdl[0], IPA_IP_v4) == false)
 			{
-				if(IPACM_Wan::wlan_v4_vlan_index[slot] == sta_ipv4_pdn_index)
-				{
-					IPACM_Wan::wlan_v4_vlan_index[slot] = -1;
-					IPACM_LOG(IPACM_LOG_DEBUG, "Cleared wlan_v4_vlan_index[%d]\n", slot);
-					break;
-				}
+			   IPACM_LOG(IPACM_LOG_INFO, "Routing rule deletion failed!\n");
+				res = IPACM_FAILURE;
+				goto fail;
 			}
 		}
-		sta_ipv4_pdn_index = -1;
+		if (is_idx_valid(sta_ipv4_pdn_index))
+		{
+			ipv4_to_iface[sta_ipv4_pdn_index].ipv4_addr = 0;
+			ipv4_to_iface[sta_ipv4_pdn_index].pIface = NULL;
+			if(m_is_sta_mode == WLAN_WAN)
+			{
+				for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES; slot++)
+				{
+					if(IPACM_Wan::wlan_sta_v4_pdn_index[slot] == sta_ipv4_pdn_index)
+					{
+						IPACM_Wan::wlan_sta_v4_pdn_index[slot] = -1;
+						IPACM_LOG(IPACM_LOG_DEBUG, "Cleared wlan_sta_v4_pdn_index[%d]\n", slot);
+						break;
+					}
+				}
+			}
+			else if((m_is_sta_mode == ECM_WAN) &&
+				(IPACM_Wan::eth_sta_v4_pdn_index == sta_ipv4_pdn_index))
+			{
+				IPACM_Wan::eth_sta_v4_pdn_index = -1;
+				IPACM_LOG(IPACM_LOG_DEBUG, "Cleared eth_sta_v4_pdn_index\n");
+			}
+			sta_ipv4_pdn_index = -1;
+		}
 		wan_v4_addr_set = false;
 		wan_v4_addr = 0;
 	}
@@ -8320,21 +8199,30 @@ int IPACM_Wan::handle_down_evt()
 		}
 
 		IPACM_LOG(IPACM_LOG_DEBUG, "finished delete default v6 RT rules\n \n");
-		ipv6_to_iface[sta_ipv6_pdn_index].pIface = NULL;
-		memset(&ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
-		if(m_is_sta_mode == WLAN_WAN)
+		if (is_idx_valid(sta_ipv6_pdn_index))
 		{
-			for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES; slot++)
+			ipv6_to_iface[sta_ipv6_pdn_index].pIface = NULL;
+			memset(&ipv6_to_iface[sta_ipv6_pdn_index].ipv6_prefix, 0, sizeof(uint32_t) * 2);
+			if(m_is_sta_mode == WLAN_WAN)
 			{
-				if(IPACM_Wan::wlan_v6_vlan_index[slot] == sta_ipv6_pdn_index)
+				for(int slot = 0; slot < IPA_MAX_WLAN_STA_IFACES; slot++)
 				{
-					IPACM_Wan::wlan_v6_vlan_index[slot] = -1;
-					IPACM_LOG(IPACM_LOG_DEBUG, "Cleared wlan_v6_vlan_index[%d]\n", slot);
-					break;
+					if(IPACM_Wan::wlan_sta_v6_pdn_index[slot] == sta_ipv6_pdn_index)
+					{
+						IPACM_Wan::wlan_sta_v6_pdn_index[slot] = -1;
+						IPACM_LOG(IPACM_LOG_DEBUG, "Cleared wlan_sta_v6_pdn_index[%d]\n", slot);
+						break;
+					}
 				}
 			}
+			else if((m_is_sta_mode == ECM_WAN) &&
+				(IPACM_Wan::eth_sta_v6_pdn_index == sta_ipv6_pdn_index))
+			{
+				IPACM_Wan::eth_sta_v6_pdn_index = -1;
+				IPACM_LOG(IPACM_LOG_DEBUG, "Cleared eth_sta_v6_pdn_index\n");
+			}
+			sta_ipv6_pdn_index = -1;
 		}
-		sta_ipv6_pdn_index = -1;
 		memset(ipv6_addr, 0, sizeof(uint32_t)*(MAX_DEFAULT_v6_ROUTE_RULES*4));
 	}
 
@@ -8572,8 +8460,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			ipacm_event_vlan_pdn *vlandown_data;
 
 			ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
-			memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
-			ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
+			ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs.clear();
 			if(modem_ipv6_pdn_index == -1)
 				num_offloaded_pdns--;
 
@@ -8793,8 +8680,7 @@ int IPACM_Wan::handle_down_evt_ex()
 			evt_data.evt_data = (void *)vlandown_data;
 
 			IPACM_EvtDispatcher::PostEvt(&evt_data);
-			memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
-			ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
+			ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs.clear();
 			ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
 
 			/* in also default gateway, DL filtering rules will be reconfigured later */
@@ -8948,34 +8834,31 @@ int IPACM_Wan::handle_down_evt_ex()
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6)
 			{
 				vlandown_data->iptype = IPA_IP_MAX;
-				vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
-				memcpy(vlandown_data->ipv6_prefix, ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix));
+				vlandown_data->VlanID = 0;
+				memcpy(vlandown_data->ipv6_prefix, ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix,
+							sizeof(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix));
 				vlandown_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
 				ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
-				memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
-				ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
+				ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs.clear();
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
-				memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
-				ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
+				ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs.clear();
 
 			}
 			else if(ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan)
 			{
 				vlandown_data->iptype = IPA_IP_v4;
-				vlandown_data->VlanID = associated_VID;
+				vlandown_data->VlanID = 0;
 				vlandown_data->ipv4_addr = (public_wan_v4_addr_set) ? public_wan_v4_addr : wan_v4_addr;
 				ipv4_to_iface[modem_ipv4_pdn_index].wan_up_vlan = false;
-				memset(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs, 0, sizeof(ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs));
-				ipv4_to_iface[modem_ipv4_pdn_index].VID_cnt = 0;
+				ipv4_to_iface[modem_ipv4_pdn_index].associated_VIDs.clear();
 			}
 			else
 			{
 				vlandown_data->iptype = IPA_IP_v6;
-				vlandown_data->VlanID = ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs[0];
+				vlandown_data->VlanID = 0;
 				memcpy(vlandown_data->ipv6_prefix, ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].ipv6_prefix));
 				ipv6_to_iface[modem_ipv6_pdn_index].wan_up_vlan_v6 = false;
-				memset(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs, 0, sizeof(ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs));
-				ipv6_to_iface[modem_ipv6_pdn_index].VID_cnt = 0;
+				ipv6_to_iface[modem_ipv6_pdn_index].associated_VIDs.clear();
 			}
 			if (num_offloaded_pdns > 0)
 				num_offloaded_pdns--;

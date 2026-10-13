@@ -39,11 +39,9 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 #ifndef IPACM_LOG_H
 #define IPACM_LOG_H
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
+/* Headers stay outside the extern "C" block: ipa_nat_utils.h -> glib.h pulls
+ * in C++ headers, and templates cannot have C language linkage. */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -54,9 +52,21 @@ extern "C"
 #include <time.h>
 #include <sys/time.h>
 #include <inttypes.h>  // for PRIu64
+#include <ipa_nat_utils.h>
 
-#ifdef USE_DLT
+#ifdef USE_CLOG
+#include "clog.h"
+#include "clog_ids.h"
+#elif defined(USE_DLT)
 #include <dlt/dlt.h>
+#endif
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+#if !defined(USE_CLOG) && defined(USE_DLT)
 	DLT_IMPORT_CONTEXT(ctx);
 #endif
 
@@ -110,6 +120,22 @@ extern uint8_t ipacm_global_log_level;
 extern uint8_t ipacm_global_syslog_level;
 extern bool ipacm_global_log_timestamp_enable;
 
+/* log_init() is expected to invoke from main function
+ */
+#ifdef USE_CLOG
+#define IPACM_CLOG_APP_ID     CLOG_APP_QIPA
+#define IPACM_CLOG_CTX_ID     CLOG_ACTX_QIPA_GNRL
+#define IPACM_CLOG_DIAG_SSID  MSG_SSID_DATA_IPACM
+extern clog_context_t ipacm_clog_ctx;
+extern bool ipacm_clog_app_registered;
+extern bool ipacm_clog_context_registered;
+extern bool ipacm_clog_cleanup_registered;
+#elif defined(USE_DLT)
+extern bool ipacm_dlt_app_registered;
+extern bool ipacm_dlt_context_registered;
+extern bool ipacm_dlt_cleanup_registered;
+#endif
+
 bool is_kernel_version_newer_than(char* version, const char* cmp_version);
 void get_kernel_version(char* kernel_ver);
 
@@ -119,13 +145,66 @@ void ipacm_send_log_to_file(char* ipacm_log_data);
 void log_ipacm_crash_info(const char* crash_str);
 int  log_init();
 void log_deinit();
+void ipacm_log_ipanat_relay(ipa_nat_log_level_t level, const char* msg);
 
-#ifdef USE_DLT
-#define IPACM_DLT_LOG(level, msg) \
-	DLT_LOG(ctx, (DltLogLevelType)(level), DLT_CSTRING(msg))
+#ifdef USE_CLOG
+static inline clog_level_t ipacm_to_clog_level(uint8_t log_level)
+{
+	switch (log_level)
+	{
+	case IPACM_LOG_DISABLED: return CLOG_LEVEL_OFF;
+	case IPACM_LOG_ERR:      return CLOG_LEVEL_ERROR;
+	case IPACM_LOG_WARN:     return CLOG_LEVEL_WARN;
+	case IPACM_LOG_INFO:     return CLOG_LEVEL_INFO;
+	case IPACM_LOG_DEBUG:    return CLOG_LEVEL_DEBUG;
+	default:                 return CLOG_LEVEL_VERBOSE;
+	}
+}
+
+#define IPACM_COMMON_LOG(level, msg) \
+	do { \
+		if (ipacm_clog_context_registered) \
+			CLOG_LOG(ipacm_clog_ctx, ipacm_to_clog_level(level), "%s", msg); \
+	} while (0)
+
+#elif defined(USE_DLT)
+static inline DltLogLevelType ipacm_to_dlt_level(uint8_t log_level)
+{
+	switch (log_level)
+	{
+	case IPACM_LOG_DISABLED: return DLT_LOG_OFF;
+	case IPACM_LOG_ERR:      return DLT_LOG_ERROR;
+	case IPACM_LOG_WARN:     return DLT_LOG_WARN;
+	case IPACM_LOG_INFO:     return DLT_LOG_INFO;
+	case IPACM_LOG_DEBUG:    return DLT_LOG_DEBUG;
+	default:                 return DLT_LOG_VERBOSE;
+	}
+}
+
+#define IPACM_COMMON_LOG(level, msg) \
+	do { \
+		if (ipacm_dlt_context_registered) \
+			DLT_LOG(ctx, ipacm_to_dlt_level(level), DLT_CSTRING(msg)); \
+	} while (0)
+
 #else
-#define IPACM_DLT_LOG(level, msg) \
+#define IPACM_COMMON_LOG(level, msg) \
 	do { } while (0)
+#endif
+
+/* qxdm/syslog/file are fallback sinks, only used when neither CLOG nor DLT
+ * is compiled in -- CLOG/DLT fully replace them. */
+#if !defined(USE_CLOG) && !defined(USE_DLT)
+	#define IPACM_FALLBACK_QXDM_SYSLOG(level, core_buf) \
+		do { \
+			ipacm_send_log_to_qxdm(core_buf); \
+			if ((level) <= ipacm_global_syslog_level) \
+				syslog(LOG_USER | ((level) - 1), "%s", (core_buf)+1); \
+		} while (0)
+	#define IPACM_FALLBACK_FILE(ts_buf) ipacm_send_log_to_file(ts_buf)
+#else
+	#define IPACM_FALLBACK_QXDM_SYSLOG(level, core_buf) do { } while (0)
+	#define IPACM_FALLBACK_FILE(ts_buf) do { } while (0)
 #endif
 
 #define IPACM_LOG(incoming_log_level, fmt, ...) \
@@ -134,8 +213,7 @@ void log_deinit();
 		char __ipacm_log_core_buf[IPACM_LOG_MAX_CORE_BUF_LEN]; \
 		__ipacm_log_core_buf[0] = (char)('0' + (uint8_t)incoming_log_level); \
 		snprintf(__ipacm_log_core_buf+1, IPACM_LOG_MAX_CORE_BUF_LEN-1 , "%s:%d %s() " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-		ipacm_send_log_to_qxdm(__ipacm_log_core_buf); \
-		if (incoming_log_level <= ipacm_global_syslog_level) syslog(LOG_USER | incoming_log_level - 1, "%s", __ipacm_log_core_buf+1); \
+		IPACM_FALLBACK_QXDM_SYSLOG(incoming_log_level, __ipacm_log_core_buf); \
 		if (incoming_log_level <= ipacm_global_log_level) \
 		{\
 			char __ipacm_log_buffer_send[IPACM_LOG_MAX_BUF_LEN] = {0}; \
@@ -147,8 +225,8 @@ void log_deinit();
 				snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN, " %s", __ipacm_log_core_buf+1); \
 			}\
 			printf("%s\n", __ipacm_log_buffer_send); \
-			ipacm_send_log_to_file(__ipacm_log_buffer_send); \
-			IPACM_DLT_LOG((incoming_log_level) + 2, __ipacm_log_buffer_send); \
+			IPACM_COMMON_LOG(incoming_log_level, __ipacm_log_buffer_send); \
+			IPACM_FALLBACK_FILE(__ipacm_log_buffer_send); \
 		}\
 	} while (0)
 
@@ -163,8 +241,8 @@ void log_deinit();
 		else {\
 			snprintf(__ipacm_log_buffer_send, IPACM_LOG_MAX_BUF_LEN," %s:%d %s(): " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 		} \
-		ipacm_send_log_to_file(__ipacm_log_buffer_send); \
-		IPACM_DLT_LOG((IPACM_LOG_DEBUG) + 2, __ipacm_log_buffer_send); \
+		IPACM_COMMON_LOG(IPACM_LOG_DEBUG, __ipacm_log_buffer_send); \
+		IPACM_FALLBACK_FILE(__ipacm_log_buffer_send); \
 	} while (0);
 
 #ifdef __cplusplus

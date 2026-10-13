@@ -127,6 +127,7 @@ typedef enum
 	IPA_LINK_TYPE_NORMAL = 0,
 	IPA_LINK_TYPE_VLAN,
 	IPA_LINK_TYPE_MACSEC,
+	IPA_LINK_TYPE_BRIDGE,
 } ipa_nl_type_e;
 
 typedef struct

@@ -52,7 +52,6 @@
 #include <IPACM_Wan.h>
 #include <IPACM_Iface.h>
 #include <IPACM_Log.h>
-#include <IPACM_Bridge.h>
 
 iface_instances *IPACM_IfaceManager::head = NULL;
 
@@ -108,12 +107,11 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 		case IPA_LINK_UP_EVENT:
 			IPACM_LOG(IPACM_LOG_INFO, "Recieved IPA_LINK_UP_EVENT event: link up %d: \n", evt_data->if_index);
 			ipa_interface_index = IPACM_Iface::iface_ipa_index_query(evt_data->if_index);
-			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(ifmgr_data.iface_name));
-			/* check for failure return */
-			if (IPACM_FAILURE == ipa_interface_index) {
+			if(IPACM_FAILURE == ipa_interface_index) {
 				IPACM_LOG(IPACM_LOG_ERR, "IPA_LINK_UP_EVENT: not supported iface id: %d\n", evt_data->if_index);
 				break;
 			}
+			strlcpy(ifmgr_data.iface_name, IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].iface_name, sizeof(ifmgr_data.iface_name));
 			/* LTE-backhaul */
 			if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == EMBMS_IF)
 			{
@@ -478,7 +476,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 			{
 				IPACM_LOG(IPACM_LOG_DEBUG, "Creating WLan interface\n");
 				IPACM_Wlan *wl = new IPACM_Wlan(param->iface_name, ipa_interface_index);
-				if (wl->rx_prop == NULL && wl->tx_prop == NULL)
+				if ((wl->rx_prop == NULL && wl->tx_prop == NULL) || !wl->iface_valid)
 				{
 					/* reset the AP-iface category to unknown */
 					IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat = UNKNOWN_IF;
@@ -663,12 +661,7 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 			break;
 		case VIRTUAL_IF:
 			{
-					IPACM_LOG(IPACM_LOG_DEBUG, "Creating br-lan interface bridge instance\n");
-					IPACM_Bridge *br_lan = new IPACM_Bridge();
-					IPACM_EvtDispatcher::registr(IPA_ADDR_ADD_EVENT, br_lan);
-					IPACM_EvtDispatcher::registr(IPA_ADDR_DEL_EVENT, br_lan);
-					IPACM_EvtDispatcher::registr(IPA_LINK_DOWN_EVENT, br_lan);
-					registr(param->iface_name, ipa_interface_index, br_lan);
+					IPACM_LOG(IPACM_LOG_DEBUG, "Bridge interface %s detected, querying address\n", param->iface_name);
 					IPACM_Iface::iface_addr_query(if_index);
 			}
 			break;
@@ -729,15 +722,19 @@ int IPACM_IfaceManager::deregistr(IPACM_Listener *param)
 			{
 				head = head->next;
 			}
-			else if(tmp->next == NULL)
-			{
-				prev->next = NULL;
-			}
-			else
+			else if(prev != NULL)
 			{
 				prev->next = tmp->next;
 			}
-
+			else
+			{
+				/* Should never happen: non-head node with NULL prev - list is corrupted */
+				IPACM_LOG(IPACM_LOG_ERR, "deregistr: list corruption detected\n");
+				tmp = tmp->next;
+				continue;
+			}
+			/* tmp must be advanced before free(tmp1): tmp and tmp1 point to
+			 * the same node here, so freeing first would make this a UAF. */
 			tmp = tmp->next;
 			free(tmp1);
 		}

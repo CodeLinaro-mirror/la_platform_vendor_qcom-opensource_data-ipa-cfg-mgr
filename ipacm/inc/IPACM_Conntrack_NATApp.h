@@ -638,7 +638,7 @@ public:
 	void AddTempEntry(const NatEntryBase& entry);
 	void DeleteTempEntry(const NatEntryBase& entry);
 	void FlushTempEntries(const IpAddress& clientIp, bool isAdd, bool isDummy, bool isStaClientIp);
-	void FlushAndCacheVlanTempEntries_v6(uint32_t* ipv6_addr, bool isAdd, bool isDummy, bool isStaClientIp);
+	void FlushAndCacheVlanTempEntries_v6(uint32_t* ipv6_addr, bool isAdd, bool isDummy, bool isStaClientIp, bool *is_entry_present);
 
 	void UpdateTcpUdpTimeStamps(bool& isTcpUdpTimeoutUpToDate);
 

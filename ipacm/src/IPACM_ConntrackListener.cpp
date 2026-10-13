@@ -906,8 +906,11 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *d
 	const IpAddress& ip = Ipv6IpAddress(data->ipv6_addr, false);
 	int i = 0, ret = 0;
 	void* exit_status;
+	bool is_entry_present = false;
 	pthread_t query_ct_ipv6_thread = 0;
 	struct query_nl_conntrack *query_nl_ct = NULL;
+	ipacm_cmd_q_data evt_data;
+	ipacm_event_route_vlan *data_vlan;
 
 	if (!IsIpv6CTEnabled() || !ip.Valid())
 	{
@@ -1000,7 +1003,28 @@ void IPACM_ConntrackListener::HandleNeighIpAddrAddEvt_v6(ipacm_event_data_all *d
 
 				ipv6ct_inst->ResetPwrSaveIf(ip);
 
-				ipv6ct_inst->FlushAndCacheVlanTempEntries_v6(data->ipv6_addr,true, false, false);
+				ipv6ct_inst->FlushAndCacheVlanTempEntries_v6(data->ipv6_addr,true, false, false, &is_entry_present);
+				if(is_entry_present)
+				{
+					evt_data.event = IPA_ROUTE_ADD_VLAN_PDN_EVENT;
+					data_vlan = (ipacm_event_route_vlan *)calloc(1, sizeof(ipacm_event_route_vlan));
+					if(!data_vlan)
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "couldn't allocate memory for new vlan pdn event\n");
+						return;
+					}
+					data_vlan->iptype = IPA_IP_v6;
+					data_vlan->VlanID = data->vlanID;
+					data_vlan->wan_ipv6_prefix[0] =data->ipv6_addr[0];
+					data_vlan->wan_ipv6_prefix[1] =data->ipv6_addr[1];
+					IPACM_LOG(IPACM_LOG_DEBUG, "Sending IPv6 address: msb 0x%08x lsb 0x%08x\n",
+						data_vlan->wan_ipv6_prefix[0], data_vlan->wan_ipv6_prefix[1]);
+					evt_data.evt_data = data_vlan;
+					IPACM_LOG(IPACM_LOG_DEBUG, "sending IPA_ROUTE_ADD_VLAN_PDN_EVENT vlan id %d, iptype %d,\n",
+						data_vlan->VlanID,
+						data_vlan->iptype);
+					IPACM_EvtDispatcher::PostEvt(&evt_data);
+				}
 			}
 			else
 #endif
@@ -2739,7 +2763,17 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 	if (IPPROTO_TCP == input->rule->protocol)
 	{
 		tcp_state = nfct_get_attr_u8(input->ct, ATTR_TCP_STATE);
-		if ((TCP_CONNTRACK_ESTABLISHED == tcp_state) &&
+		if (TCP_CONNTRACK_FIN_WAIT == tcp_state ||
+				   TCP_CONNTRACK_CLOSE == tcp_state ||
+				   input->type == NFCT_T_DESTROY)
+		{
+			IPACM_LOG(IPACM_LOG_DEBUG, "TCP state (TCP_CONNTRACK_FIN_WAIT or TCP_CONNTRACK_CLOSE) (%d) "
+					 "or type NFCT_T_DESTROY(%d)\n", tcp_state, input->type);
+
+			nat_inst->DeleteEntry(input->rule);
+			nat_inst->DeleteTempEntry(input->rule);
+		}
+		else if ((TCP_CONNTRACK_ESTABLISHED == tcp_state) &&
                     (((pkt_threshld != 0) && (pkt_count >= pkt_threshld)) ||
                     (pkt_threshld == 0)))
 		{
@@ -2779,15 +2813,6 @@ int IPACM_ConntrackListener::AddORDeleteNatEntry(const nat_entry_bundle *input, 
 			{
 				nat_inst->AddEntry(input->rule);
 			}
-		}
-		else if (TCP_CONNTRACK_FIN_WAIT == tcp_state ||
-				   input->type == NFCT_T_DESTROY)
-		{
-			IPACM_LOG(IPACM_LOG_DEBUG,"TCP state TCP_CONNTRACK_FIN_WAIT(%d) "
-					 "or type NFCT_T_DESTROY(%d)\n", tcp_state, input->type);
-
-			nat_inst->DeleteEntry(input->rule);
-			nat_inst->DeleteTempEntry(input->rule);
 		}
 		else
 		{

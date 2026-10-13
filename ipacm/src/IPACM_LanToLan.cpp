@@ -425,8 +425,8 @@ void IPACM_LanToLan::handle_client_cross_proc_ctx(ipacm_event_eth_bridge *data)
 #ifdef FEATURE_VLAN_MPDN
 	bool IsVlan = (IPACM_Iface::ipacmcfg->ipacm_mpdn_enable &&
 		IPACM_Iface::ipacmcfg->iface_in_vlan_mode(data->p_iface->dev_name));
-	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
-	uint16_t cl_Ids[IPA_MAX_NUM_OFFLOAD_VLANS];
+	uint16_t Ids[IPA_MAX_NUM_OFFLOAD_VLANS] = {0};
+	uint16_t cl_Ids[IPA_MAX_NUM_OFFLOAD_VLANS] = {0};
 	int i;
 	ipa_bridge_vlan_mapping_info mapping_info;
 	bool client_found = false;
@@ -1094,8 +1094,8 @@ void IPACM_LanToLan_Iface::add_client_rt_rule_for_new_iface()
 
 void IPACM_LanToLan_Iface::add_client_rt_rule(peer_iface_info *peer_info, client_info *client)
 {
-	int i, num_rt_rule;
-	uint32_t rt_rule_hdl[MAX_NUM_PROP];
+	int i, num_rt_rule = 0;
+	uint32_t rt_rule_hdl[MAX_NUM_PROP] = {0};
 	ipa_hdr_l2_type peer_l2_hdr_type;
 #ifdef FEATURE_VLAN_MPDN
 	std::array<uint8_t, 6> mac = {0};
@@ -1631,6 +1631,13 @@ void IPACM_LanToLan_Iface::add_client_flt_rule(peer_iface_info *peer, client_inf
 	{
 		flt_rule_hdls = it_flt->l2tp_first_pass_flt_rule_hdl[iptype].flt_rule_hdls;
 		l2tp_second_pass_flt_rule_hdl = it_flt->l2tp_second_pass_flt_rule_hdl;
+		if(it_flt->flt_rule_hdl[iptype]) {
+			IPACM_LOG(IPACM_LOG_DEBUG, "not adding rule for already found client 0x[%X][%X][%X][%X][%X][%X] vlan %d, iptype %d\n",
+				it_flt->p_client->mac_addr[0], it_flt->p_client->mac_addr[1], it_flt->p_client->mac_addr[2],
+				it_flt->p_client->mac_addr[3], it_flt->p_client->mac_addr[4], it_flt->p_client->mac_addr[5],
+				it_flt->p_client->vlan_id, iptype);
+			return;
+		}
 	}
 
 #ifdef FEATURE_L2TP
@@ -2382,7 +2389,7 @@ void IPACM_LanToLan_Iface::handle_wlan_scc_mcc_switch()
 
 void IPACM_LanToLan_Iface::handle_intra_interface_info()
 {
-	uint32_t hdr_proc_ctx_hdl;
+	uint32_t hdr_proc_ctx_hdl = 0;
 
 	if(m_p_iface->tx_prop == NULL || m_p_iface->tx_prop->num_tx_props <= 0)
 	{
@@ -2455,7 +2462,8 @@ void IPACM_LanToLan_Iface::install_iface_cross_proc_ctx(IPACM_LanToLan_Iface *pe
 
 	peer_l2_hdr_type = peer_iface->m_p_iface->tx_prop->tx[0].hdr_l2_type;
 
-	if(m_is_vlan && peer_l2_hdr_type == IPA_HDR_L2_ETHERNET_II)
+	if((m_is_vlan && peer_l2_hdr_type == IPA_HDR_L2_ETHERNET_II) &&
+	(!peer_iface->m_is_cross_proc_ctx_handled))
 	{
 		IPACM_LOG(IPACM_LOG_INFO, "Adding header Proc Context\n");
 		increment_ref_cnt_peer_l2_hdr_type(peer_l2_hdr_type);
@@ -2464,6 +2472,7 @@ void IPACM_LanToLan_Iface::install_iface_cross_proc_ctx(IPACM_LanToLan_Iface *pe
 			add_hdr_proc_ctx(peer_l2_hdr_type, peer_iface->m_p_iface->dev_name);
 			IPACM_LOG(IPACM_LOG_DEBUG, "Added header Proc Context for %s\n", peer_iface->m_p_iface->dev_name);
 		}
+		peer_iface->m_is_cross_proc_ctx_handled = true;
 	}
 
 	return;
@@ -2657,7 +2666,7 @@ list<client_info>::iterator IPACM_LanToLan_Iface::handle_client_del(uint8_t *mac
 
 void IPACM_LanToLan_Iface::add_hdr_proc_ctx(ipa_hdr_l2_type peer_l2_type, char* peer_dev_name)
 {
-	uint32_t hdr_proc_ctx_hdl;
+	uint32_t hdr_proc_ctx_hdl = 0;
 
 	if(ref_cnt_peer_l2_hdr_type[peer_l2_type] == 1)
 	{

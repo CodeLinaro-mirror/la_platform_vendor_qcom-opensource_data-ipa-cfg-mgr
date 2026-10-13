@@ -400,14 +400,10 @@ typedef struct _ipacm_event_data_all
 	char iface_name[IPA_IFACE_NAME_LEN];
 	uint16_t vlanID;
 	bool is_mld_enabled;
-} ipacm_event_data_all;
-
-typedef struct _ipacm_event_new_neigh_vlan
-{
-	/* must be first since might be treated as data_all event */
-	ipacm_event_data_all data_all;
+#ifdef FEATURE_VLAN_MPDN
 	ipacm_bridge *bridge;
-} ipacm_event_new_neigh_vlan;
+#endif
+} ipacm_event_data_all;
 
 class IPACM_Lan;
 
@@ -558,7 +554,10 @@ typedef enum
 	NEIGH_CLIENT_ADD = 0,
 	NEIGH_CLIENT_DEL,
 	NEIGH_CLIENT_DEL_PREFIX,
-	POST_NEIGH_CLIENT_IP_ADDR_EVT
+	POST_NEIGH_CLIENT_IP_ADD_EVT,
+	POST_NEIGH_CLIENT_IP_DEL_EVT,
+	POST_LAN_CLIENT_ADD_EVT,
+	POST_LAN_CLIENT_DEL_EVT
 } ipacm_neigh_cache_ops_type;
 
 typedef struct _ipacm_ifacemgr_data

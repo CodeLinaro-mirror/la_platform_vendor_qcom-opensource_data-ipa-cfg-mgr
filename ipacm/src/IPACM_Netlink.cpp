@@ -41,6 +41,7 @@
 	Skylar Chang
 
 */
+#include <algorithm>
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -58,6 +59,7 @@
 #include "IPACM_Config.h"
 #include "IPACM_Iface.h"
 #include "IPACM_Log.h"
+#include "IPACM_Bridge.h"
 #include "IPACM_Iface.h"
 #include <linux/l2tp.h>
 #include <sys/socket.h>
@@ -86,11 +88,15 @@ int find_mask(int ip_v4_last, int *mask_value);
 
 #else/* defined(FEATURE_IPA_ANDROID) */
 
-#define IPACM_NL_COPY_ADDR( event_info, element ) \
-	do { \
-		memcpy( &event_info->attr_info.element.__ss_padding, RTA_DATA(rtah), sizeof(event_info->attr_info.element.__ss_padding) ); \
-	} while (0)
-
+#define IPACM_NL_COPY_ADDR( event_info, element )                                        \
+        do {                                                                              \
+            memset( &event_info->attr_info.element.__ss_padding, 0,                      \
+                    sizeof(event_info->attr_info.element.__ss_padding) );                 \
+            memcpy( &event_info->attr_info.element.__ss_padding,                         \
+                    RTA_DATA(rtah),                                                       \
+                    std::min<size_t>(RTA_PAYLOAD(rtah),                                   \
+                             sizeof(event_info->attr_info.element.__ss_padding)) );       \
+        } while (0)
 
 #define IPACM_EVENT_COPY_ADDR_v6( event_data, element)                                   \
         memcpy( event_data, element.__ss_padding, sizeof(event_data));
@@ -494,6 +500,10 @@ static int ipa_nl_decode_rtm_link
 					} else if (strcmp(intf_type, "macsec") == 0) {
 						link_info->link_type = IPA_LINK_TYPE_MACSEC;
 						IPACM_LOG(IPACM_LOG_DEBUG, "Recived NEW_LINK for macsec type interface with interface index %d\n",
+									link_info->metainfo.ifi_index);
+					} else if (strcmp(intf_type, "bridge") == 0) {
+						link_info->link_type = IPA_LINK_TYPE_BRIDGE;
+						IPACM_LOG(IPACM_LOG_DEBUG, "Recived NEW_LINK for bridge type interface with interface index %d\n",
 									link_info->metainfo.ifi_index);
 					}
 				}
@@ -962,6 +972,11 @@ static int ipa_nl_decode_nlmsg
 								msg_ptr->nl_link_info.mtu) {
 							IPACM_Iface::ipacmcfg->add_l2tp_mtu_info(msg_ptr->nl_link_info.mtu, msg_ptr->nl_link_info.name);
 						}
+						if((msg_ptr->nl_link_info.link_type == IPA_LINK_TYPE_BRIDGE) &&
+							(IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_flags))
+						{
+							IPACM_Bridge::register_bridge(dev_name, msg_ptr->nl_link_info.metainfo.ifi_index);
+						}
 						if ((IFF_UP & msg_ptr->nl_link_info.metainfo.ifi_change) ||
 								(!memcmp(dev_name,"rmnet_data", 10) &&
 								 (msg_ptr->nl_link_info.metainfo.ifi_type == ARPHRD_RAWIP))) {
@@ -1012,6 +1027,7 @@ static int ipa_nl_decode_nlmsg
 								evt_data.event = IPA_LINK_DOWN_EVENT;
 								IPACM_LOG(IPACM_LOG_DEBUG, "Posting IPA_LINK_DOWN_EVENT with if index: %d\n",
 										data_fid->if_index);
+								IPACM_Bridge::handle_link_down(data_fid->iface_name, data_fid->if_index);
 							}
 							evt_data.evt_data = data_fid;
 							IPACM_EvtDispatcher::PostEvt(&evt_data);
@@ -1101,6 +1117,7 @@ static int ipa_nl_decode_nlmsg
 								evt_data.event = IPA_LINK_DOWN_EVENT;
 								evt_data.evt_data = data_fid;
 								IPACM_LOG(IPACM_LOG_DEBUG, "Posting usb IPA_LINK_DOWN_EVENT with if index: %d\n", data_fid->if_index);
+								IPACM_Bridge::handle_link_down(data_fid->iface_name, data_fid->if_index);
 								IPACM_EvtDispatcher::PostEvt(&evt_data);
 							}
 						}
@@ -1200,6 +1217,7 @@ static int ipa_nl_decode_nlmsg
 					IPACM_LOG(IPACM_LOG_DEBUG, "posting IPA_LINK_DOWN_EVENT with if idnex:%d\n",
 							data_fid->if_index);
 					evt_data.evt_data = data_fid;
+					IPACM_Bridge::handle_link_down(data_fid->iface_name, data_fid->if_index);
 					IPACM_EvtDispatcher::PostEvt(&evt_data);
 					/* finish command queue */
 				}
@@ -1285,6 +1303,8 @@ static int ipa_nl_decode_nlmsg
 								data_addr->if_index,
 								data_addr->ipv4_addr);
 						evt_data.evt_data = data_addr;
+						IPACM_Bridge::handle_addr_add(data_addr->iface_name, data_addr->if_index,
+						                              data_addr->ipv4_addr, data_addr->ipv4_addr_mask);
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 					}
 					else
@@ -1330,6 +1350,8 @@ static int ipa_nl_decode_nlmsg
 								data_addr->if_index,
 								data_addr->ipv4_addr);
 						evt_data.evt_data = data_addr;
+						IPACM_Bridge::handle_addr_del(data_addr->iface_name, data_addr->if_index,
+						                              data_addr->ipv4_addr);
 						IPACM_EvtDispatcher::PostEvt(&evt_data);
 					}
 					else
@@ -2778,6 +2800,11 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type, char * iface_name)
 	}
 
 	msgsent_len = send(nl_sock, &nl_request, sizeof(nl_request), 0);
+	if (msgsent_len < 0 || (size_t)msgsent_len != sizeof(nl_request))
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to send netlink request, sent %zd\n", msgsent_len);
+		goto error;
+	}
 
 	msg = {
 		.msg_name = &nladdr,
@@ -2794,6 +2821,14 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type, char * iface_name)
 		goto error;
 	}
 
+	/* This socket sends a unicast RTM_GETROUTE request; only the kernel
+	 * (nl_pid == 0) is expected to respond. A non-zero nl_pid means a
+	 * non-kernel sender, which is never valid here — treat as fatal. */
+	if (nladdr.nl_pid != 0) {
+		IPACM_LOG(IPACM_LOG_ERR, "Netlink msg not from kernel (nl_pid=%u)\n", nladdr.nl_pid);
+		goto error;
+	}
+
 	h = (struct nlmsghdr *)buf;
 
 	IPACM_LOG(IPACM_LOG_DEBUG, "Route msg_len : %d\n", msglen);
@@ -2805,19 +2840,36 @@ int ipa_nl_send_getroute(ipa_ip_type ip_type, char * iface_name)
 			IPACM_LOG(IPACM_LOG_ERR, "Dump was interrupted\n");
 			goto error;
 		}
-
-		if (nladdr.nl_pid != 0)
+		if (h->nlmsg_type == NLMSG_DONE)
 		{
-			continue;
+			break;
 		}
-
 		if (h->nlmsg_type == NLMSG_ERROR)
 		{
 			IPACM_LOG(IPACM_LOG_ERR, "Netlink message error\n");
 			goto error;
 		}
 		memset(&nl_route_info_get_route, 0, sizeof(ipa_nl_route_info_t));
-		ipa_nl_decode_rtm_route((char*)h,msglen,&nl_route_info_get_route);
+
+		/* h->nlmsg_len is header-inclusive (nlmsghdr + rtmsg + RTAs).
+		 * ipa_nl_decode_rtm_route strips NLMSG_LENGTH(sizeof(struct rtmsg))
+		 * from buflen and positions rtah past both headers, so the RTA_OK
+		 * loop is correctly bounded to this message's RTAs only.
+		 * The prior code passed msglen (the entire recv buffer), which caused
+		 * the RTA loop to overrun into subsequent messages. */
+		if (h->nlmsg_len < NLMSG_LENGTH(sizeof(struct rtmsg))) {
+			IPACM_LOG(IPACM_LOG_ERR, "Bad nlmsg_len %u (too small)\n", h->nlmsg_len);
+			goto error;
+		}
+		/* msglen is int but guaranteed > 0 here (validated above).
+		 * Cast to uint32_t to match the type of h->nlmsg_len and avoid
+		 * a signed/unsigned comparison warning. */
+		if (h->nlmsg_len > (uint32_t)msglen) {
+			IPACM_LOG(IPACM_LOG_ERR, "Bad nlmsg_len %u > remaining %d\n", h->nlmsg_len, msglen);
+			goto error;
+		}
+		ipa_nl_decode_rtm_route((char*)h, h->nlmsg_len, &nl_route_info_get_route);
+
 		IPACM_LOG(IPACM_LOG_DEBUG, "In case RTM_GETROUTE\n");
 		IPACM_LOG(IPACM_LOG_DEBUG, "rtm_type: %d\n", nl_route_info_get_route.metainfo.rtm_type);
 		IPACM_LOG(IPACM_LOG_DEBUG, "protocol: %d\n", nl_route_info_get_route.metainfo.rtm_protocol);
@@ -3603,6 +3655,12 @@ int ipa_nl_query_newneigh(int af_family, char* dev_name, bool query)
 	}
 
 	msgsent_len = send(nl_sock, &nl_request, sizeof(nl_request), 0);
+	if (msgsent_len < 0 || (size_t)msgsent_len != sizeof(nl_request))
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "Failed to send netlink request, sent %zd\n", msgsent_len);
+		ret_val = IPACM_FAILURE;
+		goto end;
+	}
 
 	msg = {
 		.msg_name = &nladdr,

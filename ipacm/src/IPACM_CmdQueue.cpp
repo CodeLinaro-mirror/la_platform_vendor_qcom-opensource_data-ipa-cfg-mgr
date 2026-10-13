@@ -26,10 +26,9 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
-SPDX-License-Identifier: BSD-3-Clause-Clear
-
+Changes from Qualcomm Technologies, Inc. are provided under the following license:
+Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+SPDX-License-Identifier: BSD-3-Clause-Clear.
 */
 /*!
 	@file
@@ -49,78 +48,91 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 
 pthread_mutex_t mutex    = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  cond_var = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 MessageQueue* MessageQueue::inst_internal = NULL;
 MessageQueue* MessageQueue::inst_external = NULL;
 
 MessageQueue* MessageQueue::getInstanceInternal()
 {
+	pthread_mutex_lock(&queue_mutex);
 	if(inst_internal == NULL)
 	{
-		inst_internal = new MessageQueue();
-		if(inst_internal == NULL)
-		{
-			IPACM_LOG(IPACM_LOG_ERR, "unable to create internal Message Queue instance\n");
-			return NULL;
-		}
+		inst_internal = new(std::nothrow) MessageQueue();
+	}
+	MessageQueue* result = inst_internal;
+	pthread_mutex_unlock(&queue_mutex);
+
+	if(result == NULL)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "unable to create internal Message Queue instance\n");
+		return NULL;
 	}
 
-	return inst_internal;
+	return result;
 }
 
 MessageQueue* MessageQueue::getInstanceExternal()
 {
+	pthread_mutex_lock(&queue_mutex);
 	if(inst_external == NULL)
 	{
-		inst_external = new MessageQueue();
-		if(inst_external == NULL)
-		{
-			IPACM_LOG(IPACM_LOG_ERR, "unable to create external Message Queue instance\n");
-			return NULL;
-		}
+		inst_external = new(std::nothrow) MessageQueue();
+	}
+	MessageQueue* result = inst_external;
+	pthread_mutex_unlock(&queue_mutex);
+
+	if(result == NULL)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "unable to create external Message Queue instance\n");
+		return NULL;
 	}
 
-	return inst_external;
+	return result;
 }
 
 void MessageQueue::enqueue(Message *item)
 {
-	if(!Head)
+	if (item == NULL)
 	{
-		Tail = item;
+		IPACM_LOG(IPACM_LOG_DEBUG, "enqueue: item is NULL, dropping\n");
+		return;
+	}
+
+	item->setnext(NULL);    // ensure new tail node has no stale next pointer
+
+	if (!Head)
+	{
+		// Queue empty — both Head and Tail point to the single new item
 		Head = item;
 	}
 	else
 	{
-		if(Tail == NULL)
-		{
-			IPACM_LOG(IPACM_LOG_DEBUG, "Tail is null\n");
-			Head->setnext(item);
-		}
-		else
-		{
-			Tail->setnext(item);
-		}
-		Tail = item;
+		// Queue non-empty — Tail is guaranteed valid whenever Head != NULL
+		Tail->setnext(item);
 	}
+	Tail = item;
 }
 
 
 Message* MessageQueue::dequeue(void)
 {
-	if(Head == NULL)
-	{
-		return NULL;
-	}
-	else
-	{
-		Message *tmp = Head;
-		Head = Head->getnext();
+    if (Head == NULL)
+    {
+        return NULL;
+    }
 
-		return tmp;
-	}
+    Message *tmp = Head;
+    Head = Head->getnext();
+
+    if (Head == NULL)
+    {
+        Tail = NULL;        //reset Tail when last item is dequeued
+    }
+
+    tmp->setnext(NULL);     // sever returned node from the queue chain
+    return tmp;
 }
-
 
 void* MessageQueue::Process(void *param)
 {

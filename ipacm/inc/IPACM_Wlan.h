@@ -567,7 +567,7 @@ private:
 	int handle_down_evt();
 
 	/*handle reset wifi-client rt-rules */
-	int handle_wlan_client_reset_rt(ipa_ip_type iptype);
+	int handle_wlan_client_reset_rt(ipa_ip_type iptype, uint16_t vlan_id = 0);
 
 	void handle_SCC_MCC_switch(ipa_ip_type);
 

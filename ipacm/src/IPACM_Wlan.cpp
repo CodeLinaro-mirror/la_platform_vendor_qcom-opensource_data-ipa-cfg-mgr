@@ -886,6 +886,8 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 				{
 					eth_bridge_post_event(IPA_ETH_BRIDGE_CLIENT_DEL, IPA_IP_MAX, data->mac_addr, NULL, NULL, vlan_id);
 				}
+				delete_wlan_client_qos_rule(data->mac_addr, 0, IPA_IP_v4, NULL);
+				delete_wlan_client_qos_rule(data->mac_addr, 0, IPA_IP_v6, NULL);
 				handle_wlan_client_down_evt(data->mac_addr);
 #ifdef IPA_VLAN_PRIORITY
 				if(IPACM_Iface::ipacmcfg->get_vlan_id(dev_name, &vlan_id, &priority))
@@ -1057,6 +1059,7 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 
 						/* Add NAT/IPv6CT rules after RT rules are set */
 						HandleNeighIpAddrAddEvt(data);
+						install_all_wlan_qos_route_rule(data->mac_addr, 0, data->ipv6_addr);
 					}
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 					else
@@ -1311,6 +1314,48 @@ void IPACM_Wlan::event_callback(ipa_cm_event_id event, void *param)
 		}
 	}
 	break;
+
+	case IPA_QOS_RULE_ADD_EVENT:
+	{
+		IPACM_LOG(IPACM_LOG_INFO, "Received and will process an IPA_QOS_RULE_ADD_EVENT\n");
+		for (int cnt = 0; cnt < num_wifi_client; cnt++)
+		{
+			IPACM_LOG(IPACM_LOG_DEBUG, "Install qos for clnt idx %d with vlan id %d\n", cnt, get_client_memptr(wlan_client, cnt)->vlan_id);
+			install_all_wlan_qos_route_rule(get_client_memptr(wlan_client, cnt)->mac, get_client_memptr(wlan_client, cnt)->vlan_id, NULL);
+		}
+		break;
+	}
+
+	case IPA_QOS_RULE_DEL_EVENT:
+	{
+		qos_delete_param_info *qos_param;
+		qos_param = (qos_delete_param_info *)param;
+		IPACM_LOG(IPACM_LOG_INFO, "Received and will process an IPA_QOS_RULE_DEL_EVENT\n");
+
+		IPACM_LOG(IPACM_LOG_DEBUG, "Deleting %d qos eth clients \n", qos_param->client_cnt);
+
+		//for (it_qos_client = qos_param->qos_client_list.begin(); it_qos_client != qos_param->qos_client_list.end(); ++it_qos_client)
+		for (int i = 0; i < qos_param->client_cnt; i++)
+		{
+			IPACM_LOG(IPACM_LOG_DEBUG, "QOS is v4 set %d for hdl %d\n",
+					 qos_param->qos_client_list[i].route_rule_set_v4, qos_param->qos_client_list[i].qos_rt_rule_hdl_v4);
+
+			if (qos_param->qos_client_list[i].route_rule_set_v4 &&
+				(m_routing.DeleteRoutingHdl(qos_param->qos_client_list[i].qos_rt_rule_hdl_v4, IPA_IP_v4) == false))
+			{
+				return;
+			}
+
+			IPACM_LOG(IPACM_LOG_DEBUG, "QOS is v6 set %d hdl %d\n",
+					qos_param->qos_client_list[i].route_rule_set_v6,
+					qos_param->qos_client_list[i].qos_rt_rule_hdl_v6);
+				if (qos_param->qos_client_list[i].route_rule_set_v6 &&
+					(m_routing.DeleteRoutingHdl(qos_param->qos_client_list[i].qos_rt_rule_hdl_v6, IPA_IP_v6) == false))
+					return;
+		}
+
+		break;
+	}
 
 	case IPA_WLAN_BRIDGE_UPDATE_EVENT:
 		{
@@ -2291,7 +2336,7 @@ int IPACM_Wlan::handle_lan_client_connect(uint8_t *mac_addr)
 				ext_prop = IPACM_Iface::ipacmcfg->GetExtProp(IPA_IP_v4);
 #ifdef IPA_HW_FNR_STATS
 				if (IPACM_Wan::ipacmcfg->hw_fnr_stats_support)
-					install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(), 
+					install_uplink_filter_rule_per_client_v2(ext_prop, IPA_IP_v4, IPACM_Wan::getXlat_Mux_Id(),
 						get_client_memptr(wlan_client, wlan_index)->mac,
 						get_client_memptr(wlan_client, wlan_index)->ul_cnt_idx);
 				else
@@ -3663,7 +3708,10 @@ int IPACM_Wlan::handle_wlan_client_reset_rt(ipa_ip_type iptype,  uint16_t vlan_i
 			IPACM_LOG(IPACM_LOG_ERR, "Failed to delete old iptype(%d) rules.\n", iptype);
 			return res;
 		}
-
+		/* Delete QOS rules. */
+		if (IPACM_Iface::ipacmcfg->ipacm_qos_enable)
+			delete_client_qos_rule(get_client_memptr(wlan_client, i)->mac,
+				0, iptype, NULL);
 		/* Reset ip-address */
 		if(iptype == IPA_IP_v4)
 		{
@@ -5315,8 +5363,8 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 #endif
 	{
 		IPACM_LOG(IPACM_LOG_INFO, "number of wan_ul_fl_rule_v4 (%d)/wan_ul_fl_rule_v6 (%d) > MAX_WAN_UL_FILTER_RULES (%d), aborting...\n",
-			num_wan_ul_fl_rule_v4,
-			num_wan_ul_fl_rule_v6,
+			num_wan_ul_fl_rule_v4[0],
+			num_wan_ul_fl_rule_v6[0],
 			MAX_WAN_UL_FILTER_RULES);
 #ifdef IPA_V6_UL_WL_FIREWALL_HANDLE
 		IPACM_LOG(IPACM_LOG_ERR, "IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES %d\n", IPACM_MAX_V6_UL_WL_FIREWALL_ENTRIES);
@@ -5326,7 +5374,7 @@ int IPACM_Wlan::delete_uplink_filter_rule_per_client
 
 	if ((iptype == IPA_IP_v4) && get_client_memptr(wlan_client, clnt_indx)->ipv4_ul_rules_set)
 	{
-		IPACM_LOG(IPACM_LOG_INFO, "Del (%d) num of v4 UL rules for cliend idx:%d\n", num_wan_ul_fl_rule_v4, clnt_indx);
+		IPACM_LOG(IPACM_LOG_INFO, "Del (%d) num of v4 UL rules for cliend idx:%d\n", num_wan_ul_fl_rule_v4[0], clnt_indx);
 		if (m_filtering.DeleteFilteringHdls(get_client_memptr(wlan_client, clnt_indx)->wan_ul_fl_rule_hdl_v4,
 				iptype, num_wan_ul_fl_rule_v4[0]) == false)
 		{
@@ -5394,3 +5442,1552 @@ int IPACM_Wlan::delete_uplink_filter_rule
 	return ret;
 }
 #endif
+
+int IPACM_Wlan::handle_wlan_qos_route_rule(uint8_t *client_mac,
+	uint16_t client_vlan_id, ipa_ip_type iptype,
+	list<qos_param_info>::iterator qos_param,
+	uint32_t *ipv6_addr)
+{
+	struct ipa_ioc_add_rt_rule *rt_rule;
+	struct ipa_rt_rule_add *rt_rule_entry;
+	uint32_t tx_index;
+	int wlan_index;
+	const int NUM = 1;
+	qos_client_info new_client_info;
+	uint8_t zero_mac_array[IPA_MAC_ADDR_SIZE] = { 0 };
+	int v6_num = 0, size = 0;
+	struct ipa_ioc_add_hdr_proc_ctx *hdr_proc_ctx_table = NULL;
+	struct ipa_hdr_proc_ctx_add *hdr_proc_ctx = NULL;
+
+	if(tx_prop == NULL)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "No rx properties registered for iface %s\n", dev_name);
+		return IPACM_SUCCESS;
+	}
+
+	IPACM_LOG(IPACM_LOG_DEBUG, "Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+					 client_mac[0], client_mac[1], client_mac[2],
+					 client_mac[3], client_mac[4], client_mac[5]);
+
+	wlan_index = get_wlan_client_index(client_mac, client_vlan_id);
+	if (wlan_index == IPACM_INVALID_INDEX)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "eth client not found/attached \n");
+		return IPACM_SUCCESS;
+	}
+
+	if (iptype==IPA_IP_v4) {
+		IPACM_LOG(IPACM_LOG_DEBUG, "eth client index: %d, ip-type: %d, ipv4_set:%d \n",
+			wlan_index, iptype, qos_param->route_rule_set_v4);
+	} else {
+		IPACM_LOG(IPACM_LOG_DEBUG, "eth client index: %d, ip-type: %d, ipv6_set:%d \n",
+			wlan_index, iptype, qos_param->route_rule_set_v6);
+	}
+	/* Add default routing rules if not set yet */
+	if ((iptype == IPA_IP_v4
+			 && qos_param->route_rule_set_v4 == false)
+			|| (iptype == IPA_IP_v6
+		            && qos_param->route_rule_set_v6 == false
+					))
+	{
+		if(IPACM_Iface::ipacmcfg->GetIPAVer() >=
+			IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
+		{
+			/* Add corresponding ipa_rm_resource_name of TX-endpoint up
+			   before IPV6 RT-rule set */
+			IPACM_LOG(IPACM_LOG_DEBUG, "dev %s add producer dependency\n", dev_name);
+			if (tx_prop != NULL)
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "depend Got pipe %d rm index : %d \n",
+				tx_prop->tx[0].dst_pipe,
+				IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe]);
+				IPACM_Iface::ipacmcfg->AddRmDepend(
+				IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe],false);
+			}
+		}
+		rt_rule = (struct ipa_ioc_add_rt_rule *)
+			 calloc(1, sizeof(struct ipa_ioc_add_rt_rule) +
+						NUM * sizeof(struct ipa_rt_rule_add));
+
+		if (rt_rule == NULL)
+		{
+			IPACM_LOG(IPACM_LOG_ERR, "Error Locate ipa_ioc_add_rt_rule memory...\n");
+			return IPACM_FAILURE;
+		}
+
+		size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
+		hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
+		if (hdr_proc_ctx_table == NULL) {
+			IPACM_LOG(IPACM_LOG_ERR, "Failed to allocate memory for hdr_proc_ctx.\n");
+			return IPACM_FAILURE;
+		}
+
+		rt_rule->commit = false; /* Install all qos route rules together */
+		rt_rule->num_rules = (uint8_t)NUM;
+		rt_rule->ip = iptype;
+
+		for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+		{
+#ifdef IPA_HDR_L2_802_1Q_AST
+			/* skip to the next tx index if the client type and hdr_l2_type are not matching */
+			if ((get_client_memptr(wlan_client, wlan_index)->is_vlan &&
+					(tx_prop->tx[tx_index].hdr_l2_type != IPA_HDR_L2_802_1Q_AST && tx_prop->tx[tx_index].hdr_l2_type != IPA_HDR_L2_802_1Q)) ||
+					(!get_client_memptr(wlan_client, wlan_index)->is_vlan &&
+					(tx_prop->tx[tx_index].hdr_l2_type == IPA_HDR_L2_802_1Q_AST || tx_prop->tx[tx_index].hdr_l2_type == IPA_HDR_L2_802_1Q)))
+			{
+				continue;
+			}
+#endif
+			if (iptype != tx_prop->tx[tx_index].ip)
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "Tx:%d, ip-type: %d conflict ip-type: %d no RT-rule"
+				" added\n", tx_index, tx_prop->tx[tx_index].ip, iptype);
+				continue;
+			}
+
+			/*if (tx_prop->tx[tx_index].tc_bmap == 0)
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "Tx:%d with pipe tc 0x%x is not for qos traffic... skip and continue\n",
+					tx_index, tx_prop->tx[tx_index].tc_bmap);
+				continue;
+			}*/
+
+			IPACM_LOG(IPACM_LOG_DEBUG, "Pipe Tx:%d, ip-type: %d debug traffic class 0x%x "
+					"bmap_tc 0x%x to be compared with pipe tc 0x%x\n",
+					tx_index, tx_prop->tx[tx_index].ip,
+					qos_param->traffic_class,
+					get_u8_bitmap_from_tc(qos_param->traffic_class),
+					tx_prop->tx[tx_index].tc_bmap);
+
+			IPACM_LOG(IPACM_LOG_DEBUG, "Qos params, sport_start %d sport_end %d dport_start %d"
+				", dport_end %d, dscp_mark %d\n", qos_param->ip_tup.sport_start,
+				qos_param->ip_tup.sport_end, qos_param->ip_tup.dport_start,
+				qos_param->ip_tup.dport_end, qos_param->dscp_mark_val);
+
+			IPACM_LOG(IPACM_LOG_DEBUG, "Qos params, protocol %d, src_ip_addr 0x%x, dst_ip_addr"
+				" 0x%x, dscp %d\n", qos_param->ip_tup.protocol,
+				qos_param->ip_tup.src_ip_addr, qos_param->ip_tup.dst_ip_addr, qos_param->dscp);
+
+			IPACM_LOG(IPACM_LOG_ERR, "Qos params, src ipv6 addr: 0x%x:%x:%x:%x, dst ipv6 addr:0x%x:%x:%x:%x\n",
+				qos_param->ip_tup.src_v6_ip_addr[0],
+				qos_param->ip_tup.src_v6_ip_addr[1],
+				qos_param->ip_tup.src_v6_ip_addr[2],
+				qos_param->ip_tup.src_v6_ip_addr[3],
+				qos_param->ip_tup.dst_v6_ip_addr[0],
+				qos_param->ip_tup.dst_v6_ip_addr[1],
+				qos_param->ip_tup.dst_v6_ip_addr[2],
+				qos_param->ip_tup.dst_v6_ip_addr[3]);
+
+			/*if (!(tx_prop->tx[tx_index].tc_bmap &
+				get_u8_bitmap_from_tc(qos_param->traffic_class)))
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "Pipe Tx:%d, ip-type: %d conflicting traffic class "
+					"0x%x with pipe tc 0x%x\n", tx_index,
+					tx_prop->tx[tx_index].ip, qos_param->traffic_class,
+					tx_prop->tx[tx_index].tc_bmap);
+				continue;
+			}*/
+
+			rt_rule_entry = &rt_rule->rules[0];
+			rt_rule_entry->at_rear = false;
+
+			if (iptype == IPA_IP_v4)
+			{
+				if (!get_client_memptr(wlan_client, wlan_index)->ipv4_header_set ||
+					!get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v4)
+				{
+					IPACM_LOG(IPACM_LOG_ERR, "Client v4 set %d hdl %d is not a valid v4 handle to install qos rule\n",
+							   get_client_memptr(wlan_client, wlan_index)->ipv4_header_set,
+							   get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v4);
+				}
+
+				IPACM_LOG(IPACM_LOG_DEBUG, "client index(%d):ipv4 address: 0x%x\n", wlan_index,
+					get_client_memptr(wlan_client, wlan_index)->v4_addr);
+
+				IPACM_LOG(IPACM_LOG_DEBUG, "client(%d): v4 header handle:(0x%x)\n",
+					wlan_index,
+					get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v4);
+				strlcpy(rt_rule->rt_tbl_name,
+					IPACM_Iface::ipacmcfg->rt_tbl_lan_v4.name,
+					sizeof(rt_rule->rt_tbl_name));
+				rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+				rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
+				memcpy(&rt_rule_entry->rule.attrib,
+					&tx_prop->tx[tx_index].attrib,
+					sizeof(rt_rule_entry->rule.attrib));
+				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+				{
+					rt_rule_entry->rule.hashable = true;
+				}
+				//Client ip is required to differentiate different clients, else hdr collision will happen
+				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+				rt_rule_entry->rule.attrib.u.v4.dst_addr =
+					get_client_memptr(wlan_client, wlan_index)->v4_addr;
+				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xffffffff;
+
+				// IP Tuple
+				if (qos_param->ip_tup.src_ip_addr)
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+					rt_rule_entry->rule.attrib.u.v4.src_addr =
+						qos_param->ip_tup.src_ip_addr;
+					rt_rule_entry->rule.attrib.u.v4.src_addr_mask =
+						qos_param->ip_tup.src_sub_mask;
+				}
+
+				if (qos_param->ip_tup.dst_ip_addr)
+				{
+					if (qos_param->ip_tup.dst_ip_addr !=
+						get_client_memptr(wlan_client, wlan_index)->v4_addr)
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "Mismatched destination qos ip addr 0x%x with "
+						"client ip 0x%x\n", qos_param->ip_tup.dst_ip_addr,
+						get_client_memptr(wlan_client, wlan_index)->v4_addr);
+						return IPACM_SUCCESS;
+					}
+				}
+
+				// If single port is provided
+				if (qos_param->ip_tup.sport_start &&
+					(qos_param->ip_tup.sport_start == qos_param->ip_tup.sport_end))
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT;
+					rt_rule_entry->rule.attrib.src_port = qos_param->ip_tup.sport_start;
+				}
+				// If port range is provided
+				else if (qos_param->ip_tup.sport_start && qos_param->ip_tup.sport_end)
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT_RANGE;
+					rt_rule_entry->rule.attrib.src_port_lo = qos_param->ip_tup.sport_start;
+					rt_rule_entry->rule.attrib.src_port_hi = qos_param->ip_tup.sport_end;
+				}
+
+				// If single port is provided
+				if (qos_param->ip_tup.dport_start &&
+					(qos_param->ip_tup.dport_start == qos_param->ip_tup.dport_end))
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT;
+					rt_rule_entry->rule.attrib.dst_port = qos_param->ip_tup.dport_start;
+				}
+				else if (qos_param->ip_tup.dport_start && qos_param->ip_tup.dport_end)
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
+					rt_rule_entry->rule.attrib.dst_port_lo = qos_param->ip_tup.dport_start;
+					rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
+				}
+
+				if (qos_param->ip_tup.protocol)
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
+					rt_rule_entry->rule.attrib.u.v4.protocol = qos_param->ip_tup.protocol;
+				}
+
+				if (qos_param->vlan_id)
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr =
+						get_client_memptr(wlan_client, wlan_index)->v4_addr;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xffffffff;
+				}
+
+				if (qos_param->dscp)
+				{
+					rt_rule_entry->rule.hashable = false;
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
+					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
+					rt_rule_entry->rule.attrib.tos_mask = 0xFC;
+				}
+
+				if (qos_param->pcp)
+				{
+					IPACM_LOG(IPACM_LOG_ERR, "QOS param PCP no action from IPA \n");
+				}
+
+				memset(hdr_proc_ctx_table, 0, size);
+				hdr_proc_ctx_table->commit = 1;
+				hdr_proc_ctx_table->num_proc_ctxs = 1;
+				hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
+				hdr_proc_ctx->type = IPA_HDR_PROC_MARK_DSCP;
+
+				hdr_proc_ctx->pdn_dscp_params.valid = 1;
+				hdr_proc_ctx->pdn_dscp_params.dscp_val = qos_param->dscp_mark_val;
+
+				hdr_proc_ctx->hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v4;
+				IPACM_LOG(IPACM_LOG_DEBUG, "hdr_proc_ctx->hdr_hdl v4 0x%x\n", hdr_proc_ctx->hdr_hdl);
+
+				if (m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false ||
+					hdr_proc_ctx_table->proc_ctx[0].status != 0) {
+					IPACM_LOG(IPACM_LOG_ERR, "ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp marking failed: %d\n",
+						hdr_proc_ctx_table->proc_ctx[0].status);
+					free(hdr_proc_ctx_table);
+					return IPACM_FAILURE;
+				}
+
+				rt_rule_entry->rule.hdr_proc_ctx_hdl = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
+				IPACM_LOG(IPACM_LOG_DEBUG, "rt->hdr_proc_ctx_hdl v4 0x%x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
+
+				if (false == m_routing.AddRoutingRule(rt_rule))
+				{
+					IPACM_LOG(IPACM_LOG_ERR, "Routing rule addition failed!\n");
+					free(rt_rule);
+					return IPACM_FAILURE;
+				}
+
+				/* copy ipv4 RT hdl */
+				memset(&new_client_info, 0 , sizeof(new_client_info));
+
+				new_client_info.qos_rt_rule_hdl_v4 = rt_rule->rules[0].rt_rule_hdl;
+				new_client_info.route_rule_set_v4 = true;
+				new_client_info.v4_ip_addr = rt_rule_entry->rule.attrib.u.v4.dst_addr;
+				new_client_info.dscp_hpc_hdl_v4 = rt_rule_entry->rule.hdr_proc_ctx_hdl;
+				new_client_info.client_iface = ipa_if_num;
+
+				memcpy(new_client_info.mac,
+					get_client_memptr(wlan_client, wlan_index)->mac, IPA_MAC_ADDR_SIZE);
+
+				qos_param->qos_client_list.push_front(new_client_info);
+				qos_param->client_cnt++;
+				IPACM_LOG(IPACM_LOG_DEBUG, "tx:%d, rt rule hdl=%x ip-type: %d client cnt %d, iface %d\n",
+					tx_index, new_client_info.qos_rt_rule_hdl_v4, iptype,
+					qos_param->client_cnt, new_client_info.client_iface);
+			}
+			else
+			{
+				if (get_client_memptr(wlan_client, wlan_index)->ipv6_header_set &&
+						get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v6)
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "client-index(%d): v6 header handle:(0x%x), v6 addr : 0x%08x:%08x:%08x:%08x\n",
+						wlan_index,
+						get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v6);
+
+					/*Copy same rule to v6 WAN RT TBL*/
+					strlcpy(rt_rule->rt_tbl_name,
+						IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name,
+						sizeof(rt_rule->rt_tbl_name));
+					rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+					/* Downlink traffic from Wan iface, directly through IPA */
+					rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
+					memcpy(&rt_rule_entry->rule.attrib,
+						&tx_prop->tx[tx_index].attrib,
+						sizeof(rt_rule_entry->rule.attrib));
+					rt_rule_entry->rule.hdr_hdl =
+						get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v6;
+
+					if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+						rt_rule_entry->rule.hashable = true;
+					if ((ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
+						ipv6_addr[3]))
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] =
+							ipv6_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] =
+							ipv6_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] =
+							ipv6_addr[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] =
+							ipv6_addr[3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xffffffff;
+					}
+
+					// IP Tuple V6 params
+					if (qos_param->ip_tup.src_v6_ip_addr[0] ||
+						qos_param->ip_tup.src_v6_ip_addr[1])
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.src_addr[0] =
+							qos_param->ip_tup.src_v6_ip_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[1] =
+							qos_param->ip_tup.src_v6_ip_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[2] =
+							qos_param->ip_tup.src_v6_ip_addr[2];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[3] =
+							qos_param->ip_tup.src_v6_ip_addr[3];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] =
+							qos_param->ip_tup.src_v6_sub_mask[0];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] =
+							qos_param->ip_tup.src_v6_sub_mask[1];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] =
+							qos_param->ip_tup.src_v6_sub_mask[2];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] =
+							qos_param->ip_tup.src_v6_sub_mask[3];
+					}
+
+					if (qos_param->ip_tup.dst_v6_ip_addr[0] ||
+						qos_param->ip_tup.dst_v6_ip_addr[1])
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] =
+							qos_param->ip_tup.dst_v6_ip_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] =
+							qos_param->ip_tup.dst_v6_ip_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] =
+							qos_param->ip_tup.dst_v6_ip_addr[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] =
+							qos_param->ip_tup.dst_v6_ip_addr[3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] =
+							qos_param->ip_tup.dst_v6_sub_mask[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] =
+							qos_param->ip_tup.dst_v6_sub_mask[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] =
+							qos_param->ip_tup.dst_v6_sub_mask[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] =
+							qos_param->ip_tup.dst_v6_sub_mask[3];
+					}
+
+					// If single port is provided
+					if (qos_param->ip_tup.sport_start &&
+						(qos_param->ip_tup.sport_start == qos_param->ip_tup.sport_end))
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT;
+						rt_rule_entry->rule.attrib.src_port = qos_param->ip_tup.sport_start;
+					}
+					else if (qos_param->ip_tup.sport_start &&
+						qos_param->ip_tup.sport_end) // If port range is provided
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT_RANGE;
+						rt_rule_entry->rule.attrib.src_port_lo = qos_param->ip_tup.sport_start;
+						rt_rule_entry->rule.attrib.src_port_hi = qos_param->ip_tup.sport_end;
+					}
+
+					// If single port is provided
+					if (qos_param->ip_tup.dport_start &&
+						(qos_param->ip_tup.dport_start == qos_param->ip_tup.dport_end))
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT;
+						rt_rule_entry->rule.attrib.dst_port = qos_param->ip_tup.dport_start;
+					}
+					else if (qos_param->ip_tup.dport_start && qos_param->ip_tup.dport_end)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
+						rt_rule_entry->rule.attrib.dst_port_lo = qos_param->ip_tup.dport_start;
+						rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
+					}
+
+					if (qos_param->ip_tup.protocol)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+						rt_rule_entry->rule.attrib.u.v6.next_hdr = qos_param->ip_tup.protocol;
+					}
+
+					if (qos_param->vlan_id)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] =
+							ipv6_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] =
+							ipv6_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] =
+							ipv6_addr[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] =
+							ipv6_addr[3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xffffffff;
+					}
+
+					if (qos_param->dscp)
+					{
+						rt_rule_entry->rule.hashable = false;
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
+						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
+						rt_rule_entry->rule.attrib.tos_mask = 0xFC;
+					}
+
+					if (qos_param->pcp)
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "QOS param PCP no v6 route rule action from IPA \n");
+					}
+
+					if (false == m_routing.AddRoutingRule(rt_rule))
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "Routing rule addition failed!\n");
+						free(rt_rule);
+						return IPACM_FAILURE;
+					}
+
+					new_client_info.qos_rt_rule_hdl_v6 = rt_rule->rules[0].rt_rule_hdl;
+					new_client_info.route_rule_set_v6 = true;
+
+					new_client_info.client_iface = ipa_if_num;
+
+					new_client_info.v6_ip_addr[0] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0];
+					new_client_info.v6_ip_addr[1] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1];
+					new_client_info.v6_ip_addr[2] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2];
+					new_client_info.v6_ip_addr[3] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3];
+
+					memcpy(new_client_info.mac,
+						get_client_memptr(wlan_client, wlan_index)->mac,
+						IPA_MAC_ADDR_SIZE);
+
+					IPACM_LOG(IPACM_LOG_DEBUG, "tx:%d, rt rule hdl=%x ip-type: %d iface %d\n", tx_index,
+							   new_client_info.qos_rt_rule_hdl_v6, iptype,
+							   new_client_info.client_iface);
+					qos_param->qos_client_list.push_front(new_client_info);
+					qos_param->client_cnt++;
+				}
+			}
+		} /* end of for loop */
+
+		free(rt_rule);
+	}
+	return IPACM_SUCCESS;
+}
+
+/*handle qos routing rules for v2*/
+int IPACM_Wlan::handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac,
+	uint16_t client_vlan_id, ipa_ip_type iptype,
+	list<qos_param_info>::iterator qos_param,
+	uint32_t *ipv6_addr)
+{
+	struct ipa_ioc_add_rt_rule_ext_v2 *rt_rule;
+	struct ipa_rt_rule_add_ext_v2 *rt_rule_entry;
+	uint32_t tx_index;
+	int wlan_index;
+	const int NUM = 1;
+	qos_client_info new_client_info;
+	uint8_t zero_mac_array[IPA_MAC_ADDR_SIZE] = { 0 };
+	int v6_num = 0;
+	struct ipa_ioc_add_hdr_proc_ctx *hdr_proc_ctx_table = NULL;
+	struct ipa_hdr_proc_ctx_add *hdr_proc_ctx = NULL;
+	uint64_t rules, size = 0;
+
+	if(tx_prop == NULL)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "No rx properties registered for iface %s\n", dev_name);
+		return IPACM_SUCCESS;
+	}
+
+	IPACM_LOG(IPACM_LOG_DEBUG, "Received mac_addr MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
+					 client_mac[0], client_mac[1], client_mac[2],
+					 client_mac[3], client_mac[4], client_mac[5]);
+
+	wlan_index = get_wlan_client_index(client_mac, client_vlan_id);
+	if (wlan_index == IPACM_INVALID_INDEX)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "eth client not found/attached \n");
+		return IPACM_SUCCESS;
+	}
+
+	if (iptype==IPA_IP_v4) {
+		IPACM_LOG(IPACM_LOG_DEBUG, "eth client index: %d, ip-type: %d, ipv4_set:%d \n",
+			wlan_index, iptype, qos_param->route_rule_set_v4);
+	} else {
+		IPACM_LOG(IPACM_LOG_DEBUG, "eth client index: %d, ip-type: %d, ipv6_set:%d \n",
+			wlan_index, iptype, qos_param->route_rule_set_v6);
+	}
+	/* Add default routing rules if not set yet */
+	if ((iptype == IPA_IP_v4
+			 && qos_param->route_rule_set_v4 == false)
+			|| (iptype == IPA_IP_v6
+		            && qos_param->route_rule_set_v6 == false
+					))
+	{
+		if(IPACM_Iface::ipacmcfg->GetIPAVer() >=
+			IPA_HW_None && IPACM_Iface::ipacmcfg->GetIPAVer() < IPA_HW_v4_0)
+		{
+			/* Add corresponding ipa_rm_resource_name of TX-endpoint up
+			   before IPV6 RT-rule set */
+			IPACM_LOG(IPACM_LOG_DEBUG, "dev %s add producer dependency\n", dev_name);
+			if (tx_prop != NULL)
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "depend Got pipe %d rm index : %d \n",
+				tx_prop->tx[0].dst_pipe,
+				IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe]);
+				IPACM_Iface::ipacmcfg->AddRmDepend(
+				IPACM_Iface::ipacmcfg->ipa_client_rm_map_tbl[tx_prop->tx[0].dst_pipe],false);
+			}
+		}
+		rt_rule = (struct ipa_ioc_add_rt_rule_ext_v2 *)
+			 calloc(1, sizeof(struct ipa_ioc_add_rt_rule_ext_v2));
+
+		if (rt_rule == NULL)
+		{
+			IPACM_LOG(IPACM_LOG_ERR, "Error Locate ipa_ioc_add_rt_rule memory...\n");
+			return IPACM_FAILURE;
+		}
+
+		size = sizeof(ipa_ioc_add_hdr_proc_ctx) + sizeof(ipa_hdr_proc_ctx_add);
+		hdr_proc_ctx_table = (ipa_ioc_add_hdr_proc_ctx *)malloc(size);
+		if (hdr_proc_ctx_table == NULL) {
+			IPACM_LOG(IPACM_LOG_ERR, "Failed to allocate memory for hdr_proc_ctx.\n");
+			return IPACM_FAILURE;
+		}
+
+		rt_rule->rules = (uintptr_t)calloc(NUM, sizeof(struct ipa_rt_rule_add_ext_v2));
+		if (!rt_rule->rules) {
+			IPACM_LOG(IPACM_LOG_ERR, "Failed to allocate memory.\n");
+			free(rt_rule);
+			return IPACM_FAILURE;
+		}
+		rt_rule->rule_add_ext_size = sizeof(struct ipa_rt_rule_add_ext_v2);
+
+		rt_rule->commit = false; /* Install all qos route rules together */
+		rt_rule->num_rules = (uint8_t)NUM;
+		rt_rule->ip = iptype;
+
+		for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+		{
+			if (iptype != tx_prop->tx[tx_index].ip)
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "Tx:%d, ip-type: %d conflict ip-type: %d no RT-rule"
+				" added\n", tx_index, tx_prop->tx[tx_index].ip, iptype);
+				continue;
+			}
+
+			/*if (tx_prop->tx[tx_index].tc_bmap == 0)
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "Tx:%d with pipe tc 0x%x is not for qos traffic... skip and continue\n",
+					tx_index, tx_prop->tx[tx_index].tc_bmap);
+				continue;
+			}*/
+
+			IPACM_LOG(IPACM_LOG_DEBUG, "Pipe Tx:%d, ip-type: %d debug traffic class 0x%x "
+					"bmap_tc 0x%x to be compared with pipe tc 0x%x\n",
+					tx_index, tx_prop->tx[tx_index].ip,
+					qos_param->traffic_class,
+					get_u8_bitmap_from_tc(qos_param->traffic_class),
+					tx_prop->tx[tx_index].tc_bmap);
+
+			IPACM_LOG(IPACM_LOG_DEBUG, "Qos params, sport_start %d sport_end %d dport_start %d"
+				", dport_end %d, \n", qos_param->ip_tup.sport_start,
+				qos_param->ip_tup.sport_end, qos_param->ip_tup.dport_start,
+				qos_param->ip_tup.dport_end);
+
+			IPACM_LOG(IPACM_LOG_DEBUG, "Qos params, protocol %d, src_ip_addr 0x%x, dst_ip_addr"
+				" 0x%x, dscp %d\n", qos_param->ip_tup.protocol,
+				qos_param->ip_tup.src_ip_addr, qos_param->ip_tup.dst_ip_addr, qos_param->dscp);
+
+			IPACM_LOG(IPACM_LOG_ERR, "Qos params, src ipv6 addr: 0x%x:%x:%x:%x, dst ipv6 addr:0x%x:%x:%x:%x\n",
+				qos_param->ip_tup.src_v6_ip_addr[0],
+				qos_param->ip_tup.src_v6_ip_addr[1],
+				qos_param->ip_tup.src_v6_ip_addr[2],
+				qos_param->ip_tup.src_v6_ip_addr[3],
+				qos_param->ip_tup.dst_v6_ip_addr[0],
+				qos_param->ip_tup.dst_v6_ip_addr[1],
+				qos_param->ip_tup.dst_v6_ip_addr[2],
+				qos_param->ip_tup.dst_v6_ip_addr[3]);
+
+			/*if (!(tx_prop->tx[tx_index].tc_bmap &
+				get_u8_bitmap_from_tc(qos_param->traffic_class)))
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "Pipe Tx:%d, ip-type: %d conflicting traffic class "
+					"0x%x with pipe tc 0x%x\n", tx_index,
+					tx_prop->tx[tx_index].ip, qos_param->traffic_class,
+					tx_prop->tx[tx_index].tc_bmap);
+				continue;
+			}*/
+
+			rules = rt_rule->rules;
+			rt_rule_entry = (struct ipa_rt_rule_add_ext_v2 *)rules;
+			rt_rule_entry->at_rear = false;
+
+			if (iptype == IPA_IP_v4)
+			{
+				if (!get_client_memptr(wlan_client, wlan_index)->ipv4_header_set ||
+					!get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v4)
+				{
+					IPACM_LOG(IPACM_LOG_ERR, "Client v4 set %d hdl %d is not a valid v4 handle to install qos rule\n",
+							   get_client_memptr(wlan_client, wlan_index)->ipv4_header_set,
+							   get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v4);
+				}
+
+				IPACM_LOG(IPACM_LOG_DEBUG, "client index(%d):ipv4 address: 0x%x\n", wlan_index,
+					get_client_memptr(wlan_client, wlan_index)->v4_addr);
+
+				IPACM_LOG(IPACM_LOG_DEBUG, "client(%d): v4 header handle:(0x%x)\n",
+					wlan_index,
+					get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v4);
+				strlcpy(rt_rule->rt_tbl_name,
+					IPACM_Iface::ipacmcfg->rt_tbl_lan_v4.name,
+					sizeof(rt_rule->rt_tbl_name));
+				rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+				rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
+				memcpy(&rt_rule_entry->rule.attrib,
+					&tx_prop->tx[tx_index].attrib,
+					sizeof(rt_rule_entry->rule.attrib));
+				if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+				{
+					rt_rule_entry->rule.hashable = true;
+				}
+				rt_rule_entry->rule.enable_stats = true;
+				rt_rule_entry->rule.cnt_idx =
+					get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx;
+				IPACM_LOG(IPACM_LOG_DEBUG, "wlan_client dl index (%d) \n", rt_rule_entry->rule.cnt_idx);
+
+				//Client ip is required to differentiate different clients, else hdr collision will happen
+				rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+				rt_rule_entry->rule.attrib.u.v4.dst_addr =
+					get_client_memptr(wlan_client, wlan_index)->v4_addr;
+				rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xffffffff;
+
+				// IP Tuple
+				if (qos_param->ip_tup.src_ip_addr)
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+					rt_rule_entry->rule.attrib.u.v4.src_addr =
+						qos_param->ip_tup.src_ip_addr;
+					rt_rule_entry->rule.attrib.u.v4.src_addr_mask =
+						qos_param->ip_tup.src_sub_mask;
+				}
+
+				if (qos_param->ip_tup.dst_ip_addr)
+				{
+					if (qos_param->ip_tup.dst_ip_addr !=
+						get_client_memptr(wlan_client, wlan_index)->v4_addr)
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "Mismatched destination qos ip addr 0x%x with "
+						"client ip 0x%x\n", qos_param->ip_tup.dst_ip_addr,
+						get_client_memptr(wlan_client, wlan_index)->v4_addr);
+						return IPACM_SUCCESS;
+					}
+				}
+
+				// If single port is provided
+				if (qos_param->ip_tup.sport_start &&
+					(qos_param->ip_tup.sport_start == qos_param->ip_tup.sport_end))
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT;
+					rt_rule_entry->rule.attrib.src_port = qos_param->ip_tup.sport_start;
+				}
+				// If port range is provided
+				else if (qos_param->ip_tup.sport_start && qos_param->ip_tup.sport_end)
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT_RANGE;
+					rt_rule_entry->rule.attrib.src_port_lo = qos_param->ip_tup.sport_start;
+					rt_rule_entry->rule.attrib.src_port_hi = qos_param->ip_tup.sport_end;
+				}
+
+				// If single port is provided
+				if (qos_param->ip_tup.dport_start &&
+					(qos_param->ip_tup.dport_start == qos_param->ip_tup.dport_end))
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT;
+					rt_rule_entry->rule.attrib.dst_port = qos_param->ip_tup.dport_start;
+				}
+				else if (qos_param->ip_tup.dport_start && qos_param->ip_tup.dport_end)
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
+					rt_rule_entry->rule.attrib.dst_port_lo = qos_param->ip_tup.dport_start;
+					rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
+				}
+
+				if (qos_param->ip_tup.protocol)
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_PROTOCOL;
+					rt_rule_entry->rule.attrib.u.v4.protocol = qos_param->ip_tup.protocol;
+				}
+
+				if (qos_param->vlan_id)
+				{
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr =
+						get_client_memptr(wlan_client, wlan_index)->v4_addr;
+					rt_rule_entry->rule.attrib.u.v4.dst_addr_mask = 0xffffffff;
+				}
+
+				if (qos_param->dscp)
+				{
+					rt_rule_entry->rule.hashable = false;
+					rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
+					rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
+					rt_rule_entry->rule.attrib.tos_mask = 0xFC;
+				}
+
+				if (qos_param->pcp)
+				{
+					IPACM_LOG(IPACM_LOG_ERR, "QOS param PCP no action from IPA \n");
+				}
+
+				memset(hdr_proc_ctx_table, 0, size);
+				hdr_proc_ctx_table->commit = 1;
+				hdr_proc_ctx_table->num_proc_ctxs = 1;
+				hdr_proc_ctx = &hdr_proc_ctx_table->proc_ctx[0];
+				hdr_proc_ctx->type = IPA_HDR_PROC_MARK_DSCP;
+
+				hdr_proc_ctx->pdn_dscp_params.valid = 1;
+				hdr_proc_ctx->pdn_dscp_params.dscp_val = qos_param->dscp_mark_val;
+
+				hdr_proc_ctx->hdr_hdl = get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v4;
+				IPACM_LOG(IPACM_LOG_DEBUG, "hdr_proc_ctx->hdr_hdl v4 0x%x\n", hdr_proc_ctx->hdr_hdl);
+
+				if (m_header.AddHeaderProcCtx(hdr_proc_ctx_table) == false ||
+					hdr_proc_ctx_table->proc_ctx[0].status != 0) {
+					IPACM_LOG(IPACM_LOG_ERR, "ioctl IPA_IOC_ADD_HDR_PROC_CTX for dscp marking failed: %d\n",
+						hdr_proc_ctx_table->proc_ctx[0].status);
+					free(hdr_proc_ctx_table);
+					return IPACM_FAILURE;
+				}
+
+				rt_rule_entry->rule.hdr_proc_ctx_hdl = hdr_proc_ctx_table->proc_ctx[0].proc_ctx_hdl;
+				IPACM_LOG(IPACM_LOG_DEBUG, "rt->hdr_proc_ctx_hdl v4 0x%x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
+
+				if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
+				{
+					IPACM_LOG(IPACM_LOG_ERR, "Routing rule addition failed!\n");
+					free(rt_rule);
+					return IPACM_FAILURE;
+				}
+
+				/* copy ipv4 RT hdl */
+				memset(&new_client_info, 0 , sizeof(new_client_info));
+
+				new_client_info.qos_rt_rule_hdl_v4 = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
+				new_client_info.route_rule_set_v4 = true;
+				new_client_info.v4_ip_addr = rt_rule_entry->rule.attrib.u.v4.dst_addr;
+				new_client_info.dscp_hpc_hdl_v4 = rt_rule_entry->rule.hdr_proc_ctx_hdl;
+				new_client_info.client_iface = ipa_if_num;
+
+				memcpy(new_client_info.mac,
+					get_client_memptr(wlan_client, wlan_index)->mac, IPA_MAC_ADDR_SIZE);
+
+				qos_param->qos_client_list.push_front(new_client_info);
+				qos_param->client_cnt++;
+				IPACM_LOG(IPACM_LOG_DEBUG, "tx:%d, rt rule hdl=%x ip-type: %d client cnt %d iface %d\n",
+					tx_index, new_client_info.qos_rt_rule_hdl_v4, iptype,
+					qos_param->client_cnt, new_client_info.client_iface);
+			}
+			else
+			{
+				if (get_client_memptr(wlan_client, wlan_index)->ipv6_header_set &&
+						get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v6)
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "client(%d): v6 header handle:(0x%x)\n",
+						wlan_index,
+						get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v6);
+
+					/*Copy same rule to v6 WAN RT TBL*/
+					strlcpy(rt_rule->rt_tbl_name,
+						IPACM_Iface::ipacmcfg->rt_tbl_wan_v6.name,
+						sizeof(rt_rule->rt_tbl_name));
+					rt_rule->rt_tbl_name[IPA_RESOURCE_NAME_MAX - 1] = '\0';
+					/* Downlink traffic from Wan iface, directly through IPA */
+					rt_rule_entry->rule.dst = tx_prop->tx[tx_index].dst_pipe;
+					memcpy(&rt_rule_entry->rule.attrib,
+						&tx_prop->tx[tx_index].attrib,
+						sizeof(rt_rule_entry->rule.attrib));
+					if (IPACM_Iface::ipacmcfg->GetIPAVer() >= IPA_HW_v4_0)
+						rt_rule_entry->rule.hashable = true;
+					rt_rule_entry->rule.hdr_hdl =
+						get_client_memptr(wlan_client, wlan_index)->hdr_hdl_v6;
+
+					rt_rule_entry->rule.enable_stats = true;
+					rt_rule_entry->rule.cnt_idx =
+						get_client_memptr(wlan_client, wlan_index)->dl_cnt_idx;
+					IPACM_LOG(IPACM_LOG_DEBUG, "wlan_client v6 dl index (%d) \n", rt_rule_entry->rule.cnt_idx);
+
+					if ((ipv6_addr[0] || ipv6_addr[1] || ipv6_addr[2] ||
+						ipv6_addr[3]))
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] =
+							ipv6_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] =
+							ipv6_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] =
+							ipv6_addr[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] =
+							ipv6_addr[3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xffffffff;
+					}
+
+					// IP Tuple V6 params
+					if (qos_param->ip_tup.src_v6_ip_addr[0] ||
+						qos_param->ip_tup.src_v6_ip_addr[1])
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.src_addr[0] =
+							qos_param->ip_tup.src_v6_ip_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[1] =
+							qos_param->ip_tup.src_v6_ip_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[2] =
+							qos_param->ip_tup.src_v6_ip_addr[2];
+						rt_rule_entry->rule.attrib.u.v6.src_addr[3] =
+							qos_param->ip_tup.src_v6_ip_addr[3];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[0] =
+							qos_param->ip_tup.src_v6_sub_mask[0];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[1] =
+							qos_param->ip_tup.src_v6_sub_mask[1];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[2] =
+							qos_param->ip_tup.src_v6_sub_mask[2];
+						rt_rule_entry->rule.attrib.u.v6.src_addr_mask[3] =
+							qos_param->ip_tup.src_v6_sub_mask[3];
+					}
+
+					if (qos_param->ip_tup.dst_v6_ip_addr[0] ||
+						qos_param->ip_tup.dst_v6_ip_addr[1])
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] =
+							qos_param->ip_tup.dst_v6_ip_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] =
+							qos_param->ip_tup.dst_v6_ip_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] =
+							qos_param->ip_tup.dst_v6_ip_addr[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] =
+							qos_param->ip_tup.dst_v6_ip_addr[3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] =
+							qos_param->ip_tup.dst_v6_sub_mask[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] =
+							qos_param->ip_tup.dst_v6_sub_mask[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] =
+							qos_param->ip_tup.dst_v6_sub_mask[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] =
+							qos_param->ip_tup.dst_v6_sub_mask[3];
+					}
+
+					// If single port is provided
+					if (qos_param->ip_tup.sport_start &&
+						(qos_param->ip_tup.sport_start == qos_param->ip_tup.sport_end))
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT;
+						rt_rule_entry->rule.attrib.src_port = qos_param->ip_tup.sport_start;
+					}
+					else if (qos_param->ip_tup.sport_start &&
+						qos_param->ip_tup.sport_end) // If port range is provided
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_SRC_PORT_RANGE;
+						rt_rule_entry->rule.attrib.src_port_lo = qos_param->ip_tup.sport_start;
+						rt_rule_entry->rule.attrib.src_port_hi = qos_param->ip_tup.sport_end;
+					}
+
+					// If single port is provided
+					if (qos_param->ip_tup.dport_start &&
+						(qos_param->ip_tup.dport_start == qos_param->ip_tup.dport_end))
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT;
+						rt_rule_entry->rule.attrib.dst_port = qos_param->ip_tup.dport_start;
+					}
+					else if (qos_param->ip_tup.dport_start && qos_param->ip_tup.dport_end)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_PORT_RANGE;
+						rt_rule_entry->rule.attrib.dst_port_lo = qos_param->ip_tup.dport_start;
+						rt_rule_entry->rule.attrib.dst_port_hi = qos_param->ip_tup.dport_end;
+					}
+
+					if (qos_param->ip_tup.protocol)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_NEXT_HDR;
+						rt_rule_entry->rule.attrib.u.v6.next_hdr = qos_param->ip_tup.protocol;
+					}
+
+					if (qos_param->vlan_id)
+					{
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_DST_ADDR;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0] =
+							ipv6_addr[0];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1] =
+							ipv6_addr[1];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2] =
+							ipv6_addr[2];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3] =
+							ipv6_addr[3];
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[0] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[1] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[2] = 0xffffffff;
+						rt_rule_entry->rule.attrib.u.v6.dst_addr_mask[3] = 0xffffffff;
+					}
+
+					if (qos_param->dscp)
+					{
+						rt_rule_entry->rule.hashable = false;
+						rt_rule_entry->rule.attrib.attrib_mask |= IPA_FLT_TOS_MASKED;
+						rt_rule_entry->rule.attrib.tos_value = qos_param->dscp << 2;
+						rt_rule_entry->rule.attrib.tos_mask = 0xFC;
+					}
+
+					if (qos_param->pcp)
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "QOS param PCP no v6 route rule action from IPA \n");
+					}
+
+					if (false == m_routing.AddRoutingRuleExt_v2(rt_rule))
+					{
+						IPACM_LOG(IPACM_LOG_ERR, "Routing rule addition failed!\n");
+						free(rt_rule);
+						return IPACM_FAILURE;
+					}
+
+					new_client_info.qos_rt_rule_hdl_v6 = ((struct ipa_rt_rule_add_ext_v2 *)rt_rule->rules)[0].rt_rule_hdl;
+					new_client_info.route_rule_set_v6 = true;
+
+					new_client_info.client_iface = ipa_if_num;
+
+					new_client_info.v6_ip_addr[0] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[0];
+					new_client_info.v6_ip_addr[1] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[1];
+					new_client_info.v6_ip_addr[2] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[2];
+					new_client_info.v6_ip_addr[3] =
+						rt_rule_entry->rule.attrib.u.v6.dst_addr[3];
+
+					memcpy(new_client_info.mac,
+						get_client_memptr(wlan_client, wlan_index)->mac,
+						IPA_MAC_ADDR_SIZE);
+
+					IPACM_LOG(IPACM_LOG_DEBUG, "tx:%d, rt rule hdl=%x ip-type: %d iface %d\n", tx_index,
+							   new_client_info.qos_rt_rule_hdl_v6, iptype, new_client_info.client_iface);
+					qos_param->qos_client_list.push_front(new_client_info);
+					qos_param->client_cnt++;
+				}
+			}
+
+		} /* end of for loop */
+
+		free(rt_rule);
+	}
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Wlan::if_wlan_client_qos_rule_needed(uint8_t * client_mac,
+	uint16_t client_vlan_id, list<qos_param_info>::iterator qos_param,
+	uint32_t *ipv6_addr)
+{
+	int ret = false;
+	int i = 0;
+	list<qos_client_info>::iterator it_qos_client;
+	int wlan_index;
+	uint8_t null_mac[IPA_MAC_ADDR_SIZE] = {0, 0, 0, 0, 0, 0};
+
+	wlan_index = get_wlan_client_index(client_mac, client_vlan_id);
+	if (wlan_index == IPACM_INVALID_INDEX)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "eth client not found/attached\n");
+		return ret;
+	}
+
+	if (!qos_param->dscp_mark_val)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "dscp marking not available for this qos config: %d .."
+			"skip this qos config\n", qos_param->dscp_mark_val);
+		return ret;
+	}
+
+	// Check if vlan type is matching, if client is non-vlan then qos param can't be vlan and vice versa
+	if (qos_param->vlan_id &&
+		(client_vlan_id != qos_param->vlan_id))
+	{
+		IPACM_LOG(IPACM_LOG_DEBUG, "Vlan client for non-vlan qos param or vice-versa,"
+				   "client vlan id %d , qos vlanid %d\n",
+				   client_vlan_id, qos_param->vlan_id);
+		return ret;
+	}
+
+	// Check if mac id is matching the qos rule mac id
+	if (memcmp(qos_param->dst_mac_addr, null_mac, sizeof(null_mac)) &&
+		memcmp(qos_param->dst_mac_addr,
+		get_client_memptr(wlan_client, wlan_index)->mac, IPA_MAC_ADDR_SIZE))
+	{
+		IPACM_LOG(IPACM_LOG_DEBUG, "Destination qos mac address %x:%x:%x:%x:%x:%x requested "
+				   "does not match client mac %x:%x:%x:%x:%x:%x, client vlanid %d\n",
+					 qos_param->dst_mac_addr[0], qos_param->dst_mac_addr[1],
+					 qos_param->dst_mac_addr[2], qos_param->dst_mac_addr[3],
+					 qos_param->dst_mac_addr[4], qos_param->dst_mac_addr[5],
+					 get_client_memptr(wlan_client, wlan_index)->mac[0],
+					 get_client_memptr(wlan_client, wlan_index)->mac[1],
+					 get_client_memptr(wlan_client, wlan_index)->mac[2],
+					 get_client_memptr(wlan_client, wlan_index)->mac[3],
+					 get_client_memptr(wlan_client, wlan_index)->mac[4],
+					 get_client_memptr(wlan_client, wlan_index)->mac[5],
+					 client_vlan_id);
+		return ret;
+	}
+
+	//don't install qos rules if client rules are not set
+	if (qos_param->ip_type == IPA_IP_v4)
+	{
+		if (!get_client_memptr(wlan_client, wlan_index)->route_rule_set_v4)
+		{
+			IPACM_LOG(IPACM_LOG_DEBUG, "v4 client rule is not set: %d, "
+					"cannot install qos v4 rule for this client\n",
+				get_client_memptr(wlan_client, wlan_index)->route_rule_set_v4);
+			return ret;
+		}
+		if (qos_param->ip_tup.dst_ip_addr)
+		{
+			if (qos_param->ip_tup.dst_ip_addr !=
+				get_client_memptr(wlan_client, wlan_index)->v4_addr)
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "Mismatched destination qos ip addr 0x%x with client ip 0x%x\n",
+					qos_param->ip_tup.dst_ip_addr,
+					get_client_memptr(wlan_client, wlan_index)->v4_addr);
+				return ret;
+			}
+		}
+	}
+
+	if (qos_param->ip_type == IPA_IP_v6)
+	{
+		if (!get_client_memptr(wlan_client, wlan_index)->route_rule_set_v6)
+		{
+			IPACM_LOG(IPACM_LOG_DEBUG, "v6 client rule is not set: %d, "
+				"cannot install qos v6 rule for this client\n",
+				get_client_memptr(wlan_client, wlan_index)->route_rule_set_v6);
+			return ret;
+		}
+		if (qos_param->ip_tup.dst_v6_ip_addr[0] ||
+			qos_param->ip_tup.dst_v6_ip_addr[1])
+		{
+			if (!ipv6_addr)
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "NULL IPv6 addr received, cannot install.\n");
+				return ret;
+			}
+			if (qos_param->ip_tup.dst_v6_ip_addr[0] != ipv6_addr[0] ||
+				qos_param->ip_tup.dst_v6_ip_addr[1] != ipv6_addr[1] ||
+				qos_param->ip_tup.dst_v6_ip_addr[2] != ipv6_addr[2] ||
+				qos_param->ip_tup.dst_v6_ip_addr[3] != ipv6_addr[3])
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "Mismatched destination qos ip addr "
+					"0x%x:%x:%x:%x with client ip 0x%x:%x:%x:%x\n",
+					qos_param->ip_tup.dst_v6_ip_addr[0],
+					qos_param->ip_tup.dst_v6_ip_addr[1],
+					qos_param->ip_tup.dst_v6_ip_addr[2],
+					qos_param->ip_tup.dst_v6_ip_addr[3],
+					ipv6_addr[0],
+					ipv6_addr[1],
+					ipv6_addr[2],
+					ipv6_addr[3]);
+				return ret;
+			}
+		}
+	}
+
+	for (it_qos_client = qos_param->qos_client_list.begin();
+		it_qos_client != qos_param->qos_client_list.end(); ++it_qos_client)
+	{
+		if (it_qos_client->v4_ip_addr &&
+			(it_qos_client->v4_ip_addr ==
+				get_client_memptr(wlan_client, wlan_index)->v4_addr))
+		{
+			IPACM_LOG(IPACM_LOG_DEBUG, "v4 Client already exists in qos list,"
+					   "Client vlan id %d , qos vlanid %d\n",
+					 client_vlan_id, qos_param->vlan_id);
+			return ret;
+		}
+
+		if (it_qos_client->v6_ip_addr[0] &&
+			it_qos_client->v6_ip_addr[0] == ipv6_addr[0] &&
+			it_qos_client->v6_ip_addr[1] == ipv6_addr[1] &&
+			it_qos_client->v6_ip_addr[2] == ipv6_addr[2] &&
+			it_qos_client->v6_ip_addr[3] == ipv6_addr[3]
+			)
+		{
+			IPACM_LOG(IPACM_LOG_DEBUG, "v6 Client already exists in qos list, Client vlan id %d , qos vlanid %d\n",
+					 client_vlan_id, qos_param->vlan_id);
+			return ret;
+		}
+	}
+
+	ret = true;
+	IPACM_LOG(IPACM_LOG_DEBUG, "No qos rule exists for this client, Adding qos rule for client "
+		"at idx %d\n", wlan_index);
+	return ret;
+}
+
+int IPACM_Wlan::install_all_wlan_qos_route_rule(uint8_t * client_mac,
+	uint16_t client_vlan_id, uint32_t *ipv6_addr)
+{
+
+	list<qos_param_info>::iterator it_qos_params;
+	int client_idx = 0;
+	int wlan_index = 0;
+	bool commit_rule = false;
+
+	IPACM_LOG(IPACM_LOG_DEBUG, "Install_all_qos_route_rule called start 0x%x, end 0x%x \n",
+			   IPACM_Iface::ipacmcfg->m_qos_params.begin(),
+			   IPACM_Iface::ipacmcfg->m_qos_params.end());
+
+	wlan_index = get_wlan_client_index(client_mac, client_vlan_id);
+	if (wlan_index == IPACM_INVALID_INDEX)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "eth client not found/attached\n");
+		return 0;
+	}
+
+	if(pthread_mutex_lock(&IPACM_Iface::ipacmcfg->qos_param_list_lock) != 0)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+
+	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin();
+		it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end(); ++it_qos_params)
+	{
+		IPACM_LOG(IPACM_LOG_DEBUG, "Individual qos rules with ip type: %d and tc: %d\n",
+			(ipa_ip_type)it_qos_params->ip_type, it_qos_params->traffic_class);
+		IPACM_LOG(IPACM_LOG_DEBUG, "Install_all_qos_route_rule it_qos_params called start 0x%x\n",
+			   it_qos_params);
+
+		if (!it_qos_params->dscp_mark_val)
+		{
+			IPACM_LOG(IPACM_LOG_DEBUG, "No dscp marking info passed: %d .. skip this rule\n",
+				it_qos_params->dscp_mark_val);
+		}
+
+		if (it_qos_params->ip_type == IPA_IP_v4)
+		{
+			if (if_wlan_client_qos_rule_needed(client_mac, client_vlan_id,
+				it_qos_params, NULL))
+			{
+				commit_rule = true;
+				IPACM_LOG(IPACM_LOG_DEBUG, "Install qos rules with ip type: %d and tc: %d\n",
+					(ipa_ip_type)it_qos_params->ip_type,
+					it_qos_params->traffic_class);
+
+				if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+				{
+					handle_wlan_qos_route_rule_ext_v2(client_mac, client_vlan_id,
+					(ipa_ip_type)it_qos_params->ip_type, it_qos_params, NULL);
+				}
+				else
+				{
+					handle_wlan_qos_route_rule(client_mac, client_vlan_id,
+					(ipa_ip_type)it_qos_params->ip_type, it_qos_params, NULL);
+				}
+			}
+		}
+		else
+		{
+			if (ipv6_addr != NULL)
+			{
+				if (if_wlan_client_qos_rule_needed(client_mac, client_vlan_id,
+					it_qos_params, ipv6_addr))
+				{
+					commit_rule = true;
+					IPACM_LOG(IPACM_LOG_DEBUG, "Install qos rules with ip type: %d and tc: %d\n",
+						(ipa_ip_type)it_qos_params->ip_type,
+						it_qos_params->traffic_class);
+
+					if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+					{
+						handle_wlan_qos_route_rule_ext_v2(client_mac, client_vlan_id,
+						(ipa_ip_type)it_qos_params->ip_type, it_qos_params, ipv6_addr);
+					}
+					else
+					{
+						handle_wlan_qos_route_rule(client_mac, client_vlan_id,
+						(ipa_ip_type)it_qos_params->ip_type, it_qos_params, ipv6_addr);
+					}
+				}
+			}
+			else
+			{
+				for (auto it = rt_hdl_v6_list[wlan_index].begin(); it != rt_hdl_v6_list[wlan_index].end(); ++it)
+				{
+					uint32_t ip6[4];
+					ip6[0] = it->first[0];
+					ip6[1] = it->first[1];
+					ip6[2] = it->first[2];
+					ip6[3] = it->first[3];
+					if (if_wlan_client_qos_rule_needed(client_mac, client_vlan_id,
+						it_qos_params,
+						ip6))
+					{
+						commit_rule = true;
+						IPACM_LOG(IPACM_LOG_DEBUG, "Install qos rules with ip type: %d and tc: %d\n",
+							(ipa_ip_type)it_qos_params->ip_type,
+							it_qos_params->traffic_class);
+
+						if (IPACM_Iface::ipacmcfg->ipacm_lan_stats_enable == true)
+						{
+							handle_wlan_qos_route_rule_ext_v2(client_mac, client_vlan_id,
+							(ipa_ip_type)it_qos_params->ip_type, it_qos_params,
+							ip6);
+						}
+						else
+						{
+							handle_wlan_qos_route_rule(client_mac, client_vlan_id,
+							(ipa_ip_type)it_qos_params->ip_type, it_qos_params,
+							ip6);
+						}
+					}
+				}
+			}
+		}
+	}
+	pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
+
+	if(commit_rule == false)
+	{
+		IPACM_LOG(IPACM_LOG_DEBUG, "No rule needs to be committed.. Exit\n");
+		return IPACM_SUCCESS;
+	}
+
+	if (false == m_routing.Commit(IPA_IP_v4))
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "QOS Routing rule v4 commit failed!\n");
+		return IPACM_FAILURE;
+	}
+
+	if (false == m_routing.Commit(IPA_IP_v6))
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "QOS Routing rule v6 commit failed!\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACM_LOG(IPACM_LOG_DEBUG, "QOS Routing rule added successfully \n");
+
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Wlan::delete_wlan_client_info_from_qos(uint8_t *client_mac,
+				uint16_t vlan_id, list<qos_param_info>::iterator qos_param,
+				uint32_t *ipv6_addr)
+{
+	list<qos_client_info>::iterator it_qos_client;
+	int wlan_index;
+
+	wlan_index = get_wlan_client_index(client_mac, vlan_id);
+	if (wlan_index == IPACM_INVALID_INDEX)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "eth client not found/attached\n");
+		return IPACM_FAILURE;
+	}
+
+	IPACM_LOG(IPACM_LOG_DEBUG, "Attempting to delete qos entry for client at idx %d"
+		" with vlan %d\n", wlan_index, vlan_id);
+
+	for (it_qos_client = qos_param->qos_client_list.begin();
+		it_qos_client != qos_param->qos_client_list.end(); )
+	{
+		if (qos_param->ip_type == IPA_IP_v4)
+		{
+			if (it_qos_client->v4_ip_addr &&
+				(it_qos_client->v4_ip_addr ==
+					get_client_memptr(wlan_client, wlan_index)->v4_addr))
+			{
+				IPACM_LOG(IPACM_LOG_DEBUG, "Found a matching vlan %d entry in qos rule list "
+					"for client with ipv4: 0x\n",
+					vlan_id, it_qos_client->v4_ip_addr);
+
+				//Delete the respective route handles
+				IPACM_LOG(IPACM_LOG_DEBUG, "Delete client rule from index %d is v4 set %d for hdl %d\n",
+					wlan_index, it_qos_client->route_rule_set_v4,
+					it_qos_client->qos_rt_rule_hdl_v4);
+
+				if (it_qos_client->route_rule_set_v4 &&
+					(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v4,
+						IPA_IP_v4) == false)) {
+					IPACM_LOG(IPACM_LOG_ERR, "Failed to delete v4 qos routing rule hdl %d\n",
+						it_qos_client->qos_rt_rule_hdl_v4);
+					return IPACM_FAILURE;
+				}
+				it_qos_client =
+					qos_param->qos_client_list.erase(it_qos_client);
+				qos_param->client_cnt--;
+				IPACM_LOG(IPACM_LOG_DEBUG, "Current client_cnt %d\n", qos_param->client_cnt);
+			}
+			else
+			{
+				it_qos_client++;
+			}
+		}
+
+		else
+		{
+			if (ipv6_addr == NULL)
+			{
+				/* Check all v6 addresses of the client. */
+				for (auto it = rt_hdl_v6_list[wlan_index].begin(); it != rt_hdl_v6_list[wlan_index].end(); ++it)
+				{
+					if (it_qos_client->v6_ip_addr[0] &&
+						it_qos_client->v6_ip_addr[0] ==
+						it->first[0] &&
+						it_qos_client->v6_ip_addr[1] ==
+						it->first[1] &&
+						it_qos_client->v6_ip_addr[2] ==
+						it->first[2] &&
+						it_qos_client->v6_ip_addr[3] ==
+						it->first[3])
+					{
+						IPACM_LOG(IPACM_LOG_DEBUG, "Delete client rule from index %d is"
+						" v6 set %d for hdl %d\n", wlan_index,
+						it_qos_client->route_rule_set_v6,
+						it_qos_client->qos_rt_rule_hdl_v6);
+						if (it_qos_client->route_rule_set_v6 &&
+							(m_routing.DeleteRoutingHdl(
+								it_qos_client->qos_rt_rule_hdl_v6,
+								IPA_IP_v6) == false)) {
+							IPACM_LOG(IPACM_LOG_ERR, "Failed to delete v6 qos routing rule hdl %d\n",
+								it_qos_client->qos_rt_rule_hdl_v6);
+							return IPACM_FAILURE;
+						}
+						it_qos_client =
+							qos_param->qos_client_list.erase(it_qos_client);
+						qos_param->client_cnt--;
+						IPACM_LOG(IPACM_LOG_DEBUG, "After V6 NULL delete, client_cnt %d\n",
+							qos_param->client_cnt);
+						continue;
+					}
+				}
+				it_qos_client++;
+			}
+			else
+			{
+				if (it_qos_client->v6_ip_addr[0] &&
+					it_qos_client->v6_ip_addr[0] == ipv6_addr[0] &&
+					it_qos_client->v6_ip_addr[1] == ipv6_addr[1] &&
+					it_qos_client->v6_ip_addr[2] == ipv6_addr[2] &&
+					it_qos_client->v6_ip_addr[3] == ipv6_addr[3])
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "Delete client rule from index %d is"
+					" v6 set %d for hdl %d\n", wlan_index,
+					it_qos_client->route_rule_set_v6,
+					it_qos_client->qos_rt_rule_hdl_v6);
+					if (it_qos_client->route_rule_set_v6 &&
+						(m_routing.DeleteRoutingHdl(
+							it_qos_client->qos_rt_rule_hdl_v6,
+							IPA_IP_v6) == false)) {
+						IPACM_LOG(IPACM_LOG_ERR, "Failed to delete v6 qos routing rule hdl %d\n",
+							it_qos_client->qos_rt_rule_hdl_v6);
+						return IPACM_FAILURE;
+					}
+					it_qos_client =
+						qos_param->qos_client_list.erase(it_qos_client);
+					qos_param->client_cnt--;
+					IPACM_LOG(IPACM_LOG_DEBUG, "After v6 delete, client_cnt %d\n",
+						qos_param->client_cnt);
+				}
+				else
+				{
+					it_qos_client++;
+				}
+			}
+		}
+	}
+	IPACM_LOG(IPACM_LOG_DEBUG, "Final client_cnt %d\n", qos_param->client_cnt);
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Wlan::delete_wlan_client_qos_rule(uint8_t *client_mac,
+	uint16_t vlan_id, ipa_ip_type iptype, uint32_t *ipv6_addr)
+{
+	list<qos_param_info>::iterator it_qos_params;
+
+	if(pthread_mutex_lock(&IPACM_Iface::ipacmcfg->qos_param_list_lock) != 0)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+
+	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin();
+		(it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end()); ++it_qos_params)
+	{
+		if (it_qos_params->ip_type != iptype)
+		{
+			continue;
+		}
+		delete_wlan_client_info_from_qos(client_mac, vlan_id, it_qos_params, ipv6_addr);
+	}
+
+	pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
+	return IPACM_SUCCESS;
+}
+
+int IPACM_Wlan::delete_all_wlan_client_info_from_qos(list<qos_param_info>::iterator qos_param)
+{
+	list<qos_client_info>::iterator it_qos_client;
+	int ret = IPACM_SUCCESS;
+
+	for (it_qos_client = qos_param->qos_client_list.begin();
+		it_qos_client != qos_param->qos_client_list.end(); )
+	{
+		if (it_qos_client->client_iface != ipa_if_num)
+		{
+			IPACM_LOG(IPACM_LOG_DEBUG, "client associated to 0x%d current iface %d ..continue ..\n",
+				it_qos_client->client_iface, ipa_if_num);
+			++it_qos_client;
+			continue;
+		}
+		//Delete the respective route handles
+		IPACM_LOG(IPACM_LOG_DEBUG, "Delete client rule from is v4 set %d for hdl %d\n",
+				   it_qos_client->route_rule_set_v4,
+				   it_qos_client->qos_rt_rule_hdl_v4);
+
+		if (it_qos_client->route_rule_set_v4 &&
+			(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v4,
+				IPA_IP_v4) == false)) {
+			IPACM_LOG(IPACM_LOG_ERR, "Failed to delete v4 qos routing rule hdl %d\n",
+				it_qos_client->qos_rt_rule_hdl_v4);
+			ret =  IPACM_FAILURE;
+		}
+
+		// Delete respective header processing contexts
+		IPACM_LOG(IPACM_LOG_DEBUG, "Deleting dscp hpc 0x%x\n", it_qos_client->dscp_hpc_hdl_v4);
+		if (it_qos_client->dscp_hpc_hdl_v4)
+		{
+			if (m_header.DeleteHeaderProcCtx(it_qos_client->dscp_hpc_hdl_v4)
+					== false)
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "Failed to delete qos dscp hpc v4 hdl 0x%x\n",
+				it_qos_client->qos_rt_rule_hdl_v4);
+				return IPACM_FAILURE;
+			}
+		}
+
+		IPACM_LOG(IPACM_LOG_DEBUG, "Delete client rule from is v6 set %d for hdl %d\n",
+				   it_qos_client->route_rule_set_v6,
+				   it_qos_client->qos_rt_rule_hdl_v6);
+		if (it_qos_client->route_rule_set_v6 &&
+			it_qos_client->qos_rt_rule_hdl_v6 &&
+			(m_routing.DeleteRoutingHdl(it_qos_client->qos_rt_rule_hdl_v6, IPA_IP_v6) == false)) {
+			IPACM_LOG(IPACM_LOG_ERR, "Failed to delete v6 qos routing rule hdl %d\n", it_qos_client->qos_rt_rule_hdl_v6);
+			ret = IPACM_FAILURE;
+		}
+
+		if (it_qos_client->dscp_hpc_hdl_v6[0])
+		{
+			if (m_header.DeleteHeaderProcCtx(it_qos_client->dscp_hpc_hdl_v6[0])
+					== false)
+			{
+				IPACM_LOG(IPACM_LOG_ERR, "Failed to delete qos dscp hpc v6 hdl 0x%x\n",
+				it_qos_client->qos_rt_rule_hdl_v6);
+				return IPACM_FAILURE;
+			}
+		}
+
+		it_qos_client = qos_param->qos_client_list.erase(it_qos_client);
+		qos_param->client_cnt--;
+	}
+
+	IPACM_LOG(IPACM_LOG_DEBUG, "Qos client list size:%d cnt %d\n",
+		qos_param->qos_client_list.size(), qos_param->client_cnt);
+	return ret;
+}
+
+int IPACM_Wlan::delete_all_wlan_client_qos_rules()
+{
+	list<qos_param_info>::iterator it_qos_params;
+
+	IPACM_LOG(IPACM_LOG_DEBUG, "Deleting all client rules from qos config\n");
+	if(pthread_mutex_lock(&IPACM_Iface::ipacmcfg->qos_param_list_lock) != 0)
+	{
+		IPACM_LOG(IPACM_LOG_ERR, "Unable to lock the mutex\n");
+		return IPACM_FAILURE;
+	}
+
+	for (it_qos_params = IPACM_Iface::ipacmcfg->m_qos_params.begin();
+		it_qos_params != IPACM_Iface::ipacmcfg->m_qos_params.end();
+		++it_qos_params)
+	{
+		delete_all_wlan_client_info_from_qos(it_qos_params);
+	}
+
+	IPACM_LOG(IPACM_LOG_DEBUG, "Qos params list size after deleting client is now :%d \n",
+		IPACM_Iface::ipacmcfg->m_qos_params.size());
+	pthread_mutex_unlock(&IPACM_Iface::ipacmcfg->qos_param_list_lock);
+	return IPACM_SUCCESS;
+}

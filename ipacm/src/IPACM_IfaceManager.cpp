@@ -541,6 +541,11 @@ int IPACM_IfaceManager::create_iface_instance(ipacm_ifacemgr_data *param)
 				IPACM_EvtDispatcher::registr(IPA_CRADLE_WAN_MODE_SWITCH, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_LINK_DOWN_EVENT, wl);
 				IPACM_EvtDispatcher::registr(IPA_WLAN_BRIDGE_UPDATE_EVENT, wl);
+
+				IPACM_EvtDispatcher::registr(IPA_QOS_RULE_ADD_EVENT, wl);
+				IPACM_EvtDispatcher::registr(IPA_QOS_RULE_DEL_EVENT, wl);
+				IPACM_EvtDispatcher::registr(IPA_QOS_RULE_FLUSH_EVENT, wl);
+
 				/* IPA_LAN_DELETE_SELF should be always last */
 				IPACM_EvtDispatcher::registr(IPA_LAN_DELETE_SELF, wl);
 				IPACM_LOG(IPACM_LOG_DEBUG, "ipa_WLAN (%s):ipa_index (%d) instance open/registr ok\n", wl->dev_name, wl->ipa_if_num);

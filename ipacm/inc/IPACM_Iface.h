@@ -47,6 +47,7 @@
 #include <stdio.h>
 #include <IPACM_CmdQueue.h>
 #include <linux/msm_ipa.h>
+#include <vector>
 #include "IPACM_Routing.h"
 #include "IPACM_Filtering.h"
 #include "IPACM_Header.h"
@@ -71,6 +72,26 @@
 #define IPV6_DEFAULT_LAN_FILTERTING_RULES 1
 #define MAX_SOFTWAREROUTING_FILTERTING_RULES 2
 #define INVALID_IFACE -1
+
+/* Support client v6 handles */
+struct client_rt_hdl_v6 {
+	uint32_t rt_rule_hdl_v6;
+	uint32_t rt_rule_hdl_v6_wan;
+};
+
+struct handleTypeV6 {
+	bool route_rule_set_v6{false};
+	vector<client_rt_hdl_v6> hdl_v6{};
+#ifdef FEATURE_STATIC_POLICY
+	vector<dscp_pdn_client_rt_hdl_v6> dscp_pdn_hdl_v6{};
+#endif
+	handleTypeV6(size_t n) {
+		hdl_v6.resize(n);
+#ifdef FEATURE_STATIC_POLICY
+		dscp_pdn_hdl_v6.resize(n);
+#endif
+	}
+};
 
 /* iface */
 class IPACM_Iface :public IPACM_Listener
@@ -126,6 +147,9 @@ public:
 	uint32_t dft_v6fl_rule_hdl[IPA_MAX_NUM_PROPS][IPV6_DEFAULT_FILTERTING_RULES + IPA_MAX_NUM_OFFLOAD_VLANS];
 	/* create additional set of v6 RT-rules in Wanv6RT table*/
 	uint32_t dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES+2*MAX_DEFAULT_v6_ROUTE_RULES];
+
+	/* save client ipv6 address info and rt handles */
+	std::map<std::array<uint32_t, 4>, handleTypeV6> rt_hdl_v6_list[IPA_MAX_NUM_CLIENTS_IPV6];
 
 	uint32_t dft_qos_rt_rule_hdl[3];
 

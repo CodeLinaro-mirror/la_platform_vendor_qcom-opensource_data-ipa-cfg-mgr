@@ -6742,16 +6742,13 @@ int IPACM_Wlan::install_all_wlan_qos_route_rule(uint8_t * client_mac,
 			}
 			else
 			{
-				for (auto it = rt_hdl_v6_list[wlan_index].begin(); it != rt_hdl_v6_list[wlan_index].end(); ++it)
+				for (int v6_num = 0;
+						v6_num < get_client_memptr(wlan_client, wlan_index)->ipv6_set;
+						++v6_num)
 				{
-					uint32_t ip6[4];
-					ip6[0] = it->first[0];
-					ip6[1] = it->first[1];
-					ip6[2] = it->first[2];
-					ip6[3] = it->first[3];
 					if (if_wlan_client_qos_rule_needed(client_mac, client_vlan_id,
 						it_qos_params,
-						ip6))
+						get_client_memptr(wlan_client, wlan_index)->v6_addr[v6_num]))
 					{
 						commit_rule = true;
 						IPACM_LOG(IPACM_LOG_DEBUG, "Install qos rules with ip type: %d and tc: %d\n",
@@ -6762,13 +6759,13 @@ int IPACM_Wlan::install_all_wlan_qos_route_rule(uint8_t * client_mac,
 						{
 							handle_wlan_qos_route_rule_ext_v2(client_mac, client_vlan_id,
 							(ipa_ip_type)it_qos_params->ip_type, it_qos_params,
-							ip6);
+							get_client_memptr(wlan_client, wlan_index)->v6_addr[v6_num]);
 						}
 						else
 						{
 							handle_wlan_qos_route_rule(client_mac, client_vlan_id,
 							(ipa_ip_type)it_qos_params->ip_type, it_qos_params,
-							ip6);
+							get_client_memptr(wlan_client, wlan_index)->v6_addr[v6_num]);
 						}
 					}
 				}
@@ -6870,20 +6867,20 @@ int IPACM_Wlan::delete_wlan_client_info_from_qos(uint8_t *client_mac,
 		else
 		{
 			if (ipv6_addr == NULL)
+		{
+			/* Check all v6 addresses of the client. */
+			for (int v6_num = 0; v6_num < IPV6_NUM_ADDR; v6_num++)
 			{
-				/* Check all v6 addresses of the client. */
-				for (auto it = rt_hdl_v6_list[wlan_index].begin(); it != rt_hdl_v6_list[wlan_index].end(); ++it)
+				if (it_qos_client->v6_ip_addr[0] &&
+					it_qos_client->v6_ip_addr[0] ==
+					get_client_memptr(wlan_client, wlan_index)->v6_addr[v6_num][0] &&
+					it_qos_client->v6_ip_addr[1] ==
+					get_client_memptr(wlan_client, wlan_index)->v6_addr[v6_num][1] &&
+					it_qos_client->v6_ip_addr[2] ==
+					get_client_memptr(wlan_client, wlan_index)->v6_addr[v6_num][2] &&
+					it_qos_client->v6_ip_addr[3] ==
+					get_client_memptr(wlan_client, wlan_index)->v6_addr[v6_num][3])
 				{
-					if (it_qos_client->v6_ip_addr[0] &&
-						it_qos_client->v6_ip_addr[0] ==
-						it->first[0] &&
-						it_qos_client->v6_ip_addr[1] ==
-						it->first[1] &&
-						it_qos_client->v6_ip_addr[2] ==
-						it->first[2] &&
-						it_qos_client->v6_ip_addr[3] ==
-						it->first[3])
-					{
 						IPACM_LOG(IPACM_LOG_DEBUG, "Delete client rule from index %d is"
 						" v6 set %d for hdl %d\n", wlan_index,
 						it_qos_client->route_rule_set_v6,

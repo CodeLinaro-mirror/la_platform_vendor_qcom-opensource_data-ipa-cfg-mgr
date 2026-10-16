@@ -74,6 +74,9 @@ typedef struct _ipa_wlan_client
 	bool ipv4_header_set;
 	bool ipv6_header_set;
 	bool power_save_set;
+	bool is_vlan;
+	/* default vlan support in wlan */
+	uint16_t vlan_id;
 #ifdef FEATURE_IPACM_PER_CLIENT_STATS
 	bool ipv4_ul_rules_set;
 	bool ipv6_ul_rules_set;
@@ -209,7 +212,7 @@ private:
 		return (ipa_wlan_client *)ret;
 	}
 
-	inline int get_wlan_client_index(uint8_t *mac_addr)
+	inline int get_wlan_client_index(uint8_t *mac_addr, uint16_t vlan_id = 0)
 	{
 		int cnt;
 		int num_wifi_client_tmp = num_wifi_client;
@@ -232,8 +235,21 @@ private:
 								mac_addr,
 								IPA_MAC_ADDR_SIZE) == 0)
 			{
-				IPACM_LOG(IPACM_LOG_DEBUG, "Matched client index: %d\n", cnt);
-				return cnt;
+				if(vlan_id)
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "VLAN IF MAC match, looking for vlan ID %d, current %d\n", vlan_id,
+						get_client_memptr(wlan_client, cnt)->vlan_id);
+					if(get_client_memptr(wlan_client, cnt)->vlan_id == vlan_id)
+					{
+						IPACM_LOG(IPACM_LOG_DEBUG, "Matched client index: %d for vid %d\n", cnt, vlan_id);
+						return cnt;
+					}
+				}
+				else
+				{
+					IPACM_LOG(IPACM_LOG_DEBUG, "Matched client index: %d\n", cnt);
+					return cnt;
+				}
 			}
 		}
 
@@ -571,6 +587,25 @@ private:
 
 	void handle_SCC_MCC_switch(ipa_ip_type);
 
+	int handle_wlan_qos_route_rule(uint8_t *client_mac, uint16_t vlan_id,
+		ipa_ip_type iptype, list<qos_param_info>::iterator qos_param,
+		uint32_t *ipv6_addr = NULL);
+	int handle_wlan_qos_route_rule_ext_v2(uint8_t *client_mac, uint16_t vlan_id,
+		ipa_ip_type iptype, list<qos_param_info>::iterator qos_param,
+		uint32_t *ipv6_addr = NULL);
+	int install_all_wlan_qos_route_rule(uint8_t * client_mac,
+		uint16_t vlan_id, uint32_t *ipv6_addr = NULL);
+	int if_wlan_client_qos_rule_needed(uint8_t *client_mac,
+		uint16_t vlan_id, list<qos_param_info>::iterator qos_param,
+		uint32_t *ipv6_addr = NULL);
+	int delete_wlan_client_qos_rule(uint8_t *client_mac, uint16_t vlan_id,
+		ipa_ip_type iptype, uint32_t *ipv6_addr = NULL);
+	int delete_wlan_client_info_from_qos(uint8_t *client_mac,
+		uint16_t vlan_id, list<qos_param_info>::iterator qos_param,
+		uint32_t *ipv6_addr = NULL);
+	int delete_all_wlan_client_qos_rules();
+	int delete_all_wlan_client_info_from_qos(
+		list<qos_param_info>::iterator qos_param);
 };
 
 

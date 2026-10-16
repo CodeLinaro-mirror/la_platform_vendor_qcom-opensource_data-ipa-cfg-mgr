@@ -150,6 +150,10 @@ struct qos_client_info
 	uint8_t mac[IPA_MAC_ADDR_SIZE];
 	uint32_t qos_rt_rule_hdl_v4;
 	uint32_t qos_rt_rule_hdl_v6;
+	int client_iface;
+
+	uint32_t dscp_hpc_hdl_v4;
+	uint32_t dscp_hpc_hdl_v6;
 
 	bool route_rule_set_v4;
 	bool route_rule_set_v6;
@@ -171,6 +175,7 @@ struct qos_param_info {
 	uint16_t vlan_id;
 	uint8_t dscp;
 	uint8_t pcp;
+	uint8_t dscp_mark_val;
 
 	uint32_t qos_rt_rule_hdl_v4;
 	uint32_t qos_rt_rule_hdl_v6;
@@ -201,6 +206,7 @@ public:
 	uint8_t ipacm_log_level;
 	uint8_t ipacm_syslog_level;
 	bool ipacm_log_timestamp_enable;
+	bool ipacm_qxdm_log_enable;
 	bool ipacm_ipanat_log_enable;
 
 	/* IPACM ipa_client map to rm_resource*/

@@ -74,6 +74,7 @@ pthread_mutex_t file_lock;
 uint8_t ipacm_global_log_level    = IPACM_DEF_LOG_LEVEL;
 uint8_t ipacm_global_syslog_level = IPACM_DEF_SYSLOG_LEVEL;
 bool ipacm_global_log_timestamp_enable = IPACM_DEF_LOG_TIMESTAMP_ENABLE;
+bool ipacm_global_qxdm_log_enable = IPACM_DEF_QXDM_LOG_ENABLE;
 
 #ifdef USE_CLOG
 clog_context_t ipacm_clog_ctx = NULL;
@@ -398,6 +399,11 @@ int log_init() {
 	if(config->ipacm_log_timestamp_enable == 1 || config->ipacm_log_timestamp_enable == 0)
 	{
 		ipacm_global_log_timestamp_enable = config->ipacm_log_timestamp_enable;
+	}
+
+	if(config->ipacm_qxdm_log_enable == 1 || config->ipacm_qxdm_log_enable == 0)
+	{
+		ipacm_global_qxdm_log_enable = config->ipacm_qxdm_log_enable;
 	}
 
 	ipanat_relay_enabled = config->ipacm_ipanat_log_enable;

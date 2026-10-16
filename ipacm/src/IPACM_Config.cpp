@@ -590,6 +590,16 @@ int IPACM_Config::Init(void)
 		ipacm_log_timestamp_enable = IPACM_DEF_LOG_TIMESTAMP_ENABLE;
 	}
 
+	if(cfg->ipacm_qxdm_log_enable == 0 || cfg->ipacm_qxdm_log_enable == 1)
+	{
+		IPACM_LOG(IPACM_LOG_INFO, "ipacm qxdm log enable is %d\n", cfg->ipacm_qxdm_log_enable);
+		ipacm_qxdm_log_enable = cfg->ipacm_qxdm_log_enable;
+	}
+	else {
+		IPACM_LOG(IPACM_LOG_ERR, "Invalid qxdm log enable value provided:%d, Setting default log level\n", cfg->ipacm_qxdm_log_enable);
+		ipacm_qxdm_log_enable = IPACM_DEF_QXDM_LOG_ENABLE;
+	}
+
 	ipacm_ipanat_log_enable = cfg->ipacm_ipanat_log_enable;
 	IPACM_LOG(IPACM_LOG_INFO, "ipacm ipanat log enable is %d\n", ipacm_ipanat_log_enable);
 
@@ -4554,6 +4564,7 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 		   (data->protocol == it_qos_params->ip_tup.protocol) &&
 		   (data->dscp == it_qos_params->dscp) &&
 		   (data->pcp == it_qos_params->pcp) &&
+		   (data->dscp_mark_val == it_qos_params->dscp_mark_val) &&
 		   !memcmp(it_qos_params->dst_mac_addr, data->dst_mac_addr, sizeof(new_qos_info.dst_mac_addr)) &&
 		   !memcmp(it_qos_params->ip_tup.src_v6_ip_addr, data->src_v6_ip_addr, sizeof(data->src_v6_ip_addr)) &&
 		   !memcmp(it_qos_params->ip_tup.dst_v6_ip_addr, data->dst_v6_ip_addr, sizeof(data->dst_v6_ip_addr))
@@ -4633,6 +4644,7 @@ void IPACM_Config::add_qos_params_info(ipa_ioc_qos_config *data)
 
 	new_qos_info.dscp = data->dscp;
 	new_qos_info.pcp = data->pcp;
+	new_qos_info.dscp_mark_val = data->dscp_mark_val;
 
 	m_qos_params.push_front(new_qos_info);
 
@@ -4709,6 +4721,7 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 		   (data->protocol == it_qos_params->ip_tup.protocol) &&
 		   (data->dscp == it_qos_params->dscp) &&
 		   (data->pcp == it_qos_params->pcp) &&
+		   (data->dscp_mark_val == it_qos_params->dscp_mark_val) &&
 		   !memcmp(it_qos_params->dst_mac_addr, data->dst_mac_addr, sizeof(new_qos_info.dst_mac_addr)) &&
 		   !memcmp(it_qos_params->ip_tup.src_v6_ip_addr, data->src_v6_ip_addr, sizeof(data->src_v6_ip_addr)) &&
 		   !memcmp(it_qos_params->ip_tup.dst_v6_ip_addr, data->dst_v6_ip_addr, sizeof(data->dst_v6_ip_addr))
@@ -4735,6 +4748,8 @@ void IPACM_Config::delete_qos_params_info(ipa_ioc_qos_config *data)
 				qos_param->qos_client_list[i].route_rule_set_v4 = it_qos_client->route_rule_set_v4;
 				qos_param->qos_client_list[i].route_rule_set_v6 = it_qos_client->route_rule_set_v6;
 
+				qos_param->qos_client_list[i].dscp_hpc_hdl_v4 = it_qos_client->dscp_hpc_hdl_v4;
+				qos_param->qos_client_list[i].dscp_hpc_hdl_v6 = it_qos_client->dscp_hpc_hdl_v6;
 				i++;
 			}
 
@@ -4765,6 +4780,7 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 	ipacm_cmd_q_data evt_data;
 	list<qos_client_info>::iterator it_qos_client;
 	int i = 0;
+	qos_delete_param_info *qos_param = NULL;
 
 	if(pthread_mutex_lock(&qos_param_list_lock) != 0)
 	{
@@ -4779,7 +4795,7 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 		IPACM_LOG(IPACM_LOG_DEBUG, "Flusing the qos parameters \n");
 		//Send qos rule del event
 		evt_data.event = IPA_QOS_RULE_DEL_EVENT;
-		qos_delete_param_info *qos_param = NULL;
+
 		qos_param = (qos_delete_param_info *)malloc(sizeof(qos_delete_param_info) + it_qos_params->qos_client_list.size() * sizeof(qos_client_info));
 		if (qos_param == NULL)
 		{
@@ -4788,6 +4804,7 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 			return;
 		}
 
+		memset(qos_param, 0, sizeof(qos_delete_param_info) + it_qos_params->qos_client_list.size() * sizeof(qos_client_info));
 		qos_param->client_cnt = it_qos_params->qos_client_list.size();
 		for (it_qos_client = it_qos_params->qos_client_list.begin(); it_qos_client != it_qos_params->qos_client_list.end(); ++it_qos_client)
 		{
@@ -4801,6 +4818,9 @@ void IPACM_Config::flush_qos_params_info(ipa_ioc_qos_config *data)
 			it_qos_client->qos_rt_rule_hdl_v6,
 			it_qos_client->route_rule_set_v4,
 			it_qos_client->route_rule_set_v6);
+			qos_param->qos_client_list[i].dscp_hpc_hdl_v4 = it_qos_client->dscp_hpc_hdl_v4;
+			qos_param->qos_client_list[i].dscp_hpc_hdl_v6 = it_qos_client->dscp_hpc_hdl_v6;
+
 			i++;
 		}
 

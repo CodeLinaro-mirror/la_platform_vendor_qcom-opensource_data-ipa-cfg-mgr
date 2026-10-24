@@ -2120,11 +2120,18 @@ bool Ipv6ctEntry::Compare(const NatEntryBase& other) const
 	}
 
 	const Ipv6ctEntry& entry = static_cast<const Ipv6ctEntry&>(other);
-	return NatEntryBase::Compare(other) &&
-		(m_srcAddr == entry.m_srcAddr || m_srcAddr == entry.m_dstAddr) &&
-		(m_dstAddr == entry.m_dstAddr || m_dstAddr == entry.m_srcAddr) &&
-		(m_dstPort == entry.m_dstPort || m_dstPort == entry.m_srcPort) &&
-		(m_srcPort == entry.m_srcPort || m_srcPort == entry.m_dstPort);
+	if (!NatEntryBase::Compare(other))
+	{
+		return false;
+	}
+
+	/* Match the complete 5-tuple either in the same direction or fully inverted.*/
+	bool sameDir = (m_srcAddr == entry.m_srcAddr) && (m_dstAddr == entry.m_dstAddr) &&
+			(m_srcPort == entry.m_srcPort) && (m_dstPort == entry.m_dstPort);
+	bool invertedDir = (m_srcAddr == entry.m_dstAddr) && (m_dstAddr == entry.m_srcAddr) &&
+			(m_srcPort == entry.m_dstPort) && (m_dstPort == entry.m_srcPort);
+
+	return sameDir || invertedDir;
 }
 
 void Ipv6ctEntry::Copy(const NatEntryBase& other)

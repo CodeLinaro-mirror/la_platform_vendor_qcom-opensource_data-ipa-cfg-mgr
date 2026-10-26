@@ -12221,6 +12221,7 @@ int IPACM_Lan::handle_down_evt()
 #endif
 	uint32_t *tcp_syn_filter_rule_hdl_ptr = NULL;
 	uint32_t *private_flt_rule_hdl = NULL;
+	uint16_t vlan_ids[IPA_MAX_NUM_OFFLOAD_VLANS];
 
 	IPACMDBG_H("lan handle_down_evt\n ");
 
@@ -12319,6 +12320,40 @@ int IPACM_Lan::handle_down_evt()
 			IPACMERR("failed to handle IF down (vlan mode)\n");
 			res = IPACM_FAILURE;
 			goto fail;
+		}
+		/* Post ROUTE_DEL for all vlans associated with physical interface */
+		if(IPACM_Iface::ipacmcfg->get_iface_vlan_ids(dev_name, vlan_ids) == IPACM_SUCCESS)
+		{
+			for(int vlan_idx = 0; vlan_idx < IPA_MAX_NUM_OFFLOAD_VLANS; vlan_idx++)
+			{
+				if(vlan_ids[vlan_idx] == 0)
+					continue;
+
+				ipacm_event_route_vlan *vlan_data =
+					(ipacm_event_route_vlan *)malloc(sizeof(ipacm_event_route_vlan));
+				if(vlan_data == NULL)
+				{
+					IPACMERR("Unable to allocate VLAN route delete event for VID %d\n",
+						vlan_ids[vlan_idx]);
+					continue;
+				}
+
+				memset(vlan_data, 0, sizeof(*vlan_data));
+				vlan_data->iptype = IPA_IP_MAX;
+				vlan_data->VlanID = vlan_ids[vlan_idx];
+
+				ipacm_cmd_q_data vlan_evt;
+				vlan_evt.event = IPA_ROUTE_DEL_VLAN_PDN_EVENT;
+				vlan_evt.evt_data = vlan_data;
+				IPACMDBG_H("Posting IPA_ROUTE_DEL_VLAN_PDN_EVENT for VID %d, parent %s\n",
+					vlan_data->VlanID, dev_name);
+				IPACM_EvtDispatcher::PostEvt(&vlan_evt);
+			}
+		}
+		else
+		{
+			IPACMERR("Failed to get VLAN IDs for disconnected interface %s\n",
+				dev_name);
 		}
 	}
 	else
@@ -21310,6 +21345,11 @@ int IPACM_Lan::handle_mpdn_ul_xlat_filter_rule(ipacm_ext_prop * prop,
 			IPACMERR("no rx props\n");
 			return IPACM_FAILURE;
 		}
+
+		entry_idx = 0;
+		prev = 0;
+		curr = 0;
+		idx_q6 = 0;
 		flt_index.source_pipe_index = ioctl(fd, IPA_IOC_QUERY_EP_MAPPING, rx_prop->rx[idx].src_pipe);
 		flt_index.install_status = IPA_QMI_RESULT_SUCCESS_V01;
 		flt_index.rule_id_ex_valid = 1;

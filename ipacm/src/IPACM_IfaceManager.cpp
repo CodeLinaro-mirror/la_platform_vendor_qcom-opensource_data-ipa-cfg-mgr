@@ -159,6 +159,11 @@ void IPACM_IfaceManager::event_callback(ipa_cm_event_id event, void *param)
 				IPACMDBG_H("Ignoring IPA_USB_LINK_UP_EVENT event for WLAN interface: %s",
 					evt_data->iface_name);
 			}
+			else if (strstr(evt_data->iface_name, "qmapmux") != NULL || strstr(evt_data->iface_name, "rmnet_data") != NULL)
+			{
+				IPACMDBG_H("Ignoring IPA_USB_LINK_UP_EVENT for WWAN interface %s\n",
+					evt_data->iface_name);
+			}
 			else if(IPACM_Iface::ipacmcfg->iface_table[ipa_interface_index].if_cat == WAN_IF)
 			{
 				/* usb-backhaul using sta_mode ECM_WAN*/

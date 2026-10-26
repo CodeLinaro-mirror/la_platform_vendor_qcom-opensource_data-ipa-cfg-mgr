@@ -1672,22 +1672,21 @@ int IPACM_Wan::handle_addr_del_evt(ipacm_event_data_addr *data)
 					ipv4_to_iface[sta_ipv4_pdn_index].wan_up_vlan = false;
 					wan_v4_is_default_gw = true;
 
-					vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
-					if(vlandown_data == NULL)
-					{
-						IPACMERR("Unable to allocate memory\n");
-						res = IPACM_FAILURE;
-						goto fail;
-					}
-					memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
-
-					vlandown_data->iptype = IPA_IP_v4;
-
 					/* Wan is down. post vlan pdn down evt for every associated vlans. */
 					vid_cnt_v4 = ipv4_to_iface[sta_ipv4_pdn_index].VID_cnt;
 					IPACMDBG_H("V4 Wan Down received for %s has associated vid count %d. \n", dev_name, vid_cnt_v4);
 					for(j = 0; j < vid_cnt_v4; j++)
 					{
+						vlandown_data = (ipacm_event_vlan_pdn *)malloc(sizeof(ipacm_event_vlan_pdn));
+						if(vlandown_data == NULL)
+						{
+							IPACMERR("Unable to allocate memory\n");
+							res = IPACM_FAILURE;
+							goto fail;
+						}
+
+						memset(vlandown_data, 0, sizeof(ipacm_event_vlan_pdn));
+						vlandown_data->iptype = IPA_IP_v4;
 						vlandown_data->VlanID = ipv4_to_iface[sta_ipv4_pdn_index].associated_VIDs[j];
 						vlandown_data->ipv4_addr = wan_v4_addr;
 						ipv4_to_iface[sta_ipv4_pdn_index].VID_cnt--;
@@ -1792,6 +1791,20 @@ void IPACM_Wan::event_callback(ipa_cm_event_id event, void *param)
 			IPACMDBG_H("DL qos rule add request on WAN iface, ignoring..\n");
 			return;
 		}
+
+		/* Only the WAN instance that owns a qos-capable egress pipe may touch
+		   the shared UL qos param list. A secondary backhaul instance without
+		   a qos pipe (e.g. modem/qmapmux in a PPPoE-backhaul setup) would
+		   otherwise delete the rules the primary instance just installed
+		   without being able to reinstall them - which strands UL QoS after
+		   modem SSR re-registers the secondary backhaul as the last listener. */
+		if (!has_ul_qos_capable_pipe())
+		{
+			IPACMDBG_H("iface %s has no qos-capable egress pipe, skipping UL qos rule add\n",
+				dev_name);
+			return;
+		}
+
 		if(IPACM_Wan::wan_up == true)
 		{
 			delete_all_UL_qos_rules(IPA_IP_v4);
@@ -4721,6 +4734,13 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 						tx_index, tx_prop->tx[tx_index].ip,iptype);
 					continue;
 				}
+
+				if (tx_prop->tx[tx_index].tc_bmap)
+				{
+					IPACMDBG_H("tc bit map is set, this is qos pipe. skip and continue \n");
+					continue;
+				}
+
 				if(IPACM_Iface::ipacmcfg->isMCC_Mode == true)
 				{
 					IPACMDBG_H("In MCC mode, use alt dst pipe: %d\n",
@@ -4886,6 +4906,13 @@ PostWanUpV6:
 						tx_index, tx_prop->tx[tx_index].ip,iptype);
 					continue;
 				}
+
+				if (tx_prop->tx[tx_index].tc_bmap)
+				{
+					IPACMDBG_H("tc bit map is set, this is qos pipe. skip and continue \n");
+					continue;
+				}
+
 				/* use the STA-header handler */
 				strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.name, sizeof(rt_rule->rt_tbl_name));
 				if(hdr_proc_set_v4 == true)
@@ -13699,6 +13726,33 @@ uint32_t IPACM_Wan::get_u8_bitmap_from_tc(uint8_t traffic_class)
 	}
 
 	return (1 << traffic_class);
+}
+
+bool IPACM_Wan::has_ul_qos_capable_pipe(void)
+{
+	uint32_t tx_index;
+
+	if (tx_prop == NULL)
+	{
+		return false;
+	}
+
+	/* A qos-capable egress pipe is marked by a non-zero tc_bmap. Backhaul
+	   instances that carry no qos pipe (e.g. the modem/qmapmux instance in a
+	   PPPoE-backhaul setup) must not run the UL QoS delete+install on the
+	   shared qos param list, otherwise - depending on which instance handles
+	   the shared IPA_QOS_RULE_ADD_EVENT last (e.g. after modem SSR
+	   re-registers qmapmux last) - such an instance would delete the rules
+	   the qos-capable instance just installed and be unable to add them back. */
+	for (tx_index = 0; tx_index < iface_query->num_tx_props; tx_index++)
+	{
+		if (tx_prop->tx[tx_index].tc_bmap != 0)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 int IPACM_Wan::handle_ul_qos_route_rule(ipa_ip_type iptype,

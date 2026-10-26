@@ -2399,7 +2399,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				{
 					PERROR("ioctl copy header failed");
 					res = IPACM_FAILURE;
-					goto fail;
+					goto fail_early;
 				}
 
 				IPACMDBG_H("header length: %d, partial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
@@ -2407,7 +2407,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				{
 					IPACMERR("header oversize\n");
 					res = IPACM_FAILURE;
-					goto fail;
+					goto fail_early;
 				}
 				else
 				{
@@ -2485,14 +2485,14 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				{
 					IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
-					goto fail;
+					goto fail_early;
 				}
 				snprintf(index,sizeof(index), "_%d", header_name_count);
 				if (strlcat(pHeaderDescriptor->hdr[0].name, index, sizeof(pHeaderDescriptor->hdr[0].name)) > IPA_RESOURCE_NAME_MAX)
 				{
 					IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
-					goto fail;
+					goto fail_early;
 				}
 
 
@@ -2507,7 +2507,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				{
 					IPACMERR("ioctl IPA_IOC_ADD_HDR failed: %d\n", pHeaderDescriptor->hdr[0].status);
 					res = IPACM_FAILURE;
-					goto fail;
+					goto fail_early;
 				}
 
 				get_client_memptr(wlan_client, num_wifi_client)->hdr_hdl_v4 = pHeaderDescriptor->hdr[0].hdr_hdl;
@@ -2545,7 +2545,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				{
 					PERROR("ioctl copy header failed");
 					res = IPACM_FAILURE;
-					goto fail;
+					goto fail_early;
 				}
 
 				IPACMDBG_H("header length: %d, paritial: %d\n", sCopyHeader.hdr_len, sCopyHeader.is_partial);
@@ -2553,7 +2553,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				{
 					IPACMERR("header oversize\n");
 					res = IPACM_FAILURE;
-					goto fail;
+					goto fail_early;
 				}
 				else
 				{
@@ -2631,7 +2631,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				{
 					IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
-					goto fail;
+					goto fail_early;
 				}
 
 				snprintf(index,sizeof(index), "_%d", header_name_count);
@@ -2639,7 +2639,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				{
 					IPACMERR(" header name construction failed exceed length (%zu)\n", strlen(pHeaderDescriptor->hdr[0].name));
 					res = IPACM_FAILURE;
-					goto fail;
+					goto fail_early;
 				}
 
 				pHeaderDescriptor->hdr[0].hdr_len = sCopyHeader.hdr_len;
@@ -2653,7 +2653,7 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 				{
 					IPACMERR("ioctl IPA_IOC_ADD_HDR failed: %d\n", pHeaderDescriptor->hdr[0].status);
 					res = IPACM_FAILURE;
-					goto fail;
+					goto fail_early;
 				}
 
 				get_client_memptr(wlan_client, num_wifi_client)->hdr_hdl_v6 = pHeaderDescriptor->hdr[0].hdr_hdl;
@@ -2920,6 +2920,11 @@ int IPACM_Wlan::handle_wlan_client_init_ex(ipacm_event_data_wlan_ex *data, bool 
 		return res;
 	}
 
+	goto fail;
+
+fail_early:
+	free(get_client_memptr(wlan_client, num_wifi_client)->p_hdr_info);
+	get_client_memptr(wlan_client, num_wifi_client)->p_hdr_info = NULL;
 fail:
 	free(pHeaderDescriptor);
 	return res;

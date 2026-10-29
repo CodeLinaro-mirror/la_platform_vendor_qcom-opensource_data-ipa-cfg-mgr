@@ -1137,14 +1137,16 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			}
 		}
 
-		if ( IPACM_Iface::ipacmcfg->mape_enable && IS_MAPE_IFACE(dev_name) && is_global_ipv6_addr(data->ipv6_addr)) {
-			mape_wan_rt_rule_hdl_v6 = rt_rule_entry->rt_rule_hdl;
-			IPACMDBG_H(" updating mape_wan_rt_rule_hdl_v6 0x%x \n",mape_wan_rt_rule_hdl_v6);
+		if (IPACM_Iface::ipacmcfg->mape_enable && IS_MAPE_IFACE(dev_name) && is_global_ipv6_addr(data->ipv6_addr)) {
+			if (!(wan_route_rule_lan_v6_hdl_a5 != 0 || wan_route_rule_wan_v6_hdl_a5 != 0)) {
+				mape_wan_rt_rule_hdl_v6 = rt_rule_entry->rt_rule_hdl;
+				IPACMDBG_H(" updating mape_wan_rt_rule_hdl_v6 0x%x \n", mape_wan_rt_rule_hdl_v6);
+			}
 		} else {
 			dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6+1] = rt_rule_entry->rt_rule_hdl;
 			IPACMDBG_H("ipv6 wan iface rt-rule hdl=0x%x hdl=0x%x, num_dft_rt_v6: %d \n",
 				dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6],
-				dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6+1],num_dft_rt_v6);
+				dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6+1], num_dft_rt_v6);
 		}
 
 #ifdef FEATURE_IPA_IPSEC

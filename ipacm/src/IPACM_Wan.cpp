@@ -1137,14 +1137,16 @@ int IPACM_Wan::handle_addr_evt(ipacm_event_data_addr *data)
 			}
 		}
 
-		if ( IPACM_Iface::ipacmcfg->mape_enable && IS_MAPE_IFACE(dev_name) && is_global_ipv6_addr(data->ipv6_addr)) {
-			mape_wan_rt_rule_hdl_v6 = rt_rule_entry->rt_rule_hdl;
-			IPACMDBG_H(" updating mape_wan_rt_rule_hdl_v6 0x%x \n",mape_wan_rt_rule_hdl_v6);
+		if (IPACM_Iface::ipacmcfg->mape_enable && IS_MAPE_IFACE(dev_name) && is_global_ipv6_addr(data->ipv6_addr)) {
+			if (!(wan_route_rule_lan_v6_hdl_a5 != 0 || wan_route_rule_wan_v6_hdl_a5 != 0)) {
+				mape_wan_rt_rule_hdl_v6 = rt_rule_entry->rt_rule_hdl;
+				IPACMDBG_H(" updating mape_wan_rt_rule_hdl_v6 0x%x \n", mape_wan_rt_rule_hdl_v6);
+			}
 		} else {
 			dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6+1] = rt_rule_entry->rt_rule_hdl;
 			IPACMDBG_H("ipv6 wan iface rt-rule hdl=0x%x hdl=0x%x, num_dft_rt_v6: %d \n",
 				dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6],
-				dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6+1],num_dft_rt_v6);
+				dft_rt_rule_hdl[MAX_DEFAULT_v4_ROUTE_RULES + 2*num_dft_rt_v6+1], num_dft_rt_v6);
 		}
 
 #ifdef FEATURE_IPA_IPSEC
@@ -6153,6 +6155,13 @@ int IPACM_Wan::handle_route_add_vlan_pdn_evt(ipa_ip_type iptype, uint16_t vlan_i
 						tx_index, tx_prop->tx[tx_index].ip,iptype);
 					continue;
 				}
+
+				if (tx_prop->tx[tx_index].tc_bmap)
+				{
+					IPACMDBG_H("tc bit map is set, this is qos pipe. skip and continue \n");
+					continue;
+				}
+
 				if(IPACM_Iface::ipacmcfg->isMCC_Mode == true)
 				{
 					IPACMDBG_H("In MCC mode, use alt dst pipe: %d\n",
@@ -6318,6 +6327,13 @@ PostWanUpV6:
 						tx_index, tx_prop->tx[tx_index].ip,iptype);
 					continue;
 				}
+
+				if (tx_prop->tx[tx_index].tc_bmap)
+				{
+					IPACMDBG_H("tc bit map is set, this is qos pipe. skip and continue \n");
+					continue;
+				}
+
 				/* use the STA-header handler */
 				strlcpy(rt_rule->rt_tbl_name, IPACM_Iface::ipacmcfg->rt_tbl_wan_v4.name, sizeof(rt_rule->rt_tbl_name));
 				if(hdr_proc_set_v4 == true)
@@ -6709,6 +6725,9 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
 				continue;
 			}
 
+			memset(&rt_rule_entry->rule, 0, sizeof(rt_rule_entry->rule));
+			rt_rule_entry->at_rear = true;
+
 			/* use the STA-header handler */
 			if (iptype == IPA_IP_v4 || is_mape_v4_interface)
 			{
@@ -6879,7 +6898,8 @@ int IPACM_Wan::handle_route_add_evt(ipa_ip_type iptype)
                   m_routing.DeleteRoutingHdl(mape_wan_rt_rule_hdl_v6, IPA_IP_v6);
                   mape_wan_rt_rule_hdl_v6 = 0;
                 }
-					rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
+					if(v6_p_ctx_2use)
+						rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
 			}
 		rt_rule_entry->rule.attrib.attrib_mask = IPA_FLT_DST_ADDR;
 		rt_rule_entry->rule.attrib.u.v6.dst_addr[0] = 0;
@@ -14815,11 +14835,14 @@ int IPACM_Wan::handle_wan_client_route_rule(uint8_t *mac_addr, ipa_ip_type iptyp
 #endif
 					{
 						if (IPACM_Iface::ipacmcfg->mape_enable
-							&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0)
-							&& get_client_memptr(wan_client, wan_index)->is_v6_gateway)
+							&& (strcmp(dev_name,IPACM_Iface::ipacmcfg->iface_table[IPACM_Iface::ipacmcfg->mape_wan_iface_table_index].phy_dev_name) == 0))
 						{
-							rt_rule_entry->rule.hdr_proc_ctx_hdl = v6_p_ctx_2use;
-							IPACMDBG_H("mape v6 rt_rule_entry->rule.hdr_proc_ctx_hdl %x\n", rt_rule_entry->rule.hdr_proc_ctx_hdl);
+							/* MAP-E: always use normal GW header for v6 UL COMRTBLv6 rule.
+							 * MAP-E encap is handled by the IPV4 UL route rule.
+							 * Using v6_p_ctx_2use here incorrectly decapsulates LAN client
+							 * traffic when WAN and LAN share the same /64 prefix. */
+							rt_rule_entry->rule.hdr_hdl = get_client_memptr(wan_client, wan_index)->hdr_hdl_v6;
+							IPACMDBG_H("mape v6 rt_rule_entry->rule.hdr_hdl %x\n", rt_rule_entry->rule.hdr_hdl);
 						}
 						else if(get_client_memptr(wan_client, wan_index)->sta_hdr_proc_ctx_set == true)
 						{
